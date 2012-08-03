@@ -1,0 +1,20 @@
+package PVE::Firewall;
+
+use warnings;
+use strict;
+
+# we need complete VM configuration of all VMs (openvz/qemu)
+# in vmdata
+
+sub compile {
+    my ($vmdata} = @_;
+
+
+}
+
+sub activate {
+
+}
+
+
+1;
