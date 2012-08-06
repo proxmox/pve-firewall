@@ -129,19 +129,19 @@ sub compile {
 
     my $out;
 
-    my $format = "%-15s %-10s %s\n";
-    $out = sprintf($format, '#ZONE', 'TYPE', 'OPTIONS');
+    my $format = "%-15s %-10s %-15s %s\n";
+    $out = sprintf($format, '#ZONE', 'TYPE', 'OPTIONS', '');
     
     foreach my $z (sort keys %$zoneinfo) {
 	my $zid = $zoneinfo->{$z}->{id};
 	if ($zoneinfo->{$z}->{type} eq 'firewall') {
-	    $out .= sprintf($format, $zid, $zoneinfo->{$z}->{type}, '');
+	    $out .= sprintf($format, $zid, $zoneinfo->{$z}->{type}, '' , "# $z");
 	} elsif ($zoneinfo->{$z}->{type} eq 'bridge') {
-	    $out .= sprintf($format, $zid, 'ipv4', '');
+	    $out .= sprintf($format, $zid, 'ipv4', '', "# $z");
 	} elsif ($zoneinfo->{$z}->{type} eq 'bport') {
 	    my $bridge_zone = $zoneinfo->{$z}->{bridge_zone} || die "internal error";
 	    my $bzid = $zoneinfo->{$bridge_zone}->{id} || die "internal error";
-	    $out .= sprintf($format, "$zid:$bzid", 'bport', '');
+	    $out .= sprintf($format, "$zid:$bzid", 'bport', '', "# $z");
 	} else {
 	    die "internal error";
 	}
@@ -153,8 +153,8 @@ sub compile {
 
     # dump interfaces
 
-    $format = "%-15s %-20s %-10s %s\n";
-    $out = sprintf($format, '#ZONE', 'INTERFACE', 'BROADCAST', 'OPTIONS');
+    $format = "%-15s %-20s %-10s %-15s %s\n";
+    $out = sprintf($format, '#ZONE', 'INTERFACE', 'BROADCAST', 'OPTIONS', '');
 
     foreach my $z (sort keys %$zoneinfo) {
 	my $zid = $zoneinfo->{$z}->{id};
@@ -162,7 +162,7 @@ sub compile {
 	    # do nothing;
 	} elsif ($zoneinfo->{$z}->{type} eq 'bridge') {
 	    my $bridge = $zoneinfo->{$z}->{bridge} || die "internal error";
-	    $out .= sprintf($format, $zid, $bridge, 'detect', 'bridge');
+	    $out .= sprintf($format, $zid, $bridge, 'detect', 'bridge', "# $z");
 
 	} elsif ($zoneinfo->{$z}->{type} eq 'bport') {
 	    my $ifaces = $zoneinfo->{$z}->{ifaces};
@@ -170,7 +170,7 @@ sub compile {
 		my $bridge_zone = $zoneinfo->{$z}->{bridge_zone} || die "internal error";
 		my $bridge = $zoneinfo->{$bridge_zone}->{bridge} || die "internal error";
 		my $iftxt = "$bridge:$iface";
-		$out .= sprintf($format, $zid, $iftxt, '', '');
+		$out .= sprintf($format, $zid, $iftxt, '', '', "# $z");
 	    }
 	} else {
 	    die "internal error";
