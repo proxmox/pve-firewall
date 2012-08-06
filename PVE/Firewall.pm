@@ -18,8 +18,10 @@ sub compile {
 	fw => { type => 'firewall' },
     };
 
-    my $register_bridge = sub {
-	my ($bridge) = @_;
+    my $register_bridge;
+
+    $register_bridge = sub {
+	my ($bridge, $vlan) = @_;
 
 	my $zone =  'z' . $bridge;
 
@@ -29,6 +31,27 @@ sub compile {
 	    type => 'bridge',
 	    bridge => $bridge,
 	};
+
+	return &$register_bridge("${bridge}v${vlan}") if defined($vlan);
+	
+	return $zone;
+    };
+
+    my $register_bridge_port = sub {
+	my ($bridge, $vlan, $vmzone, $tap) = @_;
+
+	my $bridge_zone = &$register_bridge($bridge, $vlan);
+	my $zone = $bridge_zone . $vmzone;
+
+	if (!$zoneinfo->{$zone}) {
+	    $zoneinfo->{$zone} = {
+		type => 'bport',
+		bridge_zone => $bridge_zone,
+		ifaces => {},
+	    };
+	}
+
+	$zoneinfo->{$zone}->{ifaces}->{$tap} = 1;
 	
 	return $zone;
     };
@@ -42,19 +65,9 @@ sub compile {
 	    my $net = PVE::QemuServer::parse_net($conf->{$opt});
 	    next if !$net;
 	    die "implement me" if !$net->{bridge};
-	    my $bridge = $net->{bridge};
-	    my $bridge_zone = &$register_bridge($bridge);
-	    if (defined($net->{tag})) {
-		$bridge = $bridge .= "v$net->{tag}";
-		$bridge_zone = &$register_bridge($bridge);
-	    }
 
 	    my $vmzone = $conf->{zone} || "vm$vmid";
-	    my $zone = "$bridge_zone$vmzone";
-	    $net->{zone} = $zone;
-	    $zoneinfo->{$zone}->{type} = 'bport';
-	    $zoneinfo->{$zone}->{bridge_zone} = $bridge_zone;
-	    $zoneinfo->{$zone}->{ifaces}->{"tap${vmid}i${netid}"} = 1;
+	    $net->{zone} = &$register_bridge_port($net->{bridge}, $net->{tag}, $vmzone, "tap${vmid}i${netid}");
 	    $netinfo->{$vmid}->{$netid} = $net;
 	}
     }
