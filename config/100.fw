@@ -1,1 +1,13 @@
 # Example VM firewall configuration
+#ACTION SOURCE DEST
+
+[IN]
+
+ACCEPT net0 any any tcp 80
+
+[OUT]
+
+ACCEPT net0 any any
+
+
+

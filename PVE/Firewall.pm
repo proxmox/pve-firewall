@@ -6,11 +6,42 @@ use Data::Dumper;
 use PVE::Tools;
 use PVE::QemuServer;
 
+
+my $rule_format = "%-15s %-15s %-15s %-15s %-15s %-15s\n";
+
+my $generate_input_rule = sub {
+    my ($zoneinfo, $rule, $net, $netid) = @_;
+
+    die "not implemented" if $rule->{source} ne 'any';
+    die "not implemented" if $rule->{dest} ne 'any';
+
+    my $zone = $net->{zone} || die "internal error";
+    my $zid = $zoneinfo->{$zone}->{id} || die "internal error";
+    my $tap = $net->{tap} || die "internal error";
+    
+    return sprintf($rule_format, $rule->{action}, $rule->{source}, "$zid:$tap", 
+		   $rule->{proto} || '-', $rule->{dport} || '-', $rule->{sport} || '-');
+};
+
+my $generate_output_rule = sub {
+    my ($zoneinfo, $rule, $net, $netid) = @_;
+
+    die "not implemented" if $rule->{source} ne 'any';
+    die "not implemented" if $rule->{dest} ne 'any';
+
+    my $zone = $net->{zone} || die "internal error";
+    my $zid = $zoneinfo->{$zone}->{id} || die "internal error";
+    my $tap = $net->{tap} || die "internal error";
+    
+    return sprintf($rule_format, $rule->{action}, "$zid:$tap", $rule->{dest}, 
+		   $rule->{proto} || '-', $rule->{dport} || '-', $rule->{sport} || '-');
+};
+
 # we need complete VM configuration of all VMs (openvz/qemu)
 # in vmdata
 
 sub compile {
-    my ($targetdir, $vmdata) = @_;
+    my ($targetdir, $vmdata, $rules) = @_;
 
     my $netinfo;
 
@@ -61,14 +92,15 @@ sub compile {
 	my $conf = $vmdata->{qemu}->{$vmid};
 	foreach my $opt (keys %$conf) {
 	    next if $opt !~ m/^net(\d+)$/;
-	    my $netid = $1;
+	    my $netnum = $1;
 	    my $net = PVE::QemuServer::parse_net($conf->{$opt});
 	    next if !$net;
 	    die "implement me" if !$net->{bridge};
 
 	    my $vmzone = $conf->{zone} || "vm$vmid";
-	    $net->{zone} = &$register_bridge_port($net->{bridge}, $net->{tag}, $vmzone, "tap${vmid}i${netid}");
-	    $netinfo->{$vmid}->{$netid} = $net;
+	    $net->{tap} = "tap${vmid}i${netnum}";
+	    $net->{zone} = &$register_bridge_port($net->{bridge}, $net->{tag}, $vmzone, $net->{tap});
+	    $netinfo->{$vmid}->{$opt} = $net;
 	}
     }
 
@@ -89,6 +121,10 @@ sub compile {
 	return $zonemap->{$zone};
     };
 
+    foreach my $z (sort keys %$zoneinfo) {
+	$zoneinfo->{$z}->{id} = &$lookup_zonename($z);
+    }
+
     # dump zone file
 
     my $out;
@@ -97,14 +133,14 @@ sub compile {
     $out = sprintf($format, '#ZONE', 'TYPE', 'OPTIONS');
     
     foreach my $z (sort keys %$zoneinfo) {
-	my $zid = &$lookup_zonename($z);
+	my $zid = $zoneinfo->{$z}->{id};
 	if ($zoneinfo->{$z}->{type} eq 'firewall') {
 	    $out .= sprintf($format, $zid, $zoneinfo->{$z}->{type}, '');
 	} elsif ($zoneinfo->{$z}->{type} eq 'bridge') {
-	    $out .= sprintf($format, &$lookup_zonename($z), 'ipv4', '');
+	    $out .= sprintf($format, $zid, 'ipv4', '');
 	} elsif ($zoneinfo->{$z}->{type} eq 'bport') {
 	    my $bridge_zone = $zoneinfo->{$z}->{bridge_zone} || die "internal error";
-	    my $bzid = &$lookup_zonename($bridge_zone);
+	    my $bzid = $zoneinfo->{$bridge_zone}->{id} || die "internal error";
 	    $out .= sprintf($format, "$zid:$bzid", 'bport', '');
 	} else {
 	    die "internal error";
@@ -121,7 +157,7 @@ sub compile {
     $out = sprintf($format, '#ZONE', 'INTERFACE', 'BROADCAST', 'OPTIONS');
 
     foreach my $z (sort keys %$zoneinfo) {
-	my $zid = &$lookup_zonename($z);
+	my $zid = $zoneinfo->{$z}->{id};
 	if ($zoneinfo->{$z}->{type} eq 'firewall') {
 	    # do nothing;
 	} elsif ($zoneinfo->{$z}->{type} eq 'bridge') {
@@ -153,6 +189,33 @@ sub compile {
 
     PVE::Tools::file_set_contents("$targetdir/policy", $out);
 
+    # dump rules
+    $out = '';
+
+    $out = sprintf($rule_format, '#ACTION', 'SOURCE', 'DEST', 'PROTO', 'DPORT', 'SPORT');
+    foreach my $vmid (sort keys %$rules) {
+	if (my $inrules = $rules->{$vmid}->{in}) {
+	    foreach my $rule (@$inrules) {
+		foreach my $netid (keys %{$netinfo->{$vmid}}) {
+		    my $net = $netinfo->{$vmid}->{$netid};
+		    next if !($rule->{iface} eq 'any' || $rule->{iface} eq $netid);
+		    $out .= &$generate_input_rule($zoneinfo, $rule, $net, $netid);
+		}
+	    }
+	}
+
+	if (my $outrules = $rules->{$vmid}->{out}) {
+	    foreach my $rule (@$outrules) {
+		foreach my $netid (keys %{$netinfo->{$vmid}}) {
+		    my $net = $netinfo->{$vmid}->{$netid};
+		    next if !($rule->{iface} eq 'any' || $rule->{iface} eq $netid);
+		    $out .= &$generate_output_rule($zoneinfo, $rule, $net, $netid);
+		}
+	    }
+	}
+    }
+
+    PVE::Tools::file_set_contents("$targetdir/rules", $out);
 
 }
 
