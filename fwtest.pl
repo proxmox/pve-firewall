@@ -3,6 +3,7 @@
 use strict;
 use lib qw(.);
 use PVE::Firewall;
+use File::Path;
 
 my $vmdata = {
     qemu => {
@@ -15,6 +16,7 @@ my $vmdata = {
 	102 => {
 	    zone => 'z1',
 	    net0 => 'rtl8139=0E:9D:ED:CC:AA:ED,bridge=vmbr0',
+	    net1 => 'rtl8139=0E:9D:ED:CC:CC:ED,bridge=vmbr1',
 	},
 	103 => {
 	    zone => 'z1',
@@ -24,6 +26,12 @@ my $vmdata = {
     },
 };
 
-PVE::Firewall::compile($vmdata);
+my $testdir = "./testdir";
+rmtree($testdir);
+mkdir $testdir;
+
+PVE::Firewall::compile($testdir, $vmdata);
+
+PVE::Tools::run_command(['shorewall', 'check', $testdir]);
 
 exit(0);
