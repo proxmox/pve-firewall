@@ -49,6 +49,8 @@ sub compile {
 	fw => { type => 'firewall' },
     };
 
+    my $maclist = {};
+
     my $register_bridge;
 
     $register_bridge = sub {
@@ -99,6 +101,7 @@ sub compile {
 
 	    my $vmzone = $conf->{zone} || "vm$vmid";
 	    $net->{tap} = "tap${vmid}i${netnum}";
+	    $maclist->{$net->{tap}} = $net->{macaddr} || die "internal error";
 	    $net->{zone} = &$register_bridge_port($net->{bridge}, $net->{tag}, $vmzone, $net->{tap});
 	    $netinfo->{$vmid}->{$opt} = $net;
 	}
@@ -156,6 +159,9 @@ sub compile {
     $format = "%-15s %-20s %-10s %-15s %s\n";
     $out = sprintf($format, '#ZONE', 'INTERFACE', 'BROADCAST', 'OPTIONS', '');
 
+    my $maclist_format = "%-15s %-15s %-15s\n";
+    my $macs = sprintf($maclist_format, '#DISPOSITION', 'INTERFACE', 'MACZONE');
+
     foreach my $z (sort keys %$zoneinfo) {
 	my $zid = $zoneinfo->{$z}->{id};
 	if ($zoneinfo->{$z}->{type} eq 'firewall') {
@@ -170,7 +176,8 @@ sub compile {
 		my $bridge_zone = $zoneinfo->{$z}->{bridge_zone} || die "internal error";
 		my $bridge = $zoneinfo->{$bridge_zone}->{bridge} || die "internal error";
 		my $iftxt = "$bridge:$iface";
-		$out .= sprintf($format, $zid, $iftxt, '', '', "# $z");
+		$out .= sprintf($format, $zid, $iftxt, '-', 'maclist', "# $z");
+		$macs .= sprintf($maclist_format, 'ACCEPT', $iface, $maclist->{$iface});
 	    }
 	} else {
 	    die "internal error";
@@ -180,6 +187,9 @@ sub compile {
     $out .= sprintf("#LAST LINE - ADD YOUR ENTRIES ABOVE THIS ONE - DO NOT REMOVE\n");
 
     PVE::Tools::file_set_contents("$targetdir/interfaces", $out);
+
+    # dump maclist
+    PVE::Tools::file_set_contents("$targetdir/maclist", $macs);
 
     # dump policy
 
