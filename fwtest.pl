@@ -5,28 +5,33 @@ use lib qw(.);
 use PVE::Firewall;
 use File::Path;
 use IO::File;
+use Data::Dumper;
 
+use PVE::SafeSyslog;
+use PVE::Cluster;
+use PVE::INotify;
+use PVE::RPCEnvironment;
+use PVE::QemuServer;
 
-my $vmdata = {
-    qemu => {
-	100 => {
-	    net0 => 'rtl8139=9A:42:2D:0C:01:FF,bridge=vmbr0',
-	},
-	101 => {
-	    net0 => 'rtl8139=0E:9D:ED:CC:9B:ED,bridge=vmbr0',
-	},
-	102 => {
-	    zone => 'z1',
-	    net0 => 'rtl8139=0E:9D:ED:CC:AA:ED,bridge=vmbr0',
-	    net1 => 'rtl8139=0E:9D:ED:CC:CC:ED,bridge=vmbr1',
-	},
-	103 => {
-	    zone => 'z1',
-	    net0 => 'rtl8139=0E:9D:ED:CC:BC:ED,bridge=vmbr0',
-	    net1 => 'rtl8139=0E:9D:ED:CC:BC:AA,tag=5,bridge=vmbr0',
-	},
-    },
-};
+use PVE::JSONSchema qw(get_standard_option);
+
+use PVE::CLIHandler;
+
+use base qw(PVE::CLIHandler);
+
+$ENV{'PATH'} = '/sbin:/bin:/usr/sbin:/usr/bin';
+
+initlog ('pvefw');
+
+die "please run as root\n" if $> != 0;
+
+PVE::INotify::inotify_init();
+
+my $rpcenv = PVE::RPCEnvironment->init('cli');
+
+$rpcenv->init_request();
+$rpcenv->set_language($ENV{LANG});
+$rpcenv->set_user('root@pam');
 
 sub parse_fw_rules {
     my ($filename, $fh) = @_;
@@ -55,7 +60,7 @@ sub parse_fw_rules {
 
 	if ($action !~ m/^(ACCEPT|DROP)$/) {
 	    warn "unknown action '$action'\n";
-	    next;
+#	    next;
 	}
 
 	if ($iface !~ m/^(all|net0|net1|net2|net3|net4|net5)$/) {
@@ -94,21 +99,140 @@ sub parse_fw_rules {
     return $res;
 }
 
-my $testdir = "./testdir";
-rmtree($testdir);
-mkdir $testdir;
+sub read_local_vm_config {
 
-my $rules = {};
-foreach my $vmid (keys %{$vmdata->{qemu}}) {
-    my $filename = "config/$vmid.fw";
-    my $fh = IO::File->new($filename, O_RDONLY);
-    next if !$fh;
+    my $openvz = {};
 
-    $rules->{$vmid} = parse_fw_rules($filename, $fh);
+    my $qemu = {};
+
+    my $list = PVE::QemuServer::config_list();
+
+    foreach my $vmid (keys %$list) {
+	my $cfspath = PVE::QemuServer::cfs_config_path($vmid);
+	if (my $conf = PVE::Cluster::cfs_read_file($cfspath)) {
+	    $qemu->{$vmid} = $conf;
+	}
+    }
+
+    my $vmdata = { openvz => $openvz, qemu => $qemu };
+
+    return $vmdata;
+};
+
+sub read_vm_firewall_rules {
+    my ($vmdata) = @_;
+
+    my $rules = {};
+    foreach my $vmid (keys %{$vmdata->{qemu}}, keys %{$vmdata->{openvz}}) {
+	my $filename = "/etc/pve/$vmid.fw";
+	my $fh = IO::File->new($filename, O_RDONLY);
+	next if !$fh;
+
+	$rules->{$vmid} = parse_fw_rules($filename, $fh);
+    }
+
+    return $rules;
 }
 
-PVE::Firewall::compile($testdir, $vmdata, $rules);
+__PACKAGE__->register_method ({
+    name => 'compile',
+    path => 'compile',
+    method => 'POST',
+    description => "Compile firewall rules.",
+    parameters => {
+    	additionalProperties => 0,
+	properties => {},
+    },
+    returns => { type => 'null' },
 
-PVE::Tools::run_command(['shorewall', 'check', $testdir]);
+    code => sub {
+	my ($param) = @_;
+
+	my $vmdata = read_local_vm_config();
+	my $rules = read_vm_firewall_rules();
+
+	# print Dumper($vmdata);
+
+	my $swdir = '/etc/shorewall';
+	mkdir $swdir;
+
+	PVE::Firewall::compile($swdir, $vmdata, $rules);
+
+	PVE::Tools::run_command(['shorewall', 'compile']);
+
+	return undef;
+
+    }});
+
+__PACKAGE__->register_method ({
+    name => 'start',
+    path => 'start',
+    method => 'POST',
+    description => "Start firewall.",
+    parameters => {
+    	additionalProperties => 0,
+	properties => {},
+    },
+    returns => { type => 'null' },
+
+    code => sub {
+	my ($param) = @_;
+
+	PVE::Tools::run_command(['shorewall', 'start']);
+
+	return undef;
+    }});
+
+__PACKAGE__->register_method ({
+    name => 'stop',
+    path => 'stop',
+    method => 'POST',
+    description => "Stop firewall.",
+    parameters => {
+    	additionalProperties => 0,
+	properties => {},
+    },
+    returns => { type => 'null' },
+
+    code => sub {
+	my ($param) = @_;
+
+	PVE::Tools::run_command(['shorewall', 'stop']);
+
+	return undef;
+    }});
+
+__PACKAGE__->register_method ({
+    name => 'clear',
+    path => 'clear',
+    method => 'POST',
+    description => "Clear will remove all rules installed by this script. The host is then unprotected.",
+    parameters => {
+    	additionalProperties => 0,
+	properties => {},
+    },
+    returns => { type => 'null' },
+
+    code => sub {
+	my ($param) = @_;
+
+	PVE::Tools::run_command(['shorewall', 'clear']);
+
+	return undef;
+    }});
+
+my $nodename = PVE::INotify::nodename();
+
+my $cmddef = {
+    compile => [ __PACKAGE__, 'compile', []],
+    start => [ __PACKAGE__, 'start', []],
+    stop => [ __PACKAGE__, 'stop', []],
+    clear => [ __PACKAGE__, 'clear', []],
+};
+
+my $cmd = shift;
+
+PVE::CLIHandler::handle_cmd($cmddef, "pvefw", $cmd, \@ARGV, undef, $0);
 
 exit(0);
+

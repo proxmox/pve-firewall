@@ -43,6 +43,11 @@ my $generate_output_rule = sub {
 sub compile {
     my ($targetdir, $vmdata, $rules) = @_;
 
+    # remove existing data ?
+    foreach my $file (qw(zones rules interfaces  maclist  policy)) {
+	unlink "$targetdir/$file";
+    }
+
     my $netinfo;
 
     my $zoneinfo = {
@@ -168,7 +173,7 @@ sub compile {
 	    # do nothing;
 	} elsif ($zoneinfo->{$z}->{type} eq 'bridge') {
 	    my $bridge = $zoneinfo->{$z}->{bridge} || die "internal error";
-	    $out .= sprintf($format, $zid, $bridge, 'detect', 'bridge', "# $z");
+	    $out .= sprintf($format, $zid, $bridge, 'detect', 'bridge,optional', "# $z");
 
 	} elsif ($zoneinfo->{$z}->{type} eq 'bport') {
 	    my $ifaces = $zoneinfo->{$z}->{ifaces};
@@ -195,6 +200,7 @@ sub compile {
 
     $format = "%-15s %-15s %-15s %s\n";
     $out = sprintf($format, '#SOURCE', 'DEST', 'POLICY', 'LOG');
+    #$out .= sprintf($format, 'fw', 'all', 'ACCEPT', '');
     $out .= sprintf($format, 'all', 'all', 'REJECT', 'info');
 
     PVE::Tools::file_set_contents("$targetdir/policy", $out);
