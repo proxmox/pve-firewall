@@ -33,12 +33,15 @@ $rpcenv->init_request();
 $rpcenv->set_language($ENV{LANG});
 $rpcenv->set_user('root@pam');
 
+
 sub parse_fw_rules {
     my ($filename, $fh) = @_;
 
     my $section;
 
     my $res = { in => [], out => [] };
+
+    my $macros = PVE::Firewall::get_shorewall_macros();
 
     while (defined(my $line = <$fh>)) {
 	next if $line =~ m/^#/;
@@ -58,9 +61,18 @@ sub parse_fw_rules {
 	    next;
 	}
 
-	if ($action !~ m/^(ACCEPT|DROP)$/) {
+	my $service;
+	if ($action =~ m/^(ACCEPT|DROP|REJECT)$/) {
+	    # OK
+	} elsif ($action =~ m/^(\S+)\((ACCEPT|DROP|REJECT)\)$/) {
+	    ($service, $action) = ($1, $2);
+	    if (!$macros->{$service}) {
+		warn "unknown service '$service'\n";
+		next;
+	    }
+	} else {
 	    warn "unknown action '$action'\n";
-#	    next;
+	    next;
 	}
 
 	if ($iface !~ m/^(all|net0|net1|net2|net3|net4|net5)$/) {
@@ -85,6 +97,7 @@ sub parse_fw_rules {
 
 	my $rule = {
 	    action => $action,
+	    service => $service,
 	    iface => $iface,
 	    source => $source,
 	    dest => $dest,
@@ -121,10 +134,9 @@ sub read_local_vm_config {
 
 sub read_vm_firewall_rules {
     my ($vmdata) = @_;
-
     my $rules = {};
     foreach my $vmid (keys %{$vmdata->{qemu}}, keys %{$vmdata->{openvz}}) {
-	my $filename = "/etc/pve/$vmid.fw";
+	my $filename = "/etc/pve/firewall/$vmid.fw";
 	my $fh = IO::File->new($filename, O_RDONLY);
 	next if !$fh;
 
@@ -149,7 +161,7 @@ __PACKAGE__->register_method ({
 	my ($param) = @_;
 
 	my $vmdata = read_local_vm_config();
-	my $rules = read_vm_firewall_rules();
+	my $rules = read_vm_firewall_rules($vmdata);
 
 	# print Dumper($vmdata);
 

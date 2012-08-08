@@ -6,6 +6,19 @@ use Data::Dumper;
 use PVE::Tools;
 use PVE::QemuServer;
 
+my $macros;
+sub get_shorewall_macros {
+
+    return $macros if $macros;
+
+    foreach my $path (</usr/share/shorewall/macro.*>) {
+	if ($path =~ m|/macro\.(\S+)$|) {
+	    $macros->{$1} = 1;
+	}
+    }
+    return $macros;
+}
+
 
 my $rule_format = "%-15s %-15s %-15s %-15s %-15s %-15s\n";
 
@@ -18,8 +31,11 @@ my $generate_input_rule = sub {
     my $zone = $net->{zone} || die "internal error";
     my $zid = $zoneinfo->{$zone}->{id} || die "internal error";
     my $tap = $net->{tap} || die "internal error";
-    
-    return sprintf($rule_format, $rule->{action}, $rule->{source}, "$zid:$tap", 
+
+    my $action = $rule->{service} ? 
+	"$rule->{service}($rule->{action})" : $rule->{action};
+
+    return sprintf($rule_format, $action, $rule->{source}, "$zid:$tap", 
 		   $rule->{proto} || '-', $rule->{dport} || '-', $rule->{sport} || '-');
 };
 
@@ -32,8 +48,11 @@ my $generate_output_rule = sub {
     my $zone = $net->{zone} || die "internal error";
     my $zid = $zoneinfo->{$zone}->{id} || die "internal error";
     my $tap = $net->{tap} || die "internal error";
+
+    my $action = $rule->{service} ? 
+	"$rule->{service}($rule->{action})" : $rule->{action};
     
-    return sprintf($rule_format, $rule->{action}, "$zid:$tap", $rule->{dest}, 
+    return sprintf($rule_format, $action, "$zid:$tap", $rule->{dest}, 
 		   $rule->{proto} || '-', $rule->{dport} || '-', $rule->{sport} || '-');
 };
 
