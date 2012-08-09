@@ -229,7 +229,11 @@ sub compile {
 
     $out = sprintf($rule_format, '#ACTION', 'SOURCE', 'DEST', 'PROTO', 'DPORT', 'SPORT');
     foreach my $vmid (sort keys %$rules) {
-	if (my $inrules = $rules->{$vmid}->{in}) {
+	my $inrules = $rules->{$vmid}->{in};
+	my $outrules = $rules->{$vmid}->{out};
+
+	if (scalar(@$inrules)) {
+	    $out .= "# IN to VM $vmid\n";
 	    foreach my $rule (@$inrules) {
 		foreach my $netid (keys %{$netinfo->{$vmid}}) {
 		    my $net = $netinfo->{$vmid}->{$netid};
@@ -239,7 +243,8 @@ sub compile {
 	    }
 	}
 
-	if (my $outrules = $rules->{$vmid}->{out}) {
+	if (scalar(@$outrules)) {
+	    $out .= "# OUT from VM $vmid\n";
 	    foreach my $rule (@$outrules) {
 		foreach my $netid (keys %{$netinfo->{$vmid}}) {
 		    my $net = $netinfo->{$vmid}->{$netid};
