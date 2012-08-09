@@ -29,7 +29,7 @@ my $generate_input_rule = sub {
     die "not implemented" if $rule->{dest} ne 'any';
 
     my $zone = $net->{zone} || die "internal error";
-    my $zid = $zoneinfo->{$zone}->{id} || die "internal error";
+    my $zid = $zoneinfo->{$zone}->{zoneref} || die "internal error";
     my $tap = $net->{tap} || die "internal error";
 
     my $action = $rule->{service} ? 
@@ -46,7 +46,7 @@ my $generate_output_rule = sub {
     die "not implemented" if $rule->{dest} ne 'any';
 
     my $zone = $net->{zone} || die "internal error";
-    my $zid = $zoneinfo->{$zone}->{id} || die "internal error";
+    my $zid = $zoneinfo->{$zone}->{zoneref} || die "internal error";
     my $tap = $net->{tap} || die "internal error";
 
     my $action = $rule->{service} ? 
@@ -63,7 +63,7 @@ sub compile {
     my ($targetdir, $vmdata, $rules) = @_;
 
     # remove existing data ?
-    foreach my $file (qw(zones rules interfaces  maclist  policy)) {
+    foreach my $file (qw(params zones rules interfaces  maclist  policy)) {
 	unlink "$targetdir/$file";
     }
 
@@ -150,25 +150,34 @@ sub compile {
 
     foreach my $z (sort keys %$zoneinfo) {
 	$zoneinfo->{$z}->{id} = &$lookup_zonename($z);
+	$zoneinfo->{$z}->{zonevar} = uc($z);
+ 	$zoneinfo->{$z}->{zoneref} = '$' . $zoneinfo->{$z}->{zonevar};
     }
-
-    # dump zone file
 
     my $out;
 
-    my $format = "%-15s %-10s %-15s %s\n";
-    $out = sprintf($format, '#ZONE', 'TYPE', 'OPTIONS', '');
+    # dump params file
+    $out = "# PVE zones\n";
+    foreach my $z (sort keys %$zoneinfo) {
+	$out .= "$zoneinfo->{$z}->{zonevar}=$zoneinfo->{$z}->{id}\n";
+    }
+    PVE::Tools::file_set_contents("$targetdir/params", $out);
+
+    # dump zone file
+
+    my $format = "%-30s %-10s %-15s\n";
+    $out = sprintf($format, '#ZONE', 'TYPE', 'OPTIONS');
     
     foreach my $z (sort keys %$zoneinfo) {
-	my $zid = $zoneinfo->{$z}->{id};
+	my $zid = $zoneinfo->{$z}->{zoneref};
 	if ($zoneinfo->{$z}->{type} eq 'firewall') {
-	    $out .= sprintf($format, $zid, $zoneinfo->{$z}->{type}, '' , "# $z");
+	    $out .= sprintf($format, $zid, $zoneinfo->{$z}->{type}, '');
 	} elsif ($zoneinfo->{$z}->{type} eq 'bridge') {
-	    $out .= sprintf($format, $zid, 'ipv4', '', "# $z");
+	    $out .= sprintf($format, $zid, 'ipv4', '');
 	} elsif ($zoneinfo->{$z}->{type} eq 'bport') {
 	    my $bridge_zone = $zoneinfo->{$z}->{bridge_zone} || die "internal error";
-	    my $bzid = $zoneinfo->{$bridge_zone}->{id} || die "internal error";
-	    $out .= sprintf($format, "$zid:$bzid", 'bport', '', "# $z");
+	    my $bzid = $zoneinfo->{$bridge_zone}->{zoneref} || die "internal error";
+	    $out .= sprintf($format, "$zid:$bzid", 'bport', '');
 	} else {
 	    die "internal error";
 	}
@@ -180,19 +189,19 @@ sub compile {
 
     # dump interfaces
 
-    $format = "%-15s %-20s %-10s %-15s %s\n";
-    $out = sprintf($format, '#ZONE', 'INTERFACE', 'BROADCAST', 'OPTIONS', '');
+    $format = "%-25s %-20s %-10s %-15s\n";
+    $out = sprintf($format, '#ZONE', 'INTERFACE', 'BROADCAST', 'OPTIONS');
 
     my $maclist_format = "%-15s %-15s %-15s\n";
     my $macs = sprintf($maclist_format, '#DISPOSITION', 'INTERFACE', 'MACZONE');
 
     foreach my $z (sort keys %$zoneinfo) {
-	my $zid = $zoneinfo->{$z}->{id};
+	my $zid = $zoneinfo->{$z}->{zoneref};
 	if ($zoneinfo->{$z}->{type} eq 'firewall') {
 	    # do nothing;
 	} elsif ($zoneinfo->{$z}->{type} eq 'bridge') {
 	    my $bridge = $zoneinfo->{$z}->{bridge} || die "internal error";
-	    $out .= sprintf($format, $zid, $bridge, 'detect', 'bridge,optional', "# $z");
+	    $out .= sprintf($format, $zid, $bridge, 'detect', 'bridge,optional');
 
 	} elsif ($zoneinfo->{$z}->{type} eq 'bport') {
 	    my $ifaces = $zoneinfo->{$z}->{ifaces};
@@ -200,7 +209,7 @@ sub compile {
 		my $bridge_zone = $zoneinfo->{$z}->{bridge_zone} || die "internal error";
 		my $bridge = $zoneinfo->{$bridge_zone}->{bridge} || die "internal error";
 		my $iftxt = "$bridge:$iface";
-		$out .= sprintf($format, $zid, $iftxt, '-', 'maclist', "# $z");
+		$out .= sprintf($format, $zid, $iftxt, '-', 'maclist');
 		$macs .= sprintf($maclist_format, 'ACCEPT', $iface, $maclist->{$iface});
 	    }
 	} else {
