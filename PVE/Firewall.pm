@@ -50,7 +50,7 @@ my $generate_input_rule = sub {
 	    $source = "${zoneref}:$rule->{source}";
 	}
     } else {
-	$source = "any:$rule->{source}";
+	$source = "all:$rule->{source}";
     }
 
     return sprintf($rule_format, $action, $source, $dest, $rule->{proto} || '-', 
@@ -70,9 +70,9 @@ my $generate_output_rule = sub {
     my $dest;
 
     if (!$rule->{dest}) {
-	$dest = 'any';
+	$dest = 'all';
     } else {
-	$dest = "any:$rule->{dest}";
+	$dest = "all:$rule->{dest}";
     }
 
     return sprintf($rule_format, $action, "$zid:$tap", $dest, 
@@ -299,7 +299,7 @@ sub compile {
 	    foreach my $rule (@$inrules) {
 		foreach my $netid (keys %{$netinfo->{$vmid}}) {
 		    my $net = $netinfo->{$vmid}->{$netid};
-		    next if !($rule->{iface} eq 'any' || $rule->{iface} eq $netid);
+		    next if $rule->{iface} && $rule->{iface} ne $netid;
 		    $out .= &$generate_input_rule($zoneinfo, $rule, $net, $netid);
 		}
 	    }
@@ -310,7 +310,7 @@ sub compile {
 	    foreach my $rule (@$outrules) {
 		foreach my $netid (keys %{$netinfo->{$vmid}}) {
 		    my $net = $netinfo->{$vmid}->{$netid};
-		    next if !($rule->{iface} eq 'any' || $rule->{iface} eq $netid);
+		    next if $rule->{iface} && $rule->{iface} ne $netid;
 		    $out .= &$generate_output_rule($zoneinfo, $rule, $net, $netid);
 		}
 	    }

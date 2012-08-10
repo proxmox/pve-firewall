@@ -56,7 +56,7 @@ sub parse_fw_rules {
 	my ($action, $iface, $source, $dest, $proto, $dport, $sport) =
 	    split(/\s+/, $line);
 
-	if (!($action && $iface && $source && $dest)) {
+	if (!$action) {
 	    warn "skip incomplete line\n";
 	    next;
 	}
@@ -75,26 +75,26 @@ sub parse_fw_rules {
 	    next;
 	}
 
-	$iface = undef if $iface eq '-';
+	$iface = undef if $iface && $iface eq '-';
 	if ($iface && $iface !~ m/^(net0|net1|net2|net3|net4|net5)$/) {
 	    warn "unknown interface '$iface'\n";
 	    next;
 	}
 
-	$proto = undef if $proto eq '-';
+	$proto = undef if $proto && $proto eq '-';
 	if ($proto && $proto !~ m/^(icmp|tcp|udp)$/) {
 	    warn "unknown protokol '$proto'\n";
 	    next;
 	}
 
-	$source = undef if $source eq '-';
+	$source = undef if $source && $source eq '-';
 
 #	if ($source !~ m/^(XYZ)$/) {
 #	    warn "unknown source '$source'\n";
 #	    next;
 #	}
 
-	$dest = undef if $dest eq '-';
+	$dest = undef if $dest && $dest eq '-';
 #	if ($dest !~ m/^XYZ)$/) {
 #	    warn "unknown destination '$dest'\n";
 #	    next;

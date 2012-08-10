@@ -1,13 +1,16 @@
 # Example VM firewall configuration
-#ACTION SOURCE DEST
+#ACTION IFACE SOURCE DEST
 
 [IN]
 
-ACCEPT net0 any any tcp 80
+SSH(ACCEPT) net0 192.168.2.192 -
 
 [OUT]
 
-ACCEPT net0 any any
+
+DNS(ACCEPT) net0
+Ping(ACCEPT) net0
+SSH(ACCEPT)
 
 
 
