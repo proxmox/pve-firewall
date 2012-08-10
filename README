@@ -63,5 +63,73 @@ Format is: ACTION IFACE SOURCE DEST PROTO D-PORT S-PORT
 * D-PORT: destination port
 * S-PORT: source port
 
+We translate those rules into an appropriate shorewall configuration.
+
+There are a number of restrictions when using iptables to filter
+bridged traffic. Shorewall reflects that by applying the following
+restrictions:
+
+* BP zones may only be associated with bridge ports.
+
+* All ports associated with a given BP zone must be on the same bridge.
+
+* Policies from a non-BP zone to a BP are disallowed.
+
+* Rules where the SOURCE is a non-BP zone and the DEST is a BP zone are disallowed.
+
+See: http://www.shorewall.net/bridge-Shorewall-perl.html
+
+We simply define one zone for each bridge/vm pair.
+
+Shorewall zones names are limited to 5 characters, so we need to
+translate our names into shorter ones. The mapping is store in
+/etc/shorewall/params, so we can use shell variables with long names
+to refer to those zones.
+
+Example: One bridge vmbr0 and one VM with id 100
+
+Content of /etc/shorewall/params
+ # PVE zones
+ FW=fw
+ ZVMBR0=z0
+ ZVMBR0EXT=z1
+ ZVMBR0VM100=z2
+
+Content of /etc/shorewall/zones 
+ #ZONE                          TYPE       OPTIONS        
+ $FW                            firewall                  
+ $ZVMBR0                        ipv4                      
+ $ZVMBR0EXT:$ZVMBR0             bport                     
+ $ZVMBR0VM100:$ZVMBR0           bport                     
+ #LAST LINE - ADD YOUR ENTRIES ABOVE THIS ONE - DO NOT REMOVE
+
+Content of /etc/shorewall/interfaces
+ #ZONE                     INTERFACE            BROADCAST  OPTIONS        
+ $ZVMBR0                   vmbr0                detect     bridge,optional
+ $ZVMBR0EXT                vmbr0:eth0           -                         
+ $ZVMBR0VM100              vmbr0:tap100i0       -          maclist        
+ #LAST LINE - ADD YOUR ENTRIES ABOVE THIS ONE - DO NOT REMOVE
+
+Zone $ZVMBR0VM100 contains all network interfaces from VM100.
+
+Zone $ZVMBR0EXT contains all physical network interfaces. We consider this zone to be the external world.
+
+FIXME: The following is not clear - how do we handle traffic from 
+other VM?
+
+A shorewall rule for inbound traffic looks like this:
+
+ SSH(ACCEPT)     $ZVMBR0EXT       $ZVMBR0VM100:tap100i0 
+
+Outbound rules looks like:
+
+ SSH(ACCEPT)     $ZVMBR0VM100:tap100i0          all
+
+
+
+
+
+
+
 
 
