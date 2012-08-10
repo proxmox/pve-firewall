@@ -1,14 +1,6 @@
 # Example VM firewall configuration
 #ACTION IFACE SOURCE DEST PROTO D-PORT S-PORT
 
-# ACTION: shorewall action
-# IFACE: vm network interface (net0 - net5), or '-' for all interfaces
-# SOURCE: source IP address, or '-' for any source
-# DEST: dest IP address, or '-' for any destination address
-# PROTO: see /etc/protocols
-# D-PORT: destination port
-# S-PORT: source port
-
 [IN]
 
 SSH(ACCEPT) net0 192.168.2.192 -

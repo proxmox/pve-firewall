@@ -1,4 +1,5 @@
-Experimental software, only used for testing.
+Experimental software, only used for testing!
+=============================================
 
 Note: you need to change values in /etc/sysctl.d/pve.conf to:
 
@@ -9,6 +10,8 @@ net.bridge.bridge-nf-filter-vlan-tagged = 1
 
 and reboot after that change.
 
+Quick Intro
+===========
 
 VM firewall rules are read from /etc/pve/firewall/<VMID>.fw
 
@@ -36,3 +39,29 @@ To stop the firewall:
 To clear all iptable rules:
 
 ./pvefw clear
+
+
+Implementation details
+======================
+
+We do not write iptables rules directly. Instead we use shorewall to
+do that low level stuff. 
+
+Each VM can have its own firewall definition file in 
+
+/etc/pve/firewall/<VMID>.fw
+
+That file has two sections for inbound [IN] and outbound [OUT] traffic.
+
+Format is: ACTION IFACE SOURCE DEST PROTO D-PORT S-PORT
+
+* ACTION: shorewall action
+* IFACE: vm network interface (net0 - net5), or '-' for all interfaces
+* SOURCE: source IP address, or '-' for any source
+* DEST: dest IP address, or '-' for any destination address
+* PROTO: see /etc/protocols
+* D-PORT: destination port
+* S-PORT: source port
+
+
+
