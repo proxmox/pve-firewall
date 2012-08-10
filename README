@@ -1,1 +1,13 @@
-Experimental software, only used for testing
+Experimental software, only used for testing.
+
+VM firewall rules are read from /etc/pve/firewall/<VMID>.fw
+
+You can find examples in the example/ dir
+
+Use the following command to generate shorewall configuration:
+
+./pvefw compile
+
+That command overwrites /etc/shorewall/, so don't use if you have
+and existing shorewall config you want to keep.
+
