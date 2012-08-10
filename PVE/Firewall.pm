@@ -5,6 +5,9 @@ use strict;
 use Data::Dumper;
 use PVE::Tools;
 use PVE::QemuServer;
+use File::Path;
+use IO::File;
+use Data::Dumper;
 
 my $macros;
 sub get_shorewall_macros {
@@ -82,7 +85,7 @@ my $generate_output_rule = sub {
 # we need complete VM configuration of all VMs (openvz/qemu)
 # in vmdata
 
-sub compile {
+my $compile_shorewall = sub {
     my ($targetdir, $vmdata, $rules) = @_;
 
     # remove existing data ?
@@ -318,12 +321,151 @@ sub compile {
     }
 
     PVE::Tools::file_set_contents("$targetdir/rules", $out);
+};
 
+
+sub parse_fw_rules {
+    my ($filename, $fh) = @_;
+
+    my $section;
+
+    my $res = { in => [], out => [] };
+
+    my $macros = PVE::Firewall::get_shorewall_macros();
+
+    while (defined(my $line = <$fh>)) {
+	next if $line =~ m/^#/;
+	next if $line =~ m/^\s*$/;
+
+	if ($line =~ m/^\[(in|out)\]\s*$/i) {
+	    $section = lc($1);
+	    next;
+	}
+	next if !$section;
+
+	my ($action, $iface, $source, $dest, $proto, $dport, $sport) =
+	    split(/\s+/, $line);
+
+	if (!$action) {
+	    warn "skip incomplete line\n";
+	    next;
+	}
+
+	my $service;
+	if ($action =~ m/^(ACCEPT|DROP|REJECT)$/) {
+	    # OK
+	} elsif ($action =~ m/^(\S+)\((ACCEPT|DROP|REJECT)\)$/) {
+	    ($service, $action) = ($1, $2);
+	    if (!$macros->{$service}) {
+		warn "unknown service '$service'\n";
+		next;
+	    }
+	} else {
+	    warn "unknown action '$action'\n";
+	    next;
+	}
+
+	$iface = undef if $iface && $iface eq '-';
+	if ($iface && $iface !~ m/^(net0|net1|net2|net3|net4|net5)$/) {
+	    warn "unknown interface '$iface'\n";
+	    next;
+	}
+
+	$proto = undef if $proto && $proto eq '-';
+	if ($proto && $proto !~ m/^(icmp|tcp|udp)$/) {
+	    warn "unknown protokol '$proto'\n";
+	    next;
+	}
+
+	$source = undef if $source && $source eq '-';
+
+#	if ($source !~ m/^(XYZ)$/) {
+#	    warn "unknown source '$source'\n";
+#	    next;
+#	}
+
+	$dest = undef if $dest && $dest eq '-';
+#	if ($dest !~ m/^XYZ)$/) {
+#	    warn "unknown destination '$dest'\n";
+#	    next;
+#	}
+
+	$dport = undef if $dport && $dport eq '-';
+	$sport = undef if $sport && $sport eq '-';
+
+	my $rule = {
+	    action => $action,
+	    service => $service,
+	    iface => $iface,
+	    source => $source,
+	    dest => $dest,
+	    proto => $proto,
+	    dport => $dport,
+	    sport => $sport,
+	};
+
+	push @{$res->{$section}}, $rule;
+    }
+
+    return $res;
 }
 
+sub read_local_vm_config {
 
-sub activate {
+    my $openvz = {};
 
+    my $qemu = {};
+
+    my $list = PVE::QemuServer::config_list();
+
+    foreach my $vmid (keys %$list) {
+	# next if $vmid ne '100';
+	my $cfspath = PVE::QemuServer::cfs_config_path($vmid);
+	if (my $conf = PVE::Cluster::cfs_read_file($cfspath)) {
+	    $qemu->{$vmid} = $conf;
+	}
+    }
+
+    my $vmdata = { openvz => $openvz, qemu => $qemu };
+
+    return $vmdata;
+};
+
+sub read_vm_firewall_rules {
+    my ($vmdata) = @_;
+    my $rules = {};
+    foreach my $vmid (keys %{$vmdata->{qemu}}, keys %{$vmdata->{openvz}}) {
+	my $filename = "/etc/pve/firewall/$vmid.fw";
+	my $fh = IO::File->new($filename, O_RDONLY);
+	next if !$fh;
+
+	$rules->{$vmid} = parse_fw_rules($filename, $fh);
+    }
+
+    return $rules;
+}
+
+sub compile {
+
+    my $vmdata = read_local_vm_config();
+    my $rules = read_vm_firewall_rules($vmdata);
+
+    # print Dumper($vmdata);
+
+    my $swdir = '/etc/shorewall';
+    mkdir $swdir;
+
+    &$compile_shorewall($swdir, $vmdata, $rules);
+
+    PVE::Tools::run_command(['shorewall', 'compile']);
+}
+
+sub compile_and_start {
+    my ($restart) = @_;
+
+    compile();
+
+    PVE::Tools::run_command(['shorewall', $restart ? 'restart' : 'start']);
 }
 
 

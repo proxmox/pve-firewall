@@ -1,13 +1,38 @@
 Experimental software, only used for testing.
 
+Note: you need to change values in /etc/sysctl.d/pve.conf to:
+
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+net.bridge.bridge-nf-call-arptables = 1
+net.bridge.bridge-nf-filter-vlan-tagged = 1
+
+and reboot after that change.
+
+
 VM firewall rules are read from /etc/pve/firewall/<VMID>.fw
 
 You can find examples in the example/ dir
+
+Note: All commands overwrites /etc/shorewall/, so don't use if you have
+and existing shorewall config you want to keep.
 
 Use the following command to generate shorewall configuration:
 
 ./pvefw compile
 
-That command overwrites /etc/shorewall/, so don't use if you have
-and existing shorewall config you want to keep.
+To compile and start the firewall:
 
+./pvefw start
+
+To compile and restart the firewall:
+
+./pvefw restart
+
+To stop the firewall:
+
+./pvefw stop
+
+To clear all iptable rules:
+
+./pvefw clear
