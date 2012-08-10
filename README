@@ -114,17 +114,26 @@ Zone $ZVMBR0VM100 contains all network interfaces from VM100.
 
 Zone $ZVMBR0EXT contains all physical network interfaces. We consider this zone to be the external world.
 
-FIXME: The following is not clear - how do we handle traffic from 
-other VM?
-
 A shorewall rule for inbound traffic looks like this:
 
- SSH(ACCEPT)     $ZVMBR0EXT       $ZVMBR0VM100:tap100i0 
+ SSH(ACCEPT)     all       $ZVMBR0VM100:tap100i0 
 
 Outbound rules looks like:
 
  SSH(ACCEPT)     $ZVMBR0VM100:tap100i0          all
 
+
+Unresolved problems
+===================
+
+Inbound rules with source IP does not work, because shorewall
+does not allow rules like:
+
+ SSH(ACCEPT)     all:IP_ADDRESS       $ZVMBR0VM100:tap100i0
+
+As workaroud, we can create such rule for each BP zone:
+
+ SSH(ACCEPT)     $ZVMBR0EXT:IP_ADDRESS       $ZVMBR0VM100:tap100i0
 
 
 

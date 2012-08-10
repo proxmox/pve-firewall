@@ -48,8 +48,10 @@ my $generate_input_rule = sub {
 	my $bridge_ext_zone = $zoneinfo->{$bridge_zone}->{bridge_ext_zone} || die "internal error";
 	my $zoneref = $zoneinfo->{$bridge_ext_zone}->{zoneref} || die "internal error";
 	if (!$rule->{source}) {
-	    $source = "${zoneref}";
+	    # $source = "${zoneref}";
+	    $source = 'all';
 	} else {
+	    # 'all' does not work
 	    $source = "${zoneref}:$rule->{source}";
 	}
     } else {
