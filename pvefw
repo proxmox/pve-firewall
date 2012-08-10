@@ -75,25 +75,33 @@ sub parse_fw_rules {
 	    next;
 	}
 
-	if ($iface !~ m/^(all|net0|net1|net2|net3|net4|net5)$/) {
+	$iface = undef if $iface eq '-';
+	if ($iface && $iface !~ m/^(net0|net1|net2|net3|net4|net5)$/) {
 	    warn "unknown interface '$iface'\n";
 	    next;
 	}
 
+	$proto = undef if $proto eq '-';
 	if ($proto && $proto !~ m/^(icmp|tcp|udp)$/) {
 	    warn "unknown protokol '$proto'\n";
 	    next;
 	}
 
-	if ($source !~ m/^(any)$/) {
-	    warn "unknown source '$source'\n";
-	    next;
-	}
+	$source = undef if $source eq '-';
 
-	if ($dest !~ m/^(any)$/) {
-	    warn "unknown destination '$dest'\n";
-	    next;
-	}
+#	if ($source !~ m/^(XYZ)$/) {
+#	    warn "unknown source '$source'\n";
+#	    next;
+#	}
+
+	$dest = undef if $dest eq '-';
+#	if ($dest !~ m/^XYZ)$/) {
+#	    warn "unknown destination '$dest'\n";
+#	    next;
+#	}
+
+	$dport = undef if $dport && $dport eq '-';
+	$sport = undef if $sport && $sport eq '-';
 
 	my $rule = {
 	    action => $action,
@@ -121,6 +129,7 @@ sub read_local_vm_config {
     my $list = PVE::QemuServer::config_list();
 
     foreach my $vmid (keys %$list) {
+	# next if $vmid ne '100';
 	my $cfspath = PVE::QemuServer::cfs_config_path($vmid);
 	if (my $conf = PVE::Cluster::cfs_read_file($cfspath)) {
 	    $qemu->{$vmid} = $conf;

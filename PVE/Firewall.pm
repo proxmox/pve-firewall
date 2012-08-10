@@ -20,30 +20,45 @@ sub get_shorewall_macros {
 }
 
 
-my $rule_format = "%-15s %-15s %-15s %-15s %-15s %-15s\n";
+my $rule_format = "%-15s %-30s %-30s %-15s %-15s %-15s\n";
 
 my $generate_input_rule = sub {
     my ($zoneinfo, $rule, $net, $netid) = @_;
-
-    die "not implemented" if $rule->{source} ne 'any';
-    die "not implemented" if $rule->{dest} ne 'any';
 
     my $zone = $net->{zone} || die "internal error";
     my $zid = $zoneinfo->{$zone}->{zoneref} || die "internal error";
     my $tap = $net->{tap} || die "internal error";
 
+    my $dest = "$zid:$tap";
+
+    if ($rule->{dest}) {
+	$dest .= ":$rule->{dest}";
+    }
+
     my $action = $rule->{service} ? 
 	"$rule->{service}($rule->{action})" : $rule->{action};
 
-    return sprintf($rule_format, $action, $rule->{source}, "$zid:$tap", 
-		   $rule->{proto} || '-', $rule->{dport} || '-', $rule->{sport} || '-');
+    my $source;
+
+    if ($zoneinfo->{$zone}->{type} eq 'bport') {
+	my $bridge_zone = $zoneinfo->{$zone}->{bridge_zone} || die "internal error";
+	my $bridge_ext_zone = $zoneinfo->{$bridge_zone}->{bridge_ext_zone} || die "internal error";
+	my $zoneref = $zoneinfo->{$bridge_ext_zone}->{zoneref} || die "internal error";
+	if (!$rule->{source}) {
+	    $source = "${zoneref}";
+	} else {
+	    $source = "${zoneref}:$rule->{source}";
+	}
+    } else {
+	$source = "any:$rule->{source}";
+    }
+
+    return sprintf($rule_format, $action, $source, $dest, $rule->{proto} || '-', 
+		   $rule->{dport} || '-', $rule->{sport} || '-');
 };
 
 my $generate_output_rule = sub {
     my ($zoneinfo, $rule, $net, $netid) = @_;
-
-    die "not implemented" if $rule->{source} ne 'any';
-    die "not implemented" if $rule->{dest} ne 'any';
 
     my $zone = $net->{zone} || die "internal error";
     my $zid = $zoneinfo->{$zone}->{zoneref} || die "internal error";
@@ -52,7 +67,15 @@ my $generate_output_rule = sub {
     my $action = $rule->{service} ? 
 	"$rule->{service}($rule->{action})" : $rule->{action};
     
-    return sprintf($rule_format, $action, "$zid:$tap", $rule->{dest}, 
+    my $dest;
+
+    if (!$rule->{dest}) {
+	$dest = 'any';
+    } else {
+	$dest = "any:$rule->{dest}";
+    }
+
+    return sprintf($rule_format, $action, "$zid:$tap", $dest, 
 		   $rule->{proto} || '-', $rule->{dport} || '-', $rule->{sport} || '-');
 };
 
@@ -84,9 +107,26 @@ sub compile {
 
 	return $zone if $zoneinfo->{$zone};
 
+	my $ext_zone = "z${bridge}ext";
+
 	$zoneinfo->{$zone} = {
 	    type => 'bridge',
 	    bridge => $bridge,
+	    bridge_ext_zone => $ext_zone,
+	};
+
+	# physical input devices
+	my $dir = "/sys/class/net/$bridge/brif";
+	my $physical = {};
+	PVE::Tools::dir_glob_foreach($dir, '((eth|bond).+)', sub {
+	    my ($slave) = @_;
+	    $physical->{$slave} = 1;
+	});
+
+	$zoneinfo->{$ext_zone} = {
+	    type => 'bport',
+	    bridge_zone => $zone,
+	    ifaces => $physical,
 	};
 
 	return &$register_bridge("${bridge}v${vlan}") if defined($vlan);
@@ -202,15 +242,19 @@ sub compile {
 	} elsif ($zoneinfo->{$z}->{type} eq 'bridge') {
 	    my $bridge = $zoneinfo->{$z}->{bridge} || die "internal error";
 	    $out .= sprintf($format, $zid, $bridge, 'detect', 'bridge,optional');
-
 	} elsif ($zoneinfo->{$z}->{type} eq 'bport') {
 	    my $ifaces = $zoneinfo->{$z}->{ifaces};
 	    foreach my $iface (sort keys %$ifaces) {
 		my $bridge_zone = $zoneinfo->{$z}->{bridge_zone} || die "internal error";
 		my $bridge = $zoneinfo->{$bridge_zone}->{bridge} || die "internal error";
 		my $iftxt = "$bridge:$iface";
-		$out .= sprintf($format, $zid, $iftxt, '-', 'maclist');
-		$macs .= sprintf($maclist_format, 'ACCEPT', $iface, $maclist->{$iface});
+
+		if ($maclist->{$iface}) {
+		    $out .= sprintf($format, $zid, $iftxt, '-', 'maclist');
+		    $macs .= sprintf($maclist_format, 'ACCEPT', $iface, $maclist->{$iface});
+		} else {
+		    $out .= sprintf($format, $zid, $iftxt, '-', '');
+		}
 	    }
 	} else {
 	    die "internal error";
@@ -228,7 +272,16 @@ sub compile {
 
     $format = "%-15s %-15s %-15s %s\n";
     $out = sprintf($format, '#SOURCE', 'DEST', 'POLICY', 'LOG');
-    #$out .= sprintf($format, 'fw', 'all', 'ACCEPT', '');
+    $out .= sprintf($format, 'fw', 'all', 'ACCEPT', '');
+
+    # we need to disable intra-zone traffic on bridges. Else traffic
+    # from untracked interfaces simply pass the firewall
+    foreach my $z (sort keys %$zoneinfo) {
+	my $zid = $zoneinfo->{$z}->{zoneref};
+	if ($zoneinfo->{$z}->{type} eq 'bridge') {
+	    $out .= sprintf($format, $zid, $zid, 'REJECT', 'info');
+	}
+    }
     $out .= sprintf($format, 'all', 'all', 'REJECT', 'info');
 
     PVE::Tools::file_set_contents("$targetdir/policy", $out);
