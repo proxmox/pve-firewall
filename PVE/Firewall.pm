@@ -41,25 +41,36 @@ my $generate_input_rule = sub {
     my $action = $rule->{service} ? 
 	"$rule->{service}($rule->{action})" : $rule->{action};
 
-    my $source;
+    my $sources = [];
 
-    if ($zoneinfo->{$zone}->{type} eq 'bport') {
+    if (!$rule->{source}) {
+	push @$sources, 'all'; 
+    } elsif ($zoneinfo->{$zone}->{type} eq 'bport') {
 	my $bridge_zone = $zoneinfo->{$zone}->{bridge_zone} || die "internal error";
-	my $bridge_ext_zone = $zoneinfo->{$bridge_zone}->{bridge_ext_zone} || die "internal error";
-	my $zoneref = $zoneinfo->{$bridge_ext_zone}->{zoneref} || die "internal error";
-	if (!$rule->{source}) {
-	    # $source = "${zoneref}";
-	    $source = 'all';
-	} else {
-	    # 'all' does not work
-	    $source = "${zoneref}:$rule->{source}";
+	my $zoneref = $zoneinfo->{$bridge_zone}->{zoneref} || die "internal error";
+
+	# using 'all' does not work, so we create one rule for
+	# each related zone on the same bridge
+	push @$sources, "${zoneref}:$rule->{source}";
+	foreach my $z (keys %$zoneinfo) {
+	    next if $z eq $zone;
+	    next if !$zoneinfo->{$z}->{bridge_zone};
+	    next if $zoneinfo->{$z}->{bridge_zone} ne $bridge_zone;
+	    $zoneref = $zoneinfo->{$z}->{zoneref} || die "internal error";
+	    push @$sources, "${zoneref}:$rule->{source}";
 	}
     } else {
-	$source = "all:$rule->{source}";
+	push @$sources, "all:$rule->{source}";
     }
 
-    return sprintf($rule_format, $action, $source, $dest, $rule->{proto} || '-', 
-		   $rule->{dport} || '-', $rule->{sport} || '-');
+    my $out = '';
+
+    foreach my $source (@$sources) {
+	$out .= sprintf($rule_format, $action, $source, $dest, $rule->{proto} || '-', 
+			$rule->{dport} || '-', $rule->{sport} || '-');
+    }
+
+    return $out;
 };
 
 my $generate_output_rule = sub {
@@ -421,7 +432,7 @@ sub read_local_vm_config {
     my $list = PVE::QemuServer::config_list();
 
     foreach my $vmid (keys %$list) {
-	# next if $vmid ne '100';
+	#next if !($vmid eq '100' || $vmid eq '102');
 	my $cfspath = PVE::QemuServer::cfs_config_path($vmid);
 	if (my $conf = PVE::Cluster::cfs_read_file($cfspath)) {
 	    $qemu->{$vmid} = $conf;
