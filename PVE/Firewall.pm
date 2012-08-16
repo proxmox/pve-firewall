@@ -24,6 +24,74 @@ sub get_shorewall_macros {
     return $macros;
 }
 
+my $etc_services;
+
+sub get_etc_services {
+
+    return $etc_services if $etc_services;
+
+    my $filename = "/etc/services";
+
+    my $fh = IO::File->new($filename, O_RDONLY);
+    if (!$fh) {
+	warn "unable to read '$filename' - $!\n";
+	return {};
+    }
+
+    my $services = {};
+
+    while (my $line = <$fh>) {
+	chomp ($line);
+	next if $line =~m/^#/;
+	next if ($line =~m/^\s*$/);
+
+	if ($line =~ m!^(\S+)\s+(\S+)/(tcp|udp).*$!) {
+	    $services->{byid}->{$2}->{name} = $1;
+	    $services->{byid}->{$2}->{$3} = 1;
+	    $services->{byname}->{$1} = $services->{byid}->{$2};
+	}
+    }
+
+    close($fh);
+
+    $etc_services = $services;    
+    
+    return $etc_services;
+}
+
+my $etc_protocols;
+
+sub get_etc_protocols {
+    return $etc_protocols if $etc_protocols;
+
+    my $filename = "/etc/protocols";
+
+    my $fh = IO::File->new($filename, O_RDONLY);
+    if (!$fh) {
+	warn "unable to read '$filename' - $!\n";
+	return {};
+    }
+
+    my $protocols = {};
+
+    while (my $line = <$fh>) {
+	chomp ($line);
+	next if $line =~m/^#/;
+	next if ($line =~m/^\s*$/);
+
+	if ($line =~ m!^(\S+)\s+(\d+)\s+.*$!) {
+	    $protocols->{byid}->{$2}->{name} = $1;
+	    $protocols->{byname}->{$1} = $protocols->{byid}->{$2};
+	}
+    }
+
+    close($fh);
+
+    $etc_protocols = $protocols;
+
+    return $etc_protocols;
+}
+
 sub parse_address_list {
     my ($str) = @_;
 
@@ -33,6 +101,21 @@ sub parse_address_list {
 	    die "invalid IP address: $err\n";
 	}
     }
+}
+
+sub parse_port_name_number_or_range {
+    my ($str) = @_;
+
+    my $services = PVE::Firewall::get_etc_services();
+
+    foreach my $item (split(/,/, $str)) {
+	foreach my $pon (split(':', $item, 2)) {
+	    next if $pon =~ m/^\d+$/ && $pon > 0 && $pon < 65536;
+	    next if defined($services->{byname}->{$pon});
+	    die "invalid port '$pon'\n";
+	}
+    }
+
 }
 
 my $rule_format = "%-15s %-30s %-30s %-15s %-15s %-15s\n";
@@ -356,8 +439,9 @@ sub parse_fw_rules {
 
     my $res = { in => [], out => [] };
 
-    my $macros = PVE::Firewall::get_shorewall_macros();
-
+    my $macros = get_shorewall_macros();
+    my $protocols = get_etc_protocols();
+    
     while (defined(my $line = <$fh>)) {
 	next if $line =~ m/^#/;
 	next if $line =~ m/^\s*$/;
@@ -397,7 +481,8 @@ sub parse_fw_rules {
 	}
 
 	$proto = undef if $proto && $proto eq '-';
-	if ($proto && $proto !~ m/^(icmp|tcp|udp)$/) {
+	if ($proto && !(defined($protocols->{byname}->{$proto}) ||
+			defined($protocols->{byid}->{$proto}))) {
 	    warn "unknown protokol '$proto'\n";
 	    next;
 	}
@@ -411,7 +496,8 @@ sub parse_fw_rules {
 	eval {
 	    parse_address_list($source) if $source;
 	    parse_address_list($dest) if $dest;
-
+	    parse_port_name_number_or_range($dport) if $dport;
+	    parse_port_name_number_or_range($sport) if $sport;
 	};
 	if (my $err = $@) {
 	    warn $err;
