@@ -7,6 +7,8 @@ use PVE::Tools;
 use PVE::QemuServer;
 use File::Path;
 use IO::File;
+use Net::IP;
+
 use Data::Dumper;
 
 my $macros;
@@ -22,6 +24,16 @@ sub get_shorewall_macros {
     return $macros;
 }
 
+sub parse_address_list {
+    my ($str) = @_;
+
+    foreach my $aor (split(/,/, $str)) {
+	if (!Net::IP->new($aor)) {
+	    my $err = Net::IP::Error();
+	    die "invalid IP address: $err\n";
+	}
+    }
+}
 
 my $rule_format = "%-15s %-30s %-30s %-15s %-15s %-15s\n";
 
@@ -391,20 +403,22 @@ sub parse_fw_rules {
 	}
 
 	$source = undef if $source && $source eq '-';
-
-#	if ($source !~ m/^(XYZ)$/) {
-#	    warn "unknown source '$source'\n";
-#	    next;
-#	}
-
 	$dest = undef if $dest && $dest eq '-';
-#	if ($dest !~ m/^XYZ)$/) {
-#	    warn "unknown destination '$dest'\n";
-#	    next;
-#	}
 
 	$dport = undef if $dport && $dport eq '-';
 	$sport = undef if $sport && $sport eq '-';
+
+	eval {
+	    parse_address_list($source) if $source;
+	    parse_address_list($dest) if $dest;
+
+	};
+	if (my $err = $@) {
+	    warn $err;
+	    next;
+
+	}
+
 
 	my $rule = {
 	    action => $action,
