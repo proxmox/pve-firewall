@@ -214,11 +214,11 @@ my $compile_shorewall = sub {
     $register_bridge = sub {
 	my ($bridge, $vlan) = @_;
 
-	my $zone =  'z' . $bridge;
+	my $zone =  $bridge;
 
 	return $zone if $zoneinfo->{$zone};
 
-	my $ext_zone = "z${bridge}ext";
+	my $ext_zone = "${bridge}_ext";
 
 	$zoneinfo->{$zone} = {
 	    type => 'bridge',
@@ -249,7 +249,7 @@ my $compile_shorewall = sub {
 	my ($bridge, $vlan, $vmzone, $tap) = @_;
 
 	my $bridge_zone = &$register_bridge($bridge, $vlan);
-	my $zone = $bridge_zone . $vmzone;
+	my $zone = $bridge_zone . '_' . $vmzone;
 
 	if (!$zoneinfo->{$zone}) {
 	    $zoneinfo->{$zone} = {
