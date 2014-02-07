@@ -99,12 +99,16 @@ sub get_etc_protocols {
 sub parse_address_list {
     my ($str) = @_;
 
+    my $nbaor = 0;
     foreach my $aor (split(/,/, $str)) {
 	if (!Net::IP->new($aor)) {
 	    my $err = Net::IP::Error();
 	    die "invalid IP address: $err\n";
+	}else{
+	    $nbaor++;
 	}
     }
+    return $nbaor;
 }
 
 sub parse_port_name_number_or_range {
@@ -178,7 +182,9 @@ sub iptables_generate_rule {
 
     my $cmd = "-A $chain";
 
+    $cmd .= " -m iprange --src-range" if $rule->{nbsource} && $rule->{nbsource} > 1;
     $cmd .= " -s $rule->{source}" if $rule->{source};
+    $cmd .= " -m iprange --dst-range" if $rule->{nbdest} && $rule->{nbdest} > 1;
     $cmd .= " -d $rule->{dest}" if $rule->{destination};
     $cmd .= " -p $rule->{proto}" if $rule->{proto};
     $cmd .= "  --match multiport" if $rule->{nbdport} && $rule->{nbdport} > 1;
@@ -715,10 +721,12 @@ sub parse_fw_rules {
 	$sport = undef if $sport && $sport eq '-';
 	my $nbdport = undef;
 	my $nbsport = undef;
+	my $nbsource = undef;
+	my $nbdest = undef;
 
 	eval {
-	    parse_address_list($source) if $source;
-	    parse_address_list($dest) if $dest;
+	    $nbsource = parse_address_list($source) if $source;
+	    $nbdest = parse_address_list($dest) if $dest;
 	    $nbdport = parse_port_name_number_or_range($dport) if $dport;
 	    $nbsport = parse_port_name_number_or_range($sport) if $sport;
 	};
@@ -735,6 +743,8 @@ sub parse_fw_rules {
 	    iface => $iface,
 	    source => $source,
 	    dest => $dest,
+	    nbsource => $nbsource,
+	    nbdest => $nbdest,
 	    proto => $proto,
 	    dport => $dport,
 	    sport => $sport,
