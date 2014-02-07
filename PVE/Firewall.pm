@@ -111,15 +111,20 @@ sub parse_port_name_number_or_range {
     my ($str) = @_;
 
     my $services = PVE::Firewall::get_etc_services();
-
+    my $nbports = 0;
     foreach my $item (split(/,/, $str)) {
+	my $portlist = "";
 	foreach my $pon (split(':', $item, 2)) {
-	    next if $pon =~ m/^\d+$/ && $pon > 0 && $pon < 65536;
-	    next if defined($services->{byname}->{$pon});
-	    die "invalid port '$pon'\n";
+	    if ($pon =~ m/^\d+$/){
+		die "invalid port '$pon'\n" if $pon < 0 && $pon > 65536;
+	    }else{
+		die "invalid port $services->{byname}->{$pon}\n" if !$services->{byname}->{$pon};
+	    }
+	    $nbports++;
 	}
     }
 
+    return ($nbports);
 }
 
 my $rule_format = "%-15s %-30s %-30s %-15s %-15s %-15s\n";
@@ -176,7 +181,9 @@ sub iptables_generate_rule {
     $cmd .= " -s $rule->{source}" if $rule->{source};
     $cmd .= " -d $rule->{dest}" if $rule->{destination};
     $cmd .= " -p $rule->{proto}" if $rule->{proto};
+    $cmd .= "  --match multiport" if $rule->{nbdport} && $rule->{nbdport} > 1;
     $cmd .= " --dport $rule->{dport}" if $rule->{dport};
+    $cmd .= "  --match multiport" if $rule->{nbsport} && $rule->{nbsport} > 1;
     $cmd .= " --sport $rule->{sport}" if $rule->{sport};
     $cmd .= " -j $rule->{action}" if $rule->{action};
 
@@ -706,12 +713,14 @@ sub parse_fw_rules {
 
 	$dport = undef if $dport && $dport eq '-';
 	$sport = undef if $sport && $sport eq '-';
+	my $nbdport = undef;
+	my $nbsport = undef;
 
 	eval {
 	    parse_address_list($source) if $source;
 	    parse_address_list($dest) if $dest;
-	    parse_port_name_number_or_range($dport) if $dport;
-	    parse_port_name_number_or_range($sport) if $sport;
+	    $nbdport = parse_port_name_number_or_range($dport) if $dport;
+	    $nbsport = parse_port_name_number_or_range($sport) if $sport;
 	};
 	if (my $err = $@) {
 	    warn $err;
@@ -729,6 +738,9 @@ sub parse_fw_rules {
 	    proto => $proto,
 	    dport => $dport,
 	    sport => $sport,
+	    nbdport => $nbdport,
+	    nbsport => $nbsport,
+
 	};
 
 	push @{$res->{$section}}, $rule;
