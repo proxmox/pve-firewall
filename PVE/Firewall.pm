@@ -337,8 +337,7 @@ sub flush_tap_rules_direction {
 
 	if($direction eq 'OUT'){
 	    my $rule = "proxmoxfw-INPUT -m physdev --physdev-$physdevdirection $iface -j $tapchain";
-
-	    if(!iptables_rule_exist($rule)){
+	    if(iptables_rule_exist($rule)){
 		iptables_addrule("-D $rule");
 	    }
 	}

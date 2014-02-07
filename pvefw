@@ -30,8 +30,8 @@ $rpcenv->set_language($ENV{LANG});
 $rpcenv->set_user('root@pam');
 
 __PACKAGE__->register_method({
-    name => 'enabletaprules',
-    path => 'enabletaprules',
+    name => 'enablevmfw',
+    path => 'enablevmfw',
     method => 'POST',
     parameters => {
         additionalProperties => 0,
@@ -39,8 +39,8 @@ __PACKAGE__->register_method({
             vmid => get_standard_option('pve-vmid'),
             netid => {
                 type => 'string',
+		optional => 1
             },
-
         },
     },
     returns => { type => 'null' },
@@ -52,16 +52,21 @@ __PACKAGE__->register_method({
         my $netid = $param->{netid};
 
 	my $conf = PVE::QemuServer::load_config($vmid);
-	my $net = PVE::QemuServer::parse_net($conf->{$netid});
 
-	PVE::Firewall::generate_tap_rules($net, $netid, $vmid);
+	foreach my $opt (keys %$conf) {
+            next if $opt !~ m/^net(\d+)$/;
+            my $net = PVE::QemuServer::parse_net($conf->{$opt});
+            next if !$net;
+	    next if $netid && $opt != $netid;
+	    PVE::Firewall::generate_tap_rules($net, $opt, $vmid);
+	}
 
         return undef;
     }});
 
 __PACKAGE__->register_method({
-    name => 'disabletaprules',
-    path => 'disabletaprules',
+    name => 'disablevmfw',
+    path => 'disablevmfw',
     method => 'POST',
     parameters => {
         additionalProperties => 0,
@@ -69,6 +74,7 @@ __PACKAGE__->register_method({
             vmid => get_standard_option('pve-vmid'),
             netid => {
                 type => 'string',
+		optional => 1
             },
 
         },
@@ -82,9 +88,14 @@ __PACKAGE__->register_method({
         my $netid = $param->{netid};
 
 	my $conf = PVE::QemuServer::load_config($vmid);
-	my $net = PVE::QemuServer::parse_net($conf->{$netid});
 
-	PVE::Firewall::flush_tap_rules($net, $netid, $vmid);
+	foreach my $opt (keys %$conf) {
+            next if $opt !~ m/^net(\d+)$/;
+            my $net = PVE::QemuServer::parse_net($conf->{$opt});
+            next if !$net;
+	    next if $netid && $opt != $netid;
+	    PVE::Firewall::flush_tap_rules($net, $opt, $vmid);
+	}
 
         return undef;
     }});
@@ -228,8 +239,8 @@ my $cmddef = {
     restart => [ __PACKAGE__, 'restart', []],
     stop => [ __PACKAGE__, 'stop', []],
     clear => [ __PACKAGE__, 'clear', []],
-    enabletaprules => [ __PACKAGE__, 'enabletaprules', []],
-    disabletaprules => [ __PACKAGE__, 'disabletaprules', []],
+    enablevmfw => [ __PACKAGE__, 'enablevmfw', []],
+    disablevmfw => [ __PACKAGE__, 'disablevmfw', []],
     enablehostfw => [ __PACKAGE__, 'enablehostfw', []],
     disablehostfw => [ __PACKAGE__, 'disablehostfw', []],
 };
