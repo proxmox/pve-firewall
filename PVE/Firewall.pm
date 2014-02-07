@@ -8,10 +8,13 @@ use PVE::QemuServer;
 use File::Path;
 use IO::File;
 use Net::IP;
+use PVE::Tools qw(run_command);
 
 use Data::Dumper;
 
 my $macros;
+my @ruleset = ();
+
 sub get_shorewall_macros {
 
     return $macros if $macros;
@@ -56,6 +59,7 @@ sub get_etc_services {
 
     $etc_services = $services;    
     
+
     return $etc_services;
 }
 
@@ -119,6 +123,216 @@ sub parse_port_name_number_or_range {
 }
 
 my $rule_format = "%-15s %-30s %-30s %-15s %-15s %-15s\n";
+
+sub iptables {
+    my ($cmd) = @_;
+
+    run_command("/sbin/iptables $cmd", outfunc => sub {}, errfunc => sub {});
+}
+
+sub iptables_restore {
+
+    unshift (@ruleset, '*filter');
+    push (@ruleset, 'COMMIT');
+
+    my $cmdlist = join("\n", @ruleset);
+
+    run_command("echo '$cmdlist' | /sbin/iptables-restore -n", outfunc => sub {});
+}
+
+sub iptables_addrule {
+   my ($rule) = @_;
+
+   push (@ruleset, $rule);
+}
+
+sub iptables_chain_exist {
+    my ($chain) = @_;
+
+    eval{
+	iptables("-n --list $chain");
+    };
+    return undef if $@;
+
+    return 1;
+}
+
+sub iptables_rule_exist {
+    my ($rule) = @_;
+
+    eval{
+	iptables("-C $rule");
+    };
+    return undef if $@;
+
+    return 1;
+}
+
+sub iptables_generate_rule {
+    my ($chain, $rule) = @_;
+
+    my $cmd = "-A $chain";
+
+    $cmd .= " -s $rule->{source}" if $rule->{source};
+    $cmd .= " -d $rule->{dest}" if $rule->{destination};
+    $cmd .= " -p $rule->{proto}" if $rule->{proto};
+    $cmd .= " --dport $rule->{dport}" if $rule->{dport};
+    $cmd .= " --sport $rule->{sport}" if $rule->{sport};
+    $cmd .= " -j $rule->{action}" if $rule->{action};
+
+    iptables_addrule($cmd);
+
+}
+
+sub generate_bridge_rules {
+    my ($bridge) = @_;
+
+    if(!iptables_chain_exist("BRIDGEFW-OUT")){
+	iptables_addrule(":BRIDGEFW-OUT - [0:0]");
+    }
+
+    if(!iptables_chain_exist("BRIDGEFW-IN")){
+	iptables_addrule(":BRIDGEFW-IN - [0:0]");
+    }
+
+    if(!iptables_chain_exist("proxmoxfw-FORWARD")){
+	iptables_addrule(":proxmoxfw-FORWARD - [0:0]");
+	iptables_addrule("-I FORWARD -j proxmoxfw-FORWARD");
+	iptables_addrule("-A proxmoxfw-FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT");
+	iptables_addrule("-A proxmoxfw-FORWARD -m physdev --physdev-is-in --physdev-is-bridged -j BRIDGEFW-OUT");
+	iptables_addrule("-A proxmoxfw-FORWARD -m physdev --physdev-is-out --physdev-is-bridged -j BRIDGEFW-IN");
+
+    }
+
+    generate_proxmoxfwinput();
+
+    if(!iptables_chain_exist("$bridge-IN")){
+	iptables_addrule(":$bridge-IN - [0:0]");
+	iptables_addrule("-A proxmoxfw-FORWARD -i $bridge -j DROP");  #disable interbridge routing
+	iptables_addrule("-A BRIDGEFW-IN -j $bridge-IN");
+	iptables_addrule("-A $bridge-IN -j ACCEPT");
+
+    }
+
+    if(!iptables_chain_exist("$bridge-OUT")){
+	iptables_addrule(":$bridge-OUT - [0:0]");
+	iptables_addrule("-A proxmoxfw-FORWARD -o $bridge -j DROP"); # disable interbridge routing
+	iptables_addrule("-A BRIDGEFW-OUT -j $bridge-OUT");
+
+    }
+
+}
+
+
+sub generate_tap_rules_direction {
+    my ($iface, $netid, $rules, $bridge, $direction) = @_;
+
+    my $tapchain = "$iface-$direction";
+
+    iptables_addrule(":$tapchain - [0:0]");
+
+    iptables_addrule("-A $tapchain -m state --state INVALID -j DROP");
+    iptables_addrule("-A $tapchain -m state --state RELATED,ESTABLISHED -j ACCEPT");
+
+    if (scalar(@$rules)) {
+        foreach my $rule (@$rules) {
+	    next if $rule->{iface} && $rule->{iface} ne $netid;
+	    if($rule->{action}  =~ m/^(GROUP-(\S+))$/){
+		    $rule->{action} .= "-$direction";
+		    #generate empty group rule if don't exist
+		    if(!iptables_chain_exist($rule->{action})){
+			generate_group_rules($2);
+		    }
+	    }
+	    #we go to vmbr-IN if accept in out rules
+	    $rule->{action} = "$bridge-IN" if $rule->{action} eq 'ACCEPT' && $direction eq 'OUT';
+	    iptables_generate_rule($tapchain, $rule);
+        }
+    }
+
+    iptables_addrule("-A $tapchain -j LOG --log-prefix \"$tapchain-dropped: \" --log-level 4");
+    iptables_addrule("-A $tapchain -j DROP");
+
+    #plug the tap chain to bridge chain
+    my $physdevdirection = $direction eq 'IN' ? "out":"in";
+    my $rule = "$bridge-$direction -m physdev --physdev-$physdevdirection $iface --physdev-is-bridged -j $tapchain";
+
+    if(!iptables_rule_exist($rule)){
+	iptables_addrule("-I $rule");
+    }
+
+    if($direction eq 'OUT'){
+	#add tap->host rules
+	my $rule = "proxmoxfw-INPUT -m physdev --physdev-$physdevdirection $iface -j $tapchain";
+
+	if(!iptables_rule_exist($rule)){
+	    iptables_addrule("-A $rule");
+	}
+    }
+}
+
+sub generate_tap_rules {
+    my ($net, $netid, $vmid) = @_;
+
+    my $filename = "/etc/pve/firewall/$vmid.fw";
+    my $fh = IO::File->new($filename, O_RDONLY);
+    return if !$fh;
+
+    #generate bridge rules
+    my $bridge = $net->{bridge};
+    my $tag = $net->{tag};
+    $bridge .= "v$tag" if $tag;
+   
+    #generate tap chain
+    my $rules = parse_fw_rules($filename, $fh);
+
+    my $inrules = $rules->{in};
+    my $outrules = $rules->{out};
+
+    my $iface = "tap".$vmid."i".$1 if $netid =~ m/net(\d+)/;
+
+    generate_bridge_rules($bridge);
+    generate_tap_rules_direction($iface, $netid, $inrules, $bridge, 'IN');
+    generate_tap_rules_direction($iface, $netid, $outrules, $bridge, 'OUT');
+    iptables_restore();
+}
+
+sub flush_tap_rules {
+    my ($net, $netid, $vmid) = @_;
+
+    my $bridge = $net->{bridge};
+    my $iface = "tap".$vmid."i".$1 if $netid =~ m/net(\d+)/;
+
+    flush_tap_rules_direction($iface, $bridge, 'IN');
+    flush_tap_rules_direction($iface, $bridge, 'OUT');
+    iptables_restore();
+}
+
+sub flush_tap_rules_direction {
+    my ($iface, $bridge, $direction) = @_;
+
+    my $tapchain = "$iface-$direction";
+
+    if(iptables_chain_exist($tapchain)){
+	iptables_addrule("-F $tapchain");
+
+	my $physdevdirection = $direction eq 'IN' ? "out":"in";
+	my $rule = "$bridge-$direction -m physdev --physdev-$physdevdirection $iface --physdev-is-bridged -j $tapchain";
+	if(iptables_rule_exist($rule)){
+	    iptables_addrule("-D $rule");
+	}
+
+	if($direction eq 'OUT'){
+	    my $rule = "proxmoxfw-INPUT -m physdev --physdev-$physdevdirection $iface -j $tapchain";
+
+	    if(!iptables_rule_exist($rule)){
+		iptables_addrule("-D $rule");
+	    }
+	}
+
+	iptables_addrule("-X $tapchain");
+    }
+}
 
 my $generate_input_rule = sub {
     my ($zoneinfo, $rule, $net, $netid) = @_;
@@ -461,7 +675,7 @@ sub parse_fw_rules {
 	}
 
 	my $service;
-	if ($action =~ m/^(ACCEPT|DROP|REJECT)$/) {
+	if ($action =~ m/^(ACCEPT|DROP|REJECT|GROUP-(\S+))$/) {
 	    # OK
 	} elsif ($action =~ m/^(\S+)\((ACCEPT|DROP|REJECT)\)$/) {
 	    ($service, $action) = ($1, $2);

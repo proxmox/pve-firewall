@@ -29,6 +29,65 @@ $rpcenv->init_request();
 $rpcenv->set_language($ENV{LANG});
 $rpcenv->set_user('root@pam');
 
+__PACKAGE__->register_method({
+    name => 'enabletaprules',
+    path => 'enabletaprules',
+    method => 'POST',
+    parameters => {
+        additionalProperties => 0,
+        properties => {
+            vmid => get_standard_option('pve-vmid'),
+            netid => {
+                type => 'string',
+            },
+
+        },
+    },
+    returns => { type => 'null' },
+    code => sub {
+        my ($param) = @_;
+
+        # test if VM exists
+        my $vmid = $param->{vmid};
+        my $netid = $param->{netid};
+
+	my $conf = PVE::QemuServer::load_config($vmid);
+	my $net = PVE::QemuServer::parse_net($conf->{$netid});
+
+	PVE::Firewall::generate_tap_rules($net, $netid, $vmid);
+
+        return undef;
+    }});
+
+__PACKAGE__->register_method({
+    name => 'disabletaprules',
+    path => 'disabletaprules',
+    method => 'POST',
+    parameters => {
+        additionalProperties => 0,
+        properties => {
+            vmid => get_standard_option('pve-vmid'),
+            netid => {
+                type => 'string',
+            },
+
+        },
+    },
+    returns => { type => 'null' },
+    code => sub {
+        my ($param) = @_;
+
+        # test if VM exists
+        my $vmid = $param->{vmid};
+        my $netid = $param->{netid};
+
+	my $conf = PVE::QemuServer::load_config($vmid);
+	my $net = PVE::QemuServer::parse_net($conf->{$netid});
+
+	PVE::Firewall::flush_tap_rules($net, $netid, $vmid);
+
+        return undef;
+    }});
 
 __PACKAGE__->register_method ({
     name => 'compile',
@@ -133,6 +192,8 @@ my $cmddef = {
     restart => [ __PACKAGE__, 'restart', []],
     stop => [ __PACKAGE__, 'stop', []],
     clear => [ __PACKAGE__, 'clear', []],
+    enabletaprules => [ __PACKAGE__, 'enabletaprules', []],
+    disabletaprules => [ __PACKAGE__, 'disabletaprules', []],
 };
 
 my $cmd = shift;
