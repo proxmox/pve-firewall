@@ -101,6 +101,51 @@ __PACKAGE__->register_method({
     }});
 
 __PACKAGE__->register_method({
+    name => 'enablegroup',
+    path => 'enablegroup',
+    method => 'POST',
+    parameters => {
+        additionalProperties => 0,
+        properties => {
+            securitygroup => {
+                type => 'string',
+            },
+        },
+    },
+    returns => { type => 'null' },
+    code => sub {
+        my ($param) = @_;
+
+	my $group = $param->{securitygroup};
+	PVE::Firewall::enable_group_rules($group);
+
+        return undef;
+    }});
+
+__PACKAGE__->register_method({
+    name => 'disablegroup',
+    path => 'disablegroup',
+    method => 'POST',
+    parameters => {
+        additionalProperties => 0,
+        properties => {
+            securitygroup => {
+                type => 'string',
+            },
+
+        },
+    },
+    returns => { type => 'null' },
+    code => sub {
+        my ($param) = @_;
+
+	my $group = $param->{securitygroup};
+	PVE::Firewall::disable_group_rules($group);
+
+        return undef;
+    }});
+
+__PACKAGE__->register_method({
     name => 'enablehostfw',
     path => 'enablehostfw',
     method => 'POST',
@@ -243,6 +288,8 @@ my $cmddef = {
     disablevmfw => [ __PACKAGE__, 'disablevmfw', []],
     enablehostfw => [ __PACKAGE__, 'enablehostfw', []],
     disablehostfw => [ __PACKAGE__, 'disablehostfw', []],
+    enablegroup => [ __PACKAGE__, 'enablegroup', []],
+    disablegroup => [ __PACKAGE__, 'disablegroup', []],
 };
 
 my $cmd = shift;

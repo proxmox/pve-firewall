@@ -463,6 +463,80 @@ sub generate_proxmoxfwoutput {
 
 }
 
+sub enable_group_rules {
+    my ($group) = @_;
+    
+    generate_group_rules($group);
+    iptables_restore();
+}
+
+sub generate_group_rules {
+    my ($group) = @_;
+
+    my $filename = "/etc/pve/firewall/groups.fw";
+    my $fh = IO::File->new($filename, O_RDONLY);
+    return if !$fh;
+
+    my $rules = parse_fw_rules($filename, $fh, $group);
+    my $inrules = $rules->{in};
+    my $outrules = $rules->{out};
+
+    my $chain = "GROUP-".$group."-IN";
+
+    iptables_addrule(":$chain - [0:0]");
+
+    if (scalar(@$inrules)) {
+        foreach my $rule (@$inrules) {
+            iptables_generate_rule($chain, $rule);
+        }
+    }
+
+    $chain = "GROUP-".$group."-OUT";
+
+    iptables_addrule(":$chain - [0:0]");
+
+    if(!iptables_chain_exist("BRIDGEFW-OUT")){
+	iptables_addrule(":BRIDGEFW-OUT - [0:0]");
+    }
+
+    if(!iptables_chain_exist("BRIDGEFW-IN")){
+	iptables_addrule(":BRIDGEFW-IN - [0:0]");
+    }
+
+    if (scalar(@$outrules)) {
+        foreach my $rule (@$outrules) {
+            #we go the BRIDGEFW-IN because we need to check also other tap rules 
+            #(and group rules can be set on any bridge, so we can't go to VMBRXX-IN)
+            $rule->{action} = 'BRIDGEFW-IN' if $rule->{action} eq 'ACCEPT';
+            iptables_generate_rule($chain, $rule);
+        }
+    }
+
+}
+
+sub disable_group_rules {
+    my ($group) = @_;
+
+    my $chain = "GROUP-".$group."-IN";
+
+    if(iptables_chain_exist($chain)){
+	iptables_addrule("-F $chain");
+	iptables_addrule("-X $chain");
+    }
+
+    $chain = "GROUP-".$group."-OUT";
+
+    if(iptables_chain_exist($chain)){
+	iptables_addrule("-F $chain");
+	iptables_addrule("-X $chain");
+    }
+
+    #iptables_restore will die if security group is linked in a tap chain
+    #maybe can we improve that, parsing each vm config, or parsing iptables -S
+    #to see if the security group is linked or not
+    iptables_restore();
+}
+
 
 my $generate_input_rule = sub {
     my ($zoneinfo, $rule, $net, $netid) = @_;
@@ -777,9 +851,11 @@ my $compile_shorewall = sub {
 
 
 sub parse_fw_rules {
-    my ($filename, $fh) = @_;
+    my ($filename, $fh, $group) = @_;
 
     my $section;
+    my $securitygroup;
+    my $securitygroupexist;
 
     my $res = { in => [], out => [] };
 
@@ -790,11 +866,14 @@ sub parse_fw_rules {
 	next if $line =~ m/^#/;
 	next if $line =~ m/^\s*$/;
 
-	if ($line =~ m/^\[(in|out)\]\s*$/i) {
+	if ($line =~ m/^\[(in|out)(:(\S+))?\]\s*$/i) {
 	    $section = lc($1);
+	    $securitygroup = lc($3) if $3;
+	    $securitygroupexist = 1 if $securitygroup &&  $securitygroup eq $group;
 	    next;
 	}
 	next if !$section;
+	next if $group && $securitygroup ne $group;
 
 	my ($action, $iface, $source, $dest, $proto, $dport, $sport) =
 	    split(/\s+/, $line);
@@ -873,6 +952,7 @@ sub parse_fw_rules {
 	push @{$res->{$section}}, $rule;
     }
 
+    die "security group $group don't exist" if $group && !$securitygroupexist;
     return $res;
 }
 
