@@ -347,6 +347,124 @@ sub flush_tap_rules_direction {
     }
 }
 
+sub enablehostfw {
+
+    generate_proxmoxfwinput();
+    generate_proxmoxfwoutput();
+
+    my $filename = "/etc/pve/local/host.fw";
+    my $fh = IO::File->new($filename, O_RDONLY);
+    return if !$fh;
+
+    my $rules = parse_fw_rules($filename, $fh);
+    my $inrules = $rules->{in};
+    my $outrules = $rules->{out};
+
+    #host inbound firewall
+    iptables_addrule(":host-IN - [0:0]");
+    iptables_addrule("-A host-IN -m state --state INVALID -j DROP");
+    iptables_addrule("-A host-IN -m state --state RELATED,ESTABLISHED -j ACCEPT");
+    iptables_addrule("-A host-IN -i lo -j ACCEPT");
+    iptables_addrule("-A host-IN -m addrtype --dst-type MULTICAST -j ACCEPT");
+    iptables_addrule("-A host-IN -p udp -m state --state NEW -m multiport --dports 5404,5405 -j ACCEPT");
+    iptables_addrule("-A host-IN -p udp -m udp --dport 9000 -j ACCEPT"); #corosync
+
+    if (scalar(@$inrules)) {
+        foreach my $rule (@$inrules) {
+            #we use RETURN because we need to check also tap rules
+            $rule->{action} = 'RETURN' if $rule->{action} eq 'ACCEPT';
+            iptables_generate_rule('host-IN', $rule);
+        }
+    }
+
+    iptables_addrule("-A host-IN -j LOG --log-prefix \"kvmhost-IN dropped: \" --log-level 4");
+    iptables_addrule("-A host-IN -j DROP");
+
+    #host outbound firewall
+    iptables_addrule(":host-OUT - [0:0]");
+    iptables_addrule("-A host-OUT -m state --state INVALID -j DROP");
+    iptables_addrule("-A host-OUT -m state --state RELATED,ESTABLISHED -j ACCEPT");
+    iptables_addrule("-A host-OUT -o lo -j ACCEPT");
+    iptables_addrule("-A host-OUT -m addrtype --dst-type MULTICAST -j ACCEPT");
+    iptables_addrule("-A host-OUT -p udp -m state --state NEW -m multiport --dports 5404,5405 -j ACCEPT");
+    iptables_addrule("-A host-OUT -p udp -m udp --dport 9000 -j ACCEPT"); #corosync
+
+    if (scalar(@$outrules)) {
+        foreach my $rule (@$outrules) {
+            #we use RETURN because we need to check also tap rules
+            $rule->{action} = 'RETURN' if $rule->{action} eq 'ACCEPT';
+            iptables_generate_rule('host-OUT', $rule);
+        }
+    }
+
+    iptables_addrule("-A host-OUT -j LOG --log-prefix \"kvmhost-OUT dropped: \" --log-level 4");
+    iptables_addrule("-A host-OUT -j DROP");
+
+    
+    my $rule = "proxmoxfw-INPUT -j host-IN";
+    if(!iptables_rule_exist($rule)){
+	iptables_addrule("-I $rule");
+    }
+
+    $rule = "proxmoxfw-OUTPUT -j host-OUT";
+    if(!iptables_rule_exist($rule)){
+	iptables_addrule("-I $rule");
+    }
+
+    iptables_restore();
+
+
+}
+
+sub disablehostfw {
+
+    my $chain = "host-IN";
+
+    my $rule = "proxmoxfw-INPUT -j $chain";
+    if(iptables_rule_exist($rule)){
+	iptables_addrule("-D $rule");
+    }
+
+    if(iptables_chain_exist($chain)){
+	iptables_addrule("-F $chain");
+	iptables_addrule("-X $chain");
+    }
+
+    $chain = "host-OUT";
+
+    $rule = "proxmoxfw-OUTPUT -j $chain";
+    if(iptables_rule_exist($rule)){
+	iptables_addrule("-D $rule");
+    }
+
+    if(iptables_chain_exist($chain)){
+	iptables_addrule("-F $chain");
+	iptables_addrule("-X $chain");
+    }
+
+    iptables_restore();   
+}
+
+sub generate_proxmoxfwinput {
+
+    if(!iptables_chain_exist("proxmoxfw-INPUT")){
+        iptables_addrule(":proxmoxfw-INPUT - [0:0]");
+        iptables_addrule("-I INPUT -j proxmoxfw-INPUT");
+        iptables_addrule("-A INPUT -j ACCEPT");
+    }
+}
+
+sub generate_proxmoxfwoutput {
+
+    if(!iptables_chain_exist("proxmoxfw-OUTPUT")){
+        iptables_addrule(":proxmoxfw-OUTPUT - [0:0]");
+        iptables_addrule("-I OUTPUT -j proxmoxfw-OUTPUT");
+        iptables_addrule("-A OUTPUT -j ACCEPT");
+    }
+
+}
+
+
 my $generate_input_rule = sub {
     my ($zoneinfo, $rule, $net, $netid) = @_;
 

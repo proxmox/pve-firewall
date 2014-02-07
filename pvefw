@@ -89,6 +89,42 @@ __PACKAGE__->register_method({
         return undef;
     }});
 
+__PACKAGE__->register_method({
+    name => 'enablehostfw',
+    path => 'enablehostfw',
+    method => 'POST',
+    parameters => {
+    	additionalProperties => 0,
+	properties => {},
+    },
+    returns => { type => 'null' },
+
+    code => sub {
+	my ($param) = @_;
+
+	PVE::Firewall::enablehostfw();
+
+	return undef;
+    }});
+
+__PACKAGE__->register_method({
+    name => 'disablehostfw',
+    path => 'disablehostfw',
+    method => 'POST',
+    parameters => {
+    	additionalProperties => 0,
+	properties => {},
+    },
+    returns => { type => 'null' },
+
+    code => sub {
+	my ($param) = @_;
+
+	PVE::Firewall::disablehostfw();
+
+	return undef;
+    }});
+
 __PACKAGE__->register_method ({
     name => 'compile',
     path => 'compile',
@@ -194,6 +230,8 @@ my $cmddef = {
     clear => [ __PACKAGE__, 'clear', []],
     enabletaprules => [ __PACKAGE__, 'enabletaprules', []],
     disabletaprules => [ __PACKAGE__, 'disabletaprules', []],
+    enablehostfw => [ __PACKAGE__, 'enablehostfw', []],
+    disablehostfw => [ __PACKAGE__, 'disablehostfw', []],
 };
 
 my $cmd = shift;
