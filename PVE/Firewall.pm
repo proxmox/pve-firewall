@@ -8,9 +8,11 @@ use PVE::QemuServer;
 use File::Path;
 use IO::File;
 use Net::IP;
-use PVE::Tools qw(run_command);
+use PVE::Tools qw(run_command lock_file);
 
 use Data::Dumper;
+
+my $pve_fw_lock_filename = "/var/lock/pvefw.lck";
 
 my $macros;
 my @ruleset = ();
@@ -957,6 +959,18 @@ sub parse_fw_rules {
     }
 
     die "security group $group don't exist" if $group && !$securitygroupexist;
+    return $res;
+}
+
+sub run_locked {
+    my ($code, @param) = @_;
+
+    my $timeout = 10;
+
+    my $res = lock_file($pve_fw_lock_filename, $timeout, $code, @param);
+
+    die $@ if $@;
+
     return $res;
 }
 

@@ -51,17 +51,21 @@ __PACKAGE__->register_method({
         my $vmid = $param->{vmid};
         my $netid = $param->{netid};
 
-	my $conf = PVE::QemuServer::load_config($vmid);
+	my $code = sub {
+	    my $conf = PVE::QemuServer::load_config($vmid);
 
-	foreach my $opt (keys %$conf) {
-            next if $opt !~ m/^net(\d+)$/;
-            my $net = PVE::QemuServer::parse_net($conf->{$opt});
-            next if !$net;
-	    next if $netid && $opt != $netid;
-	    PVE::Firewall::generate_tap_rules($net, $opt, $vmid);
-	}
+	    foreach my $opt (keys %$conf) {
+		next if $opt !~ m/^net(\d+)$/;
+		my $net = PVE::QemuServer::parse_net($conf->{$opt});
+		next if !$net;
+		next if $netid && $opt != $netid;
+		PVE::Firewall::generate_tap_rules($net, $opt, $vmid);
+	    }
+	};
 
-        return undef;
+	PVE::Firewall::run_locked($code);
+        
+	return undef;
     }});
 
 __PACKAGE__->register_method({
@@ -87,15 +91,20 @@ __PACKAGE__->register_method({
         my $vmid = $param->{vmid};
         my $netid = $param->{netid};
 
-	my $conf = PVE::QemuServer::load_config($vmid);
 
-	foreach my $opt (keys %$conf) {
-            next if $opt !~ m/^net(\d+)$/;
-            my $net = PVE::QemuServer::parse_net($conf->{$opt});
-            next if !$net;
-	    next if $netid && $opt != $netid;
-	    PVE::Firewall::flush_tap_rules($net, $opt, $vmid);
-	}
+	my $code = sub {
+	    my $conf = PVE::QemuServer::load_config($vmid);
+
+	    foreach my $opt (keys %$conf) {
+		next if $opt !~ m/^net(\d+)$/;
+		my $net = PVE::QemuServer::parse_net($conf->{$opt});
+		next if !$net;
+		next if $netid && $opt != $netid;
+		PVE::Firewall::flush_tap_rules($net, $opt, $vmid);
+	    }
+	};
+
+	PVE::Firewall::run_locked($code);
 
         return undef;
     }});
@@ -116,9 +125,13 @@ __PACKAGE__->register_method({
     code => sub {
         my ($param) = @_;
 
-	my $group = $param->{securitygroup};
-	PVE::Firewall::enable_group_rules($group);
+	my $code = sub {
+	    my $group = $param->{securitygroup};
+	    PVE::Firewall::enable_group_rules($group);
+	};
 
+	PVE::Firewall::run_locked($code);
+	
         return undef;
     }});
 
@@ -139,8 +152,12 @@ __PACKAGE__->register_method({
     code => sub {
         my ($param) = @_;
 
-	my $group = $param->{securitygroup};
-	PVE::Firewall::disable_group_rules($group);
+	my $code = sub {
+	    my $group = $param->{securitygroup};
+	    PVE::Firewall::disable_group_rules($group);
+	};
+
+	PVE::Firewall::run_locked($code);
 
         return undef;
     }});
@@ -158,7 +175,11 @@ __PACKAGE__->register_method({
     code => sub {
 	my ($param) = @_;
 
-	PVE::Firewall::enablehostfw();
+	my $code = sub {
+	    PVE::Firewall::enablehostfw();
+	};
+
+	PVE::Firewall::run_locked($code);
 
 	return undef;
     }});
@@ -176,7 +197,11 @@ __PACKAGE__->register_method({
     code => sub {
 	my ($param) = @_;
 
-	PVE::Firewall::disablehostfw();
+	my $code = sub {
+	    PVE::Firewall::disablehostfw();
+	};
+
+	PVE::Firewall::run_locked($code);
 
 	return undef;
     }});
@@ -195,7 +220,11 @@ __PACKAGE__->register_method ({
     code => sub {
 	my ($param) = @_;
 
-	PVE::Firewall::compile();
+	my $code = sub {
+	    PVE::Firewall::compile();
+	};
+
+	PVE::Firewall::run_locked($code);
 
 	return undef;
     }});
@@ -214,7 +243,11 @@ __PACKAGE__->register_method ({
     code => sub {
 	my ($param) = @_;
 
-	PVE::Firewall::compile_and_start();
+	my $code = sub {
+	    PVE::Firewall::compile_and_start();
+	};
+
+	PVE::Firewall::run_locked($code);
 
 	return undef;
     }});
@@ -233,7 +266,11 @@ __PACKAGE__->register_method ({
     code => sub {
 	my ($param) = @_;
 
-	die "implement me";
+	my $code = sub {
+	    die "implement me";
+	};
+
+	PVE::Firewall::run_locked($code);
 
 	return undef;
     }});
