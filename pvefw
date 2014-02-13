@@ -204,7 +204,7 @@ __PACKAGE__->register_method ({
     name => 'start',
     path => 'start',
     method => 'POST',
-    description => "Start firewall.",
+    description => "Start (or restart if already active) firewall.",
     parameters => {
     	additionalProperties => 0,
 	properties => {},
@@ -220,29 +220,10 @@ __PACKAGE__->register_method ({
     }});
 
 __PACKAGE__->register_method ({
-    name => 'restart',
-    path => 'restart',
-    method => 'POST',
-    description => "Restart firewall.",
-    parameters => {
-    	additionalProperties => 0,
-	properties => {},
-    },
-    returns => { type => 'null' },
-
-    code => sub {
-	my ($param) = @_;
-
-	PVE::Firewall::compile_and_start(1);
-
-	return undef;
-    }});
-
-__PACKAGE__->register_method ({
     name => 'stop',
     path => 'stop',
     method => 'POST',
-    description => "Stop firewall.",
+    description => "Stop firewall. This will remove all rules installed by this script. The host is then unprotected.",
     parameters => {
     	additionalProperties => 0,
 	properties => {},
@@ -252,26 +233,7 @@ __PACKAGE__->register_method ({
     code => sub {
 	my ($param) = @_;
 
-	PVE::Tools::run_command(['shorewall', 'stop']);
-
-	return undef;
-    }});
-
-__PACKAGE__->register_method ({
-    name => 'clear',
-    path => 'clear',
-    method => 'POST',
-    description => "Clear will remove all rules installed by this script. The host is then unprotected.",
-    parameters => {
-    	additionalProperties => 0,
-	properties => {},
-    },
-    returns => { type => 'null' },
-
-    code => sub {
-	my ($param) = @_;
-
-	PVE::Tools::run_command(['shorewall', 'clear']);
+	die "implement me";
 
 	return undef;
     }});
@@ -283,7 +245,6 @@ my $cmddef = {
     start => [ __PACKAGE__, 'start', []],
     restart => [ __PACKAGE__, 'restart', []],
     stop => [ __PACKAGE__, 'stop', []],
-    clear => [ __PACKAGE__, 'clear', []],
     enablevmfw => [ __PACKAGE__, 'enablevmfw', []],
     disablevmfw => [ __PACKAGE__, 'disablevmfw', []],
     enablehostfw => [ __PACKAGE__, 'enablehostfw', []],

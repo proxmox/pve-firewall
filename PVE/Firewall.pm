@@ -15,15 +15,19 @@ use Data::Dumper;
 my $macros;
 my @ruleset = ();
 
-sub get_shorewall_macros {
+# todo: implement some kind of MACROS, like shorewall /usr/share/shorewall/macro.*
+sub get_firewall_macros {
 
     return $macros if $macros;
 
-    foreach my $path (</usr/share/shorewall/macro.*>) {
-	if ($path =~ m|/macro\.(\S+)$|) {
-	    $macros->{$1} = 1;
-	}
-    }
+    #foreach my $path (</usr/share/shorewall/macro.*>) {
+    #  if ($path =~ m|/macro\.(\S+)$|) {
+    #    $macros->{$1} = 1;
+    #  }
+    #}
+
+    $macros = {}; # fixme: implemet me
+
     return $macros;
 }
 
@@ -859,7 +863,7 @@ sub parse_fw_rules {
 
     my $res = { in => [], out => [] };
 
-    my $macros = get_shorewall_macros();
+    my $macros = get_firewall_macros();
     my $protocols = get_etc_protocols();
     
     while (defined(my $line = <$fh>)) {
@@ -992,18 +996,12 @@ sub read_vm_firewall_rules {
 }
 
 sub compile {
-
     my $vmdata = read_local_vm_config();
     my $rules = read_vm_firewall_rules($vmdata);
 
     # print Dumper($vmdata);
 
-    my $swdir = '/etc/shorewall';
-    mkdir $swdir;
-
-    &$compile_shorewall($swdir, $vmdata, $rules);
-
-    PVE::Tools::run_command(['shorewall', 'compile']);
+    die "implement me";
 }
 
 sub compile_and_start {
@@ -1011,8 +1009,7 @@ sub compile_and_start {
 
     compile();
 
-    PVE::Tools::run_command(['shorewall', $restart ? 'restart' : 'start']);
+     die "implement me";  
 }
-
 
 1;
