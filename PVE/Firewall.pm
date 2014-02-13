@@ -152,7 +152,7 @@ sub iptables_restore {
 
     my $cmdlist = join("\n", @ruleset);
 
-    run_command("echo '$cmdlist' | /sbin/iptables-restore -n", outfunc => sub {});
+    run_command("/sbin/iptables-restore -n", input => $cmdlist, outfunc => sub {});
 }
 
 sub iptables_addrule {
