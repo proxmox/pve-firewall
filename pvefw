@@ -267,7 +267,19 @@ __PACKAGE__->register_method ({
 	my ($param) = @_;
 
 	my $code = sub {
-	    die "implement me";
+	    my $chash = PVE::Firewall::iptables_get_chains();
+	    my $cmdlist = "*filter\n";
+	    $cmdlist .= "-D INPUT -j proxmoxfw-INPUT\n";
+	    $cmdlist .= "-D FORWARD -j proxmoxfw-FORWARD\n";
+	    foreach my $chain (keys %$chash) {
+		$cmdlist .= "-F $chain\n";
+	    }
+	    foreach my $chain (keys %$chash) {
+		$cmdlist .= "-X $chain\n";
+	    }
+	    $cmdlist .= "COMMIT\n";
+
+	    PVE::Firewall::iptables_restore_cmdlist($cmdlist);
 	};
 
 	PVE::Firewall::run_locked($code);

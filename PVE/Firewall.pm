@@ -146,12 +146,8 @@ sub iptables {
     run_command("/sbin/iptables $cmd", outfunc => sub {}, errfunc => sub {});
 }
 
-sub iptables_restore {
-
-    unshift (@ruleset, '*filter');
-    push (@ruleset, 'COMMIT');
-
-    my $cmdlist = join("\n", @ruleset) . "\n";
+sub iptables_restore_cmdlist {
+    my ($cmdlist) = @_;
 
     my $verbose = 1; # fixme: how/when do we set this
 
@@ -161,6 +157,16 @@ sub iptables_restore {
 	print STDERR $cmdlist if $verbose;
 	die $err;
     }
+}
+
+sub iptables_restore {
+
+    unshift (@ruleset, '*filter');
+    push (@ruleset, 'COMMIT');
+
+    my $cmdlist = join("\n", @ruleset) . "\n";
+
+    iptables_restore_cmdlist($cmdlist);
 }
 
 # experimental code to read existing chains and compute SHA1 checksum
@@ -176,6 +182,7 @@ sub iptables_get_chains {
 	return 1 if $name =~ m/^BRIDGEFW-(:?IN|OUT)$/;
 	return 1 if $name =~ m/^proxmoxfw-\S+$/;
 	return 1 if $name =~ m/^tap\d+i\d+-(:?IN|OUT)$/;
+	return 1 if $name =~ m/^vmbr\d+-(:?IN|OUT)$/;
 
 	return undef;
     };
