@@ -3,6 +3,7 @@ package PVE::Firewall;
 use warnings;
 use strict;
 use Data::Dumper;
+use Digest::SHA;
 use PVE::Tools;
 use PVE::QemuServer;
 use File::Path;
@@ -160,6 +161,65 @@ sub iptables_restore {
 	print STDERR $cmdlist if $verbose;
 	die $err;
     }
+}
+
+# experimental code to read existing chains and compute SHA1 checksum
+# for each chain. 
+sub iptables_get_chains {
+
+    my $res = {};
+
+    # check what chains we want to track
+    my $is_pvefw_chain = sub {
+	my $name = shift;
+
+	return 1 if $name =~ m/^BRIDGEFW-(:?IN|OUT)$/;
+	return 1 if $name =~ m/^proxmoxfw-\S+$/;
+	return 1 if $name =~ m/^tap\d+i\d+-(:?IN|OUT)$/;
+
+	return undef;
+    };
+
+    my $table = '';
+
+    my $dhash = {};
+
+    my $parser = sub {
+	my $line = shift;
+
+	return if $line =~ m/^#/;
+	return if $line =~ m/^\s*$/;
+
+	if ($line =~ m/^\*(\S+)$/) {
+	    $table = $1;
+	    return;
+	}
+
+	return if $table ne 'filter';
+
+	if ($line =~ m/^:(\S+)\s/) {
+	    my $chain = $1;
+	    return if !&$is_pvefw_chain($chain);
+	    $dhash->{$chain} = Digest::SHA->new('sha1');
+	} elsif ($line =~ m/^-([A-Z]) (\S+)\s/) {
+	    my $chain = $2;
+	    return if !&$is_pvefw_chain($chain);
+	    my $sha = $dhash->{$chain} || die "undefined chain '$chain'";
+	    $sha->add_bits("$line\n");
+	} else {
+	    # simply ignore the rest
+	    return;
+	}
+    };
+
+    run_command("/sbin/iptables-save", outfunc => $parser);
+
+    foreach my $chain (keys %$dhash) {
+	my $sha = $dhash->{$chain};
+	$res->{$chain} = $sha->b64digest;
+    }
+
+    return $res;
 }
 
 sub iptables_addrule {
