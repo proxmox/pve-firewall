@@ -150,9 +150,16 @@ sub iptables_restore {
     unshift (@ruleset, '*filter');
     push (@ruleset, 'COMMIT');
 
-    my $cmdlist = join("\n", @ruleset);
+    my $cmdlist = join("\n", @ruleset) . "\n";
 
-    run_command("/sbin/iptables-restore -n", input => $cmdlist, outfunc => sub {});
+    my $verbose = 1; # fixme: how/when do we set this
+
+    #run_command("echo '$cmdlist' | /sbin/iptables-restore -n");
+    eval { run_command("/sbin/iptables-restore -n ", input => $cmdlist); };
+    if (my $err = $@) {
+	print STDERR $cmdlist if $verbose;
+	die $err;
+    }
 }
 
 sub iptables_addrule {
