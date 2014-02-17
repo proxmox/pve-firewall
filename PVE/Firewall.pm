@@ -277,8 +277,13 @@ sub ruleset_insertrule {
 sub generate_bridge_chains {
     my ($ruleset, $bridge) = @_;
 
-    ruleset_create_chain($ruleset, "BRIDGEFW-IN");
-    ruleset_create_chain($ruleset, "BRIDGEFW-OUT");
+    if (!ruleset_chain_exist($ruleset, "BRIDGEFW-IN")){
+	ruleset_create_chain($ruleset, "BRIDGEFW-IN");
+    }
+
+    if (!ruleset_chain_exist($ruleset, "BRIDGEFW-OUT")){
+	ruleset_create_chain($ruleset, "BRIDGEFW-OUT");
+    }
 
     if (!ruleset_chain_exist($ruleset, "proxmoxfw-FORWARD")){
 	ruleset_create_chain($ruleset, "proxmoxfw-FORWARD");
@@ -618,7 +623,6 @@ sub compile {
 	    generate_tap_rules_direction($ruleset, $iface, $netid, $rules->{$vmid}->{out}, $bridge, 'OUT');
 	}
     }
-    
     return $ruleset;
 }
 
