@@ -184,6 +184,7 @@ sub iptables_get_chains {
 	return 1 if $name =~ m/^tap\d+i\d+-(:?IN|OUT)$/;
 	return 1 if $name =~ m/^vmbr\d+-(:?IN|OUT)$/;
 	return 1 if $name =~ m/^GROUP-(:?[^\s\-]+)-(:?IN|OUT)$/;
+	return 1 if $name =~ m/^host-(:?IN|OUT)$/;
 
 	return undef;
     };
