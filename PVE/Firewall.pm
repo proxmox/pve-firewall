@@ -3,7 +3,7 @@ package PVE::Firewall;
 use warnings;
 use strict;
 use Data::Dumper;
-use Digest::SHA;
+use Digest::MD5;
 use PVE::Tools;
 use PVE::QemuServer;
 use File::Path;
@@ -16,7 +16,6 @@ use Data::Dumper;
 my $pve_fw_lock_filename = "/var/lock/pvefw.lck";
 
 my $macros;
-my @ruleset = ();
 
 # todo: implement some kind of MACROS, like shorewall /usr/share/shorewall/macro.*
 sub get_firewall_macros {
@@ -149,28 +148,9 @@ sub iptables {
 sub iptables_restore_cmdlist {
     my ($cmdlist) = @_;
 
-    my $verbose = 1; # fixme: how/when do we set this
-
-    #run_command("echo '$cmdlist' | /sbin/iptables-restore -n");
-    eval { run_command("/sbin/iptables-restore -n ", input => $cmdlist); };
-    if (my $err = $@) {
-	print STDERR $cmdlist if $verbose;
-	die $err;
-    }
+    run_command("/sbin/iptables-restore -n", input => $cmdlist);
 }
 
-sub iptables_restore {
-
-    unshift (@ruleset, '*filter');
-    push (@ruleset, 'COMMIT');
-
-    my $cmdlist = join("\n", @ruleset) . "\n";
-
-    iptables_restore_cmdlist($cmdlist);
-}
-
-# experimental code to read existing chains and compute SHA1 checksum
-# for each chain. 
 sub iptables_get_chains {
 
     my $res = {};
@@ -191,8 +171,6 @@ sub iptables_get_chains {
 
     my $table = '';
 
-    my $dhash = {};
-
     my $parser = sub {
 	my $line = shift;
 
@@ -209,12 +187,11 @@ sub iptables_get_chains {
 	if ($line =~ m/^:(\S+)\s/) {
 	    my $chain = $1;
 	    return if !&$is_pvefw_chain($chain);
-	    $dhash->{$chain} = Digest::SHA->new('sha1');
-	} elsif ($line =~ m/^-([A-Z]) (\S+)\s/) {
-	    my $chain = $2;
+	    $res->{$chain} = "unknown";
+	} elsif ($line =~ m/^-A\s+(\S+)\s.*--log-prefix\s+\"PVESIG:(\S+)\"/) {
+	    my ($chain, $sig) = ($1, $2);
 	    return if !&$is_pvefw_chain($chain);
-	    my $sha = $dhash->{$chain} || die "undefined chain '$chain'";
-	    $sha->add_bits("$line\n");
+	    $res->{$chain} = $sig;
 	} else {
 	    # simply ignore the rest
 	    return;
@@ -223,18 +200,7 @@ sub iptables_get_chains {
 
     run_command("/sbin/iptables-save", outfunc => $parser);
 
-    foreach my $chain (keys %$dhash) {
-	my $sha = $dhash->{$chain};
-	$res->{$chain} = $sha->b64digest;
-    }
-
     return $res;
-}
-
-sub iptables_addrule {
-   my ($rule) = @_;
-
-   push (@ruleset, $rule);
 }
 
 sub iptables_chain_exist {
@@ -259,10 +225,10 @@ sub iptables_rule_exist {
     return 1;
 }
 
-sub iptables_generate_rule {
-    my ($chain, $rule) = @_;
+sub ruleset_generate_rule {
+    my ($ruleset, $chain, $rule) = @_;
 
-    my $cmd = "-A $chain";
+    my $cmd = '';
 
     $cmd .= " -m iprange --src-range" if $rule->{nbsource} && $rule->{nbsource} > 1;
     $cmd .= " -s $rule->{source}" if $rule->{source};
@@ -275,348 +241,193 @@ sub iptables_generate_rule {
     $cmd .= " --sport $rule->{sport}" if $rule->{sport};
     $cmd .= " -j $rule->{action}" if $rule->{action};
 
-    iptables_addrule($cmd);
-
+    ruleset_addrule($ruleset, $chain, $cmd) if $cmd;
 }
 
-sub generate_bridge_rules {
-    my ($bridge) = @_;
+sub ruleset_create_chain {
+    my ($ruleset, $chain) = @_;
 
-    if(!iptables_chain_exist("BRIDGEFW-OUT")){
-	iptables_addrule(":BRIDGEFW-OUT - [0:0]");
-    }
+    die "chain '$chain' already exists\n" if $ruleset->{$chain};
 
-    if(!iptables_chain_exist("BRIDGEFW-IN")){
-	iptables_addrule(":BRIDGEFW-IN - [0:0]");
-    }
-
-    if(!iptables_chain_exist("proxmoxfw-FORWARD")){
-	iptables_addrule(":proxmoxfw-FORWARD - [0:0]");
-	iptables_addrule("-I FORWARD -j proxmoxfw-FORWARD");
-	iptables_addrule("-A proxmoxfw-FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT");
-	iptables_addrule("-A proxmoxfw-FORWARD -m physdev --physdev-is-in --physdev-is-bridged -j BRIDGEFW-OUT");
-	iptables_addrule("-A proxmoxfw-FORWARD -m physdev --physdev-is-out --physdev-is-bridged -j BRIDGEFW-IN");
-
-    }
-
-    generate_proxmoxfwinput();
-
-    if(!iptables_chain_exist("$bridge-IN")){
-	iptables_addrule(":$bridge-IN - [0:0]");
-	iptables_addrule("-A proxmoxfw-FORWARD -i $bridge -j DROP");  #disable interbridge routing
-	iptables_addrule("-A BRIDGEFW-IN -j $bridge-IN");
-	iptables_addrule("-A $bridge-IN -j ACCEPT");
-
-    }
-
-    if(!iptables_chain_exist("$bridge-OUT")){
-	iptables_addrule(":$bridge-OUT - [0:0]");
-	iptables_addrule("-A proxmoxfw-FORWARD -o $bridge -j DROP"); # disable interbridge routing
-	iptables_addrule("-A BRIDGEFW-OUT -j $bridge-OUT");
-
-    }
-
+    $ruleset->{$chain} = [];
 }
 
+sub ruleset_chain_exist {
+    my ($ruleset, $chain) = @_;
+
+    return $ruleset->{$chain} ? 1 : undef;
+}
+
+sub ruleset_addrule {
+   my ($ruleset, $chain, $rule) = @_;
+
+   die "no such chain '$chain'\n" if !$ruleset->{$chain};
+
+   push @{$ruleset->{$chain}}, "-A $chain $rule";
+}
+
+sub ruleset_insertrule {
+   my ($ruleset, $chain, $rule) = @_;
+
+   die "no such chain '$chain'\n" if !$ruleset->{$chain};
+
+   unshift @{$ruleset->{$chain}}, "-A $chain $rule";
+}
+
+sub generate_bridge_chains {
+    my ($ruleset, $bridge) = @_;
+
+    ruleset_create_chain($ruleset, "BRIDGEFW-IN");
+    ruleset_create_chain($ruleset, "BRIDGEFW-OUT");
+
+    if (!ruleset_chain_exist($ruleset, "proxmoxfw-FORWARD")){
+	ruleset_create_chain($ruleset, "proxmoxfw-FORWARD");
+
+	ruleset_addrule($ruleset, "proxmoxfw-FORWARD", "-m state --state RELATED,ESTABLISHED -j ACCEPT");
+	ruleset_addrule($ruleset, "proxmoxfw-FORWARD", "-m physdev --physdev-is-in --physdev-is-bridged -j BRIDGEFW-OUT");
+	ruleset_addrule($ruleset, "proxmoxfw-FORWARD", "-m physdev --physdev-is-out --physdev-is-bridged -j BRIDGEFW-IN");
+    }
+
+    if (!ruleset_chain_exist($ruleset, "$bridge-IN")) {
+	ruleset_create_chain($ruleset, "$bridge-IN");
+	ruleset_addrule($ruleset, "proxmoxfw-FORWARD", "-i $bridge -j DROP");  # disable interbridge routing
+	ruleset_addrule($ruleset, "BRIDGEFW-IN", "-j $bridge-IN");
+	ruleset_addrule($ruleset, "$bridge-IN", "-j ACCEPT");
+    }
+
+    if (!ruleset_chain_exist($ruleset, "$bridge-OUT")) {
+	ruleset_create_chain($ruleset, "$bridge-OUT");
+	ruleset_addrule($ruleset, "proxmoxfw-FORWARD", "-o $bridge -j DROP"); # disable interbridge routing
+	ruleset_addrule($ruleset, "BRIDGEFW-OUT", "-j $bridge-OUT");
+    }
+}
 
 sub generate_tap_rules_direction {
-    my ($iface, $netid, $rules, $bridge, $direction) = @_;
+    my ($ruleset, $iface, $netid, $rules, $bridge, $direction) = @_;
 
     my $tapchain = "$iface-$direction";
 
-    iptables_addrule(":$tapchain - [0:0]");
+    ruleset_create_chain($ruleset, $tapchain);
 
-    iptables_addrule("-A $tapchain -m state --state INVALID -j DROP");
-    iptables_addrule("-A $tapchain -m state --state RELATED,ESTABLISHED -j ACCEPT");
+    ruleset_addrule($ruleset, $tapchain, "-m state --state INVALID -j DROP");
+    ruleset_addrule($ruleset, $tapchain, "-m state --state RELATED,ESTABLISHED -j ACCEPT");
 
-    if (scalar(@$rules)) {
+    if ($rules) {
         foreach my $rule (@$rules) {
 	    next if $rule->{iface} && $rule->{iface} ne $netid;
 	    if($rule->{action}  =~ m/^(GROUP-(\S+))$/){
-		    $rule->{action} .= "-$direction";
-		    #generate empty group rule if don't exist
-		    if(!iptables_chain_exist($rule->{action})){
-			generate_group_rules($2);
-		    }
+		$rule->{action} .= "-$direction";
+		# generate empty group rule if don't exist
+		if(!ruleset_chain_exist($ruleset, $rule->{action})){
+		    generate_group_rules($ruleset, $2);
+		}
 	    }
-	    #we go to vmbr-IN if accept in out rules
+	    # we go to vmbr-IN if accept in out rules
 	    $rule->{action} = "$bridge-IN" if $rule->{action} eq 'ACCEPT' && $direction eq 'OUT';
-	    iptables_generate_rule($tapchain, $rule);
+	    ruleset_generate_rule($ruleset, $tapchain, $rule);
         }
     }
 
-    iptables_addrule("-A $tapchain -j LOG --log-prefix \"$tapchain-dropped: \" --log-level 4");
-    iptables_addrule("-A $tapchain -j DROP");
+    ruleset_addrule($ruleset, $tapchain, "-j LOG --log-prefix \"$tapchain-dropped: \" --log-level 4");
+    ruleset_addrule($ruleset, $tapchain, "-j DROP");
 
-    #plug the tap chain to bridge chain
-    my $physdevdirection = $direction eq 'IN' ? "out":"in";
-    my $rule = "$bridge-$direction -m physdev --physdev-$physdevdirection $iface --physdev-is-bridged -j $tapchain";
+    # plug the tap chain to bridge chain
+    my $physdevdirection = $direction eq 'IN' ? "out" : "in";
+    my $rule = "-m physdev --physdev-$physdevdirection $iface --physdev-is-bridged -j $tapchain";
+    ruleset_insertrule($ruleset, "$bridge-$direction", $rule);
 
-    if(!iptables_rule_exist($rule)){
-	iptables_addrule("-I $rule");
-    }
-
-    if($direction eq 'OUT'){
-	#add tap->host rules
-	my $rule = "proxmoxfw-INPUT -m physdev --physdev-$physdevdirection $iface -j $tapchain";
-
-	if(!iptables_rule_exist($rule)){
-	    iptables_addrule("-A $rule");
-	}
-    }
-}
-
-sub generate_tap_rules {
-    my ($net, $netid, $vmid) = @_;
-
-    my $filename = "/etc/pve/firewall/$vmid.fw";
-    my $fh = IO::File->new($filename, O_RDONLY);
-    return if !$fh;
-
-    #generate bridge rules
-    my $bridge = $net->{bridge};
-    my $tag = $net->{tag};
-    $bridge .= "v$tag" if $tag;
-   
-    #generate tap chain
-    my $rules = parse_fw_rules($filename, $fh);
-
-    my $inrules = $rules->{in};
-    my $outrules = $rules->{out};
-
-    my $iface = "tap".$vmid."i".$1 if $netid =~ m/net(\d+)/;
-
-    generate_bridge_rules($bridge);
-    generate_tap_rules_direction($iface, $netid, $inrules, $bridge, 'IN');
-    generate_tap_rules_direction($iface, $netid, $outrules, $bridge, 'OUT');
-    iptables_restore();
-}
-
-sub flush_tap_rules {
-    my ($net, $netid, $vmid) = @_;
-
-    my $bridge = $net->{bridge};
-    my $iface = "tap".$vmid."i".$1 if $netid =~ m/net(\d+)/;
-
-    flush_tap_rules_direction($iface, $bridge, 'IN');
-    flush_tap_rules_direction($iface, $bridge, 'OUT');
-    iptables_restore();
-}
-
-sub flush_tap_rules_direction {
-    my ($iface, $bridge, $direction) = @_;
-
-    my $tapchain = "$iface-$direction";
-
-    if(iptables_chain_exist($tapchain)){
-	iptables_addrule("-F $tapchain");
-
-	my $physdevdirection = $direction eq 'IN' ? "out":"in";
-	my $rule = "$bridge-$direction -m physdev --physdev-$physdevdirection $iface --physdev-is-bridged -j $tapchain";
-	if(iptables_rule_exist($rule)){
-	    iptables_addrule("-D $rule");
-	}
-
-	if($direction eq 'OUT'){
-	    my $rule = "proxmoxfw-INPUT -m physdev --physdev-$physdevdirection $iface -j $tapchain";
-	    if(iptables_rule_exist($rule)){
-		iptables_addrule("-D $rule");
-	    }
-	}
-
-	iptables_addrule("-X $tapchain");
+    if ($direction eq 'OUT'){
+	# add tap->host rules
+	my $rule = "-m physdev --physdev-$physdevdirection $iface -j $tapchain";
+	ruleset_addrule($ruleset, "proxmoxfw-INPUT", $rule);
     }
 }
 
 sub enablehostfw {
-
-    generate_proxmoxfwinput();
-    generate_proxmoxfwoutput();
+    my ($ruleset) = @_;
 
     my $filename = "/etc/pve/local/host.fw";
     my $fh = IO::File->new($filename, O_RDONLY);
     return if !$fh;
 
     my $rules = parse_fw_rules($filename, $fh);
-    my $inrules = $rules->{in};
-    my $outrules = $rules->{out};
 
-    #host inbound firewall
-    iptables_addrule(":host-IN - [0:0]");
-    iptables_addrule("-A host-IN -m state --state INVALID -j DROP");
-    iptables_addrule("-A host-IN -m state --state RELATED,ESTABLISHED -j ACCEPT");
-    iptables_addrule("-A host-IN -i lo -j ACCEPT");
-    iptables_addrule("-A host-IN -m addrtype --dst-type MULTICAST -j ACCEPT");
-    iptables_addrule("-A host-IN -p udp -m state --state NEW -m multiport --dports 5404,5405 -j ACCEPT");
-    iptables_addrule("-A host-IN -p udp -m udp --dport 9000 -j ACCEPT"); #corosync
+    # host inbound firewall
+    ruleset_create_chain($ruleset, "host-IN");
 
-    if (scalar(@$inrules)) {
-        foreach my $rule (@$inrules) {
-            #we use RETURN because we need to check also tap rules
+    ruleset_addrule($ruleset, "host-IN", "-m state --state INVALID -j DROP");
+    ruleset_addrule($ruleset, "host-IN", "-m state --state RELATED,ESTABLISHED -j ACCEPT");
+    ruleset_addrule($ruleset, "host-IN", "-i lo -j ACCEPT");
+    ruleset_addrule($ruleset, "host-IN", "-m addrtype --dst-type MULTICAST -j ACCEPT");
+    ruleset_addrule($ruleset, "host-IN", "-p udp -m state --state NEW -m multiport --dports 5404,5405 -j ACCEPT");
+    ruleset_addrule($ruleset, "host-IN", "-p udp -m udp --dport 9000 -j ACCEPT");  #corosync
+
+    if ($rules->{in}) {
+        foreach my $rule (@{$rules->{in}}) {
+            # we use RETURN because we need to check also tap rules
             $rule->{action} = 'RETURN' if $rule->{action} eq 'ACCEPT';
-            iptables_generate_rule('host-IN', $rule);
+            ruleset_generate_rule($ruleset, "host-IN", $rule);
         }
     }
 
-    iptables_addrule("-A host-IN -j LOG --log-prefix \"kvmhost-IN dropped: \" --log-level 4");
-    iptables_addrule("-A host-IN -j DROP");
+    ruleset_addrule($ruleset, "host-IN", "-j LOG --log-prefix \"kvmhost-IN dropped: \" --log-level 4");
+    ruleset_addrule($ruleset, "host-IN", "-j DROP");
 
-    #host outbound firewall
-    iptables_addrule(":host-OUT - [0:0]");
-    iptables_addrule("-A host-OUT -m state --state INVALID -j DROP");
-    iptables_addrule("-A host-OUT -m state --state RELATED,ESTABLISHED -j ACCEPT");
-    iptables_addrule("-A host-OUT -o lo -j ACCEPT");
-    iptables_addrule("-A host-OUT -m addrtype --dst-type MULTICAST -j ACCEPT");
-    iptables_addrule("-A host-OUT -p udp -m state --state NEW -m multiport --dports 5404,5405 -j ACCEPT");
-    iptables_addrule("-A host-OUT -p udp -m udp --dport 9000 -j ACCEPT"); #corosync
+    # host outbound firewall
+    ruleset_create_chain($ruleset, "host-OUT");
+    ruleset_addrule($ruleset, "host-OUT", "-m state --state INVALID -j DROP");
+    ruleset_addrule($ruleset, "host-OUT", "-m state --state RELATED,ESTABLISHED -j ACCEPT");
+    ruleset_addrule($ruleset, "host-OUT", "-o lo -j ACCEPT");
+    ruleset_addrule($ruleset, "host-OUT", "-m addrtype --dst-type MULTICAST -j ACCEPT");
+    ruleset_addrule($ruleset, "host-OUT", "-p udp -m state --state NEW -m multiport --dports 5404,5405 -j ACCEPT");
+    ruleset_addrule($ruleset, "host-OUT", "-p udp -m udp --dport 9000 -j ACCEPT"); #corosync
 
-    if (scalar(@$outrules)) {
-        foreach my $rule (@$outrules) {
-            #we use RETURN because we need to check also tap rules
+    if ($rules->{out}) {
+        foreach my $rule (@{$rules->{out}}) {
+            # we use RETURN because we need to check also tap rules
             $rule->{action} = 'RETURN' if $rule->{action} eq 'ACCEPT';
-            iptables_generate_rule('host-OUT', $rule);
+            ruleset_generate_rule($ruleset, "host-OUT", $rule);
         }
     }
 
-    iptables_addrule("-A host-OUT -j LOG --log-prefix \"kvmhost-OUT dropped: \" --log-level 4");
-    iptables_addrule("-A host-OUT -j DROP");
-
+    ruleset_addrule($ruleset, "host-OUT", "-j LOG --log-prefix \"kvmhost-OUT dropped: \" --log-level 4");
+    ruleset_addrule($ruleset, "host-OUT", "-j DROP");
     
-    my $rule = "proxmoxfw-INPUT -j host-IN";
-    if(!iptables_rule_exist($rule)){
-	iptables_addrule("-I $rule");
-    }
-
-    $rule = "proxmoxfw-OUTPUT -j host-OUT";
-    if(!iptables_rule_exist($rule)){
-	iptables_addrule("-I $rule");
-    }
-
-    iptables_restore();
-
-
-}
-
-sub disablehostfw {
-
-    my $chain = "host-IN";
-
-    my $rule = "proxmoxfw-INPUT -j $chain";
-    if(iptables_rule_exist($rule)){
-	iptables_addrule("-D $rule");
-    }
-
-    if(iptables_chain_exist($chain)){
-	iptables_addrule("-F $chain");
-	iptables_addrule("-X $chain");
-    }
-
-    $chain = "host-OUT";
-
-    $rule = "proxmoxfw-OUTPUT -j $chain";
-    if(iptables_rule_exist($rule)){
-	iptables_addrule("-D $rule");
-    }
-
-    if(iptables_chain_exist($chain)){
-	iptables_addrule("-F $chain");
-	iptables_addrule("-X $chain");
-    }
-
-    iptables_restore();   
-}
-
-sub generate_proxmoxfwinput {
-
-    if(!iptables_chain_exist("proxmoxfw-INPUT")){
-        iptables_addrule(":proxmoxfw-INPUT - [0:0]");
-        iptables_addrule("-I INPUT -j proxmoxfw-INPUT");
-        iptables_addrule("-A INPUT -j ACCEPT");
-    }
-}
-
-sub generate_proxmoxfwoutput {
-
-    if(!iptables_chain_exist("proxmoxfw-OUTPUT")){
-        iptables_addrule(":proxmoxfw-OUTPUT - [0:0]");
-        iptables_addrule("-I OUTPUT -j proxmoxfw-OUTPUT");
-        iptables_addrule("-A OUTPUT -j ACCEPT");
-    }
-
-}
-
-sub enable_group_rules {
-    my ($group) = @_;
-    
-    generate_group_rules($group);
-    iptables_restore();
+    ruleset_addrule($ruleset, "proxmoxfw-OUTPUT", "-j host-OUT");
+    ruleset_addrule($ruleset, "proxmoxfw-INPUT", "-j host-IN");
 }
 
 sub generate_group_rules {
-    my ($group) = @_;
+    my ($ruleset, $group) = @_;
 
     my $filename = "/etc/pve/firewall/groups.fw";
     my $fh = IO::File->new($filename, O_RDONLY);
     return if !$fh;
 
     my $rules = parse_fw_rules($filename, $fh, $group);
-    my $inrules = $rules->{in};
-    my $outrules = $rules->{out};
 
-    my $chain = "GROUP-".$group."-IN";
+    my $chain = "GROUP-${group}-IN";
 
-    iptables_addrule(":$chain - [0:0]");
+    ruleset_create_chain($ruleset, $chain);
 
-    if (scalar(@$inrules)) {
-        foreach my $rule (@$inrules) {
-            iptables_generate_rule($chain, $rule);
+    if ($rules->{in}) {
+        foreach my $rule (@{$rules->{in}}) {
+ 	    ruleset_generate_rule($ruleset, $chain, $rule);
         }
     }
 
-    $chain = "GROUP-".$group."-OUT";
+    $chain = "GROUP-${group}-OUT";
 
-    iptables_addrule(":$chain - [0:0]");
+    ruleset_create_chain($ruleset, $chain);
 
-    if(!iptables_chain_exist("BRIDGEFW-OUT")){
-	iptables_addrule(":BRIDGEFW-OUT - [0:0]");
-    }
-
-    if(!iptables_chain_exist("BRIDGEFW-IN")){
-	iptables_addrule(":BRIDGEFW-IN - [0:0]");
-    }
-
-    if (scalar(@$outrules)) {
-        foreach my $rule (@$outrules) {
-            #we go the BRIDGEFW-IN because we need to check also other tap rules 
-            #(and group rules can be set on any bridge, so we can't go to VMBRXX-IN)
+    if ($rules->{out}) {
+        foreach my $rule (@{$rules->{out}}) {
+            # we go the BRIDGEFW-IN because we need to check also other tap rules 
+            # (and group rules can be set on any bridge, so we can't go to VMBRXX-IN)
             $rule->{action} = 'BRIDGEFW-IN' if $rule->{action} eq 'ACCEPT';
-            iptables_generate_rule($chain, $rule);
+            ruleset_generate_rule($rule, $chain, $rule);
         }
     }
-
-}
-
-sub disable_group_rules {
-    my ($group) = @_;
-
-    my $chain = "GROUP-".$group."-IN";
-
-    if(iptables_chain_exist($chain)){
-	iptables_addrule("-F $chain");
-	iptables_addrule("-X $chain");
-    }
-
-    $chain = "GROUP-".$group."-OUT";
-
-    if(iptables_chain_exist($chain)){
-	iptables_addrule("-F $chain");
-	iptables_addrule("-X $chain");
-    }
-
-    #iptables_restore will die if security group is linked in a tap chain
-    #maybe can we improve that, parsing each vm config, or parsing iptables -S
-    #to see if the security group is linked or not
-    iptables_restore();
 }
 
 sub parse_fw_rules {
@@ -746,7 +557,6 @@ sub read_local_vm_config {
     my $list = PVE::QemuServer::config_list();
 
     foreach my $vmid (keys %$list) {
-	#next if !($vmid eq '100' || $vmid eq '102');
 	my $cfspath = PVE::QemuServer::cfs_config_path($vmid);
 	if (my $conf = PVE::Cluster::cfs_read_file($cfspath)) {
 	    $qemu->{$vmid} = $conf;
@@ -776,17 +586,170 @@ sub compile {
     my $vmdata = read_local_vm_config();
     my $rules = read_vm_firewall_rules($vmdata);
 
-    # print Dumper($vmdata);
+    #print Dumper($rules);
 
-    die "implement me";
+    my $ruleset = {};
+
+    # setup host firewall rules
+    ruleset_create_chain($ruleset, "proxmoxfw-INPUT");
+    ruleset_create_chain($ruleset, "proxmoxfw-OUTPUT");
+
+    enablehostfw($ruleset);
+
+    # generate firewall rules for QEMU VMs 
+    foreach my $vmid (keys %{$vmdata->{qemu}}) {
+	my $conf = $vmdata->{qemu}->{$vmid};
+	next if !$rules->{$vmid};
+
+	foreach my $netid (keys %$conf) {
+	    next if $netid !~ m/^net(\d+)$/;
+	    my $net = PVE::QemuServer::parse_net($conf->{$netid});
+	    next if !$net;
+	    my $iface = "tap${vmid}i$1";
+
+	    my $bridge = $net->{bridge};
+	    next if !$bridge; # fixme: ?
+
+	    $bridge .= "v$net->{tag}" if $net->{tag};
+
+	    generate_bridge_chains($ruleset, $bridge);
+
+	    generate_tap_rules_direction($ruleset, $iface, $netid, $rules->{$vmid}->{in}, $bridge, 'IN');
+	    generate_tap_rules_direction($ruleset, $iface, $netid, $rules->{$vmid}->{out}, $bridge, 'OUT');
+	}
+    }
+    
+    return $ruleset;
+}
+
+sub get_ruleset_status {
+    my ($ruleset, $verbose) = @_;
+
+    my $active_chains = iptables_get_chains();
+
+    my $statushash = {};
+
+    foreach my $chain (sort keys %$ruleset) {
+	my $digest = Digest::MD5->new();
+	foreach my $cmd (@{$ruleset->{$chain}}) {
+	     $digest->add("$cmd\n");
+	}
+	my $sig = $digest->b64digest;
+	$statushash->{$chain}->{sig} = $sig;
+
+	my $oldsig = $active_chains->{$chain};
+	if (!defined($oldsig)) {
+	    $statushash->{$chain}->{action} = 'create';
+	} else {
+	    if ($oldsig eq $sig) {
+		$statushash->{$chain}->{action} = 'exists';
+	    } else {
+		$statushash->{$chain}->{action} = 'update';
+	    }
+	}
+	print "$statushash->{$chain}->{action} $chain ($sig)\n" if $verbose;
+	foreach my $cmd (@{$ruleset->{$chain}}) {
+	    print "\t$cmd\n" if $verbose;
+	}
+    }
+
+    foreach my $chain (sort keys %$active_chains) {
+	if (!defined($ruleset->{$chain})) {
+	    my $sig = $active_chains->{$chain};
+	    $statushash->{$chain}->{action} = 'delete';
+	    $statushash->{$chain}->{sig} = $sig;
+	    print "delete $chain ($sig)\n" if $verbose;
+	}
+    }    
+
+    return $statushash;
+}
+
+sub print_ruleset {
+    my ($ruleset) = @_;
+
+    get_ruleset_status($ruleset, 1);
+}
+
+sub print_sig_rule {
+    my ($chain, $sig) = @_;
+
+    # Note: This rule should never match! We just use this hack to store a SHA1 checksum
+    # used to detect changes
+    return "-A $chain -j LOG --log-prefix \"PVESIG:$sig\" -p tcp -s \"127.128.129.130\" --dport 1\n";
 }
 
 sub compile_and_start {
-    my ($restart) = @_;
+    my ($verbose) = @_;
 
-    compile();
+    my $ruleset = compile();
 
-     die "implement me";  
+    my $cmdlist = "*filter\n"; # we pass this to iptables-restore;
+
+    my $statushash = get_ruleset_status($ruleset, $verbose);
+
+    # create missing chains first
+    foreach my $chain (sort keys %$ruleset) {
+	my $stat = $statushash->{$chain};
+	die "internal error" if !$stat;
+	next if $stat->{action} ne 'create';
+
+	$cmdlist .= ":$chain - [0:0]\n";
+    }
+
+    my $rule = "INPUT -j proxmoxfw-INPUT";
+    if (!PVE::Firewall::iptables_rule_exist($rule)) {
+	$cmdlist .= "-A $rule\n";
+    }
+    $rule = "OUTPUT -j proxmoxfw-OUTPUT";
+    if (!PVE::Firewall::iptables_rule_exist($rule)) {
+	$cmdlist .= "-A $rule\n";
+    }
+
+    $rule = "FORWARD -j proxmoxfw-FORWARD";
+    if (!PVE::Firewall::iptables_rule_exist($rule)) {
+	$cmdlist .= "-A $rule\n";
+    }
+
+    foreach my $chain (sort keys %$ruleset) {
+	my $stat = $statushash->{$chain};
+	die "internal error" if !$stat;
+
+	if ($stat->{action} eq 'update' || $stat->{action} eq 'create') {
+	    $cmdlist .= "-F $chain\n";
+	    foreach my $cmd (@{$ruleset->{$chain}}) {
+		$cmdlist .= "$cmd\n";
+	    }
+	    $cmdlist .= print_sig_rule($chain, $stat->{sig});
+	} elsif ($stat->{action} eq 'delete') {
+	    $cmdlist .= "-F $chain\n";
+	    $cmdlist .= "-X $chain\n";
+	} elsif ($stat->{action} eq 'exists') {
+	    # do nothing
+	} else {
+	    die "internal error - unknown status '$stat->{action}'";
+	}
+    }
+
+    $cmdlist .= "COMMIT\n";
+
+    print $cmdlist if $verbose;
+
+    iptables_restore_cmdlist($cmdlist);
+
+    # test: re-read status and check if everything is up to date 
+    $statushash = get_ruleset_status($ruleset);
+
+    my $errors;
+    foreach my $chain (sort keys %$ruleset) {
+	my $stat = $statushash->{$chain};
+	if ($stat->{action} ne 'exists') {
+	    warn "unable to update chain '$chain'\n";
+	    $errors = 1;
+	}
+    }
+
+    die "unable to apply firewall changes\n" if $errors;
 }
 
 1;

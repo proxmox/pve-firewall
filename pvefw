@@ -29,191 +29,21 @@ $rpcenv->init_request();
 $rpcenv->set_language($ENV{LANG});
 $rpcenv->set_user('root@pam');
 
-__PACKAGE__->register_method({
-    name => 'enablevmfw',
-    path => 'enablevmfw',
-    method => 'POST',
-    parameters => {
-        additionalProperties => 0,
-        properties => {
-            vmid => get_standard_option('pve-vmid'),
-            netid => {
-                type => 'string',
-		optional => 1
-            },
-        },
-    },
-    returns => { type => 'null' },
-    code => sub {
-        my ($param) = @_;
-
-        # test if VM exists
-        my $vmid = $param->{vmid};
-        my $netid = $param->{netid};
-
-	my $code = sub {
-	    my $conf = PVE::QemuServer::load_config($vmid);
-
-	    foreach my $opt (keys %$conf) {
-		next if $opt !~ m/^net(\d+)$/;
-		my $net = PVE::QemuServer::parse_net($conf->{$opt});
-		next if !$net;
-		next if $netid && $opt != $netid;
-		PVE::Firewall::generate_tap_rules($net, $opt, $vmid);
-	    }
-	};
-
-	PVE::Firewall::run_locked($code);
-        
-	return undef;
-    }});
-
-__PACKAGE__->register_method({
-    name => 'disablevmfw',
-    path => 'disablevmfw',
-    method => 'POST',
-    parameters => {
-        additionalProperties => 0,
-        properties => {
-            vmid => get_standard_option('pve-vmid'),
-            netid => {
-                type => 'string',
-		optional => 1
-            },
-
-        },
-    },
-    returns => { type => 'null' },
-    code => sub {
-        my ($param) = @_;
-
-        # test if VM exists
-        my $vmid = $param->{vmid};
-        my $netid = $param->{netid};
-
-
-	my $code = sub {
-	    my $conf = PVE::QemuServer::load_config($vmid);
-
-	    foreach my $opt (keys %$conf) {
-		next if $opt !~ m/^net(\d+)$/;
-		my $net = PVE::QemuServer::parse_net($conf->{$opt});
-		next if !$net;
-		next if $netid && $opt != $netid;
-		PVE::Firewall::flush_tap_rules($net, $opt, $vmid);
-	    }
-	};
-
-	PVE::Firewall::run_locked($code);
-
-        return undef;
-    }});
-
-__PACKAGE__->register_method({
-    name => 'enablegroup',
-    path => 'enablegroup',
-    method => 'POST',
-    parameters => {
-        additionalProperties => 0,
-        properties => {
-            securitygroup => {
-                type => 'string',
-            },
-        },
-    },
-    returns => { type => 'null' },
-    code => sub {
-        my ($param) = @_;
-
-	my $code = sub {
-	    my $group = $param->{securitygroup};
-	    PVE::Firewall::enable_group_rules($group);
-	};
-
-	PVE::Firewall::run_locked($code);
-	
-        return undef;
-    }});
-
-__PACKAGE__->register_method({
-    name => 'disablegroup',
-    path => 'disablegroup',
-    method => 'POST',
-    parameters => {
-        additionalProperties => 0,
-        properties => {
-            securitygroup => {
-                type => 'string',
-            },
-
-        },
-    },
-    returns => { type => 'null' },
-    code => sub {
-        my ($param) = @_;
-
-	my $code = sub {
-	    my $group = $param->{securitygroup};
-	    PVE::Firewall::disable_group_rules($group);
-	};
-
-	PVE::Firewall::run_locked($code);
-
-        return undef;
-    }});
-
-__PACKAGE__->register_method({
-    name => 'enablehostfw',
-    path => 'enablehostfw',
-    method => 'POST',
-    parameters => {
-    	additionalProperties => 0,
-	properties => {},
-    },
-    returns => { type => 'null' },
-
-    code => sub {
-	my ($param) = @_;
-
-	my $code = sub {
-	    PVE::Firewall::enablehostfw();
-	};
-
-	PVE::Firewall::run_locked($code);
-
-	return undef;
-    }});
-
-__PACKAGE__->register_method({
-    name => 'disablehostfw',
-    path => 'disablehostfw',
-    method => 'POST',
-    parameters => {
-    	additionalProperties => 0,
-	properties => {},
-    },
-    returns => { type => 'null' },
-
-    code => sub {
-	my ($param) = @_;
-
-	my $code = sub {
-	    PVE::Firewall::disablehostfw();
-	};
-
-	PVE::Firewall::run_locked($code);
-
-	return undef;
-    }});
-
 __PACKAGE__->register_method ({
     name => 'compile',
     path => 'compile',
     method => 'POST',
-    description => "Compile firewall rules.",
+    description => "Compile amd print firewall rules. This is only for testing.",
     parameters => {
     	additionalProperties => 0,
-	properties => {},
+	properties => {
+	    verbose => {
+		description => "Verbose output.",
+		type => "boolean",
+		optional => 1,
+		default => 0,
+	    },
+	},
     },
     returns => { type => 'null' },
 
@@ -221,7 +51,8 @@ __PACKAGE__->register_method ({
 	my ($param) = @_;
 
 	my $code = sub {
-	    PVE::Firewall::compile();
+	    my $ruleset = PVE::Firewall::compile();
+	    PVE::Firewall::get_ruleset_status($ruleset, 1) if $param->{verbose};
 	};
 
 	PVE::Firewall::run_locked($code);
@@ -236,7 +67,14 @@ __PACKAGE__->register_method ({
     description => "Start (or restart if already active) firewall.",
     parameters => {
     	additionalProperties => 0,
-	properties => {},
+	properties => {
+	    verbose => {
+		description => "Verbose output.",
+		type => "boolean",
+		optional => 1,
+		default => 0,
+	    },
+	},
     },
     returns => { type => 'null' },
 
@@ -244,7 +82,7 @@ __PACKAGE__->register_method ({
 	my ($param) = @_;
 
 	my $code = sub {
-	    PVE::Firewall::compile_and_start();
+	    PVE::Firewall::compile_and_start($param->{verbose});
 	};
 
 	PVE::Firewall::run_locked($code);
@@ -269,8 +107,20 @@ __PACKAGE__->register_method ({
 	my $code = sub {
 	    my $chash = PVE::Firewall::iptables_get_chains();
 	    my $cmdlist = "*filter\n";
-	    $cmdlist .= "-D INPUT -j proxmoxfw-INPUT\n";
-	    $cmdlist .= "-D FORWARD -j proxmoxfw-FORWARD\n";
+	    my $rule = "INPUT -j proxmoxfw-INPUT";
+	    if (PVE::Firewall::iptables_rule_exist($rule)) {
+		$cmdlist .= "-D $rule\n";
+	    }
+	    $rule = "OUTPUT -j proxmoxfw-OUTPUT";
+	    if (PVE::Firewall::iptables_rule_exist($rule)) {
+		$cmdlist .= "-D $rule\n";
+	    }
+
+	    $rule = "FORWARD -j proxmoxfw-FORWARD";
+	    if (PVE::Firewall::iptables_rule_exist($rule)) {
+		$cmdlist .= "-D $rule\n";
+	    }
+
 	    foreach my $chain (keys %$chash) {
 		$cmdlist .= "-F $chain\n";
 	    }
@@ -292,14 +142,7 @@ my $nodename = PVE::INotify::nodename();
 my $cmddef = {
     compile => [ __PACKAGE__, 'compile', []],
     start => [ __PACKAGE__, 'start', []],
-    restart => [ __PACKAGE__, 'restart', []],
     stop => [ __PACKAGE__, 'stop', []],
-    enablevmfw => [ __PACKAGE__, 'enablevmfw', []],
-    disablevmfw => [ __PACKAGE__, 'disablevmfw', []],
-    enablehostfw => [ __PACKAGE__, 'enablehostfw', []],
-    disablehostfw => [ __PACKAGE__, 'disablehostfw', []],
-    enablegroup => [ __PACKAGE__, 'enablegroup', []],
-    disablegroup => [ __PACKAGE__, 'disablegroup', []],
 };
 
 my $cmd = shift;
