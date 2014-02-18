@@ -137,6 +137,18 @@ sub parse_port_name_number_or_range {
     return ($nbports);
 }
 
+my $bridge_firewall_enabled = 0;
+
+sub enable_bridge_firewall {
+
+    return if $bridge_firewall_enabled; # only once
+
+    system("echo 1 > /proc/sys/net/bridge/bridge-nf-call-iptables");
+    system("echo 1 > /proc/sys/net/bridge/bridge-nf-call-ip6tables");
+
+    $bridge_firewall_enabled = 1;
+}
+
 my $rule_format = "%-15s %-30s %-30s %-15s %-15s %-15s\n";
 
 sub iptables {
