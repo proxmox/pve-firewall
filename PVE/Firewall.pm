@@ -702,10 +702,10 @@ sub print_sig_rule {
     return "-A $chain -j LOG --log-prefix \"PVESIG:$sig\" -p tcp -s \"127.128.129.130\" --dport 1\n";
 }
 
-sub compile_and_start {
-    my ($verbose) = @_;
+sub apply_ruleset {
+    my ($ruleset, $verbose) = @_;
 
-    my $ruleset = compile();
+    enable_bridge_firewall();
 
     my $cmdlist = "*filter\n"; # we pass this to iptables-restore;
 

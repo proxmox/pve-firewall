@@ -82,8 +82,8 @@ __PACKAGE__->register_method ({
 	my ($param) = @_;
 
 	my $code = sub {
-	    PVE::Firewall::enable_bridge_firewall();
-	    PVE::Firewall::compile_and_start($param->{verbose});
+	    my $ruleset = PVE::Firewall::compile();
+	    PVE::Firewall::apply_ruleset($ruleset, $param->{verbose});
 	};
 
 	PVE::Firewall::run_locked($code);
