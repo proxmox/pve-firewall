@@ -258,6 +258,8 @@ sub ruleset_generate_rule {
 sub ruleset_create_chain {
     my ($ruleset, $chain) = @_;
 
+    die "Invalid chain name '$chain' (28 char max)\n" if length($chain) > 28;
+
     die "chain '$chain' already exists\n" if $ruleset->{$chain};
 
     $ruleset->{$chain} = [];
