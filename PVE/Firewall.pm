@@ -3,7 +3,7 @@ package PVE::Firewall;
 use warnings;
 use strict;
 use Data::Dumper;
-use Digest::MD5;
+use Digest::SHA;
 use PVE::Tools;
 use PVE::QemuServer;
 use File::Path;
@@ -199,7 +199,7 @@ sub iptables_get_chains {
 	    my $chain = $1;
 	    return if !&$is_pvefw_chain($chain);
 	    $res->{$chain} = "unknown";
-	} elsif ($line =~ m/^-A\s+(\S+)\s.*--log-prefix\s+\"PVESIG:(\S+)\"/) {
+	} elsif ($line =~ m/^-A\s+(\S+)\s.*--comment\s+\"PVESIG:(\S+)\"/) {
 	    my ($chain, $sig) = ($1, $2);
 	    return if !&$is_pvefw_chain($chain);
 	    $res->{$chain} = $sig;
@@ -653,7 +653,7 @@ sub get_ruleset_status {
     my $statushash = {};
 
     foreach my $chain (sort keys %$ruleset) {
-	my $digest = Digest::MD5->new();
+	my $digest = Digest::SHA->new('sha1');
 	foreach my $cmd (@{$ruleset->{$chain}}) {
 	     $digest->add("$cmd\n");
 	}
@@ -697,9 +697,8 @@ sub print_ruleset {
 sub print_sig_rule {
     my ($chain, $sig) = @_;
 
-    # Note: This rule should never match! We just use this hack to store a SHA1 checksum
-    # used to detect changes
-    return "-A $chain -j LOG --log-prefix \"PVESIG:$sig\" -p tcp -s \"127.128.129.130\" --dport 1\n";
+    # We just use this to store a SHA1 checksum used to detect changes
+    return "-A $chain -m comment --comment \"PVESIG:$sig\"\n";
 }
 
 sub apply_ruleset {
