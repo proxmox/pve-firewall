@@ -450,7 +450,7 @@ sub generate_group_rules {
             # we go the PVEFW-BRIDGE-IN because we need to check also other tap rules 
             # (and group rules can be set on any bridge, so we can't go to VMBRXX-IN)
             $rule->{action} = 'PVEFW-BRIDGE-IN' if $rule->{action} eq 'ACCEPT';
-            ruleset_generate_rule($rule, $chain, $rule);
+            ruleset_generate_rule($ruleset, $chain, $rule);
         }
     }
 }
