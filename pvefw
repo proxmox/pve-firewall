@@ -107,16 +107,16 @@ __PACKAGE__->register_method ({
 	my $code = sub {
 	    my $chash = PVE::Firewall::iptables_get_chains();
 	    my $cmdlist = "*filter\n";
-	    my $rule = "INPUT -j proxmoxfw-INPUT";
+	    my $rule = "INPUT -j PVEFW-INPUT";
 	    if (PVE::Firewall::iptables_rule_exist($rule)) {
 		$cmdlist .= "-D $rule\n";
 	    }
-	    $rule = "OUTPUT -j proxmoxfw-OUTPUT";
+	    $rule = "OUTPUT -j PVEFW-OUTPUT";
 	    if (PVE::Firewall::iptables_rule_exist($rule)) {
 		$cmdlist .= "-D $rule\n";
 	    }
 
-	    $rule = "FORWARD -j proxmoxfw-FORWARD";
+	    $rule = "FORWARD -j PVEFW-FORWARD";
 	    if (PVE::Firewall::iptables_rule_exist($rule)) {
 		$cmdlist .= "-D $rule\n";
 	    }

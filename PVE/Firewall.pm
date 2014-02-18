@@ -159,12 +159,11 @@ sub iptables_get_chains {
     my $is_pvefw_chain = sub {
 	my $name = shift;
 
-	return 1 if $name =~ m/^BRIDGEFW-(:?IN|OUT)$/;
-	return 1 if $name =~ m/^proxmoxfw-\S+$/;
+	return 1 if $name =~ m/^PVEFW-\S+$/;
+
 	return 1 if $name =~ m/^tap\d+i\d+-(:?IN|OUT)$/;
 	return 1 if $name =~ m/^vmbr\d+-(:?IN|OUT)$/;
 	return 1 if $name =~ m/^GROUP-(:?[^\s\-]+)-(:?IN|OUT)$/;
-	return 1 if $name =~ m/^host-(:?IN|OUT)$/;
 
 	return undef;
     };
@@ -277,33 +276,33 @@ sub ruleset_insertrule {
 sub generate_bridge_chains {
     my ($ruleset, $bridge) = @_;
 
-    if (!ruleset_chain_exist($ruleset, "BRIDGEFW-IN")){
-	ruleset_create_chain($ruleset, "BRIDGEFW-IN");
+    if (!ruleset_chain_exist($ruleset, "PVEFW-BRIDGE-IN")){
+	ruleset_create_chain($ruleset, "PVEFW-BRIDGE-IN");
     }
 
-    if (!ruleset_chain_exist($ruleset, "BRIDGEFW-OUT")){
-	ruleset_create_chain($ruleset, "BRIDGEFW-OUT");
+    if (!ruleset_chain_exist($ruleset, "PVEFW-BRIDGE-OUT")){
+	ruleset_create_chain($ruleset, "PVEFW-BRIDGE-OUT");
     }
 
-    if (!ruleset_chain_exist($ruleset, "proxmoxfw-FORWARD")){
-	ruleset_create_chain($ruleset, "proxmoxfw-FORWARD");
+    if (!ruleset_chain_exist($ruleset, "PVEFW-FORWARD")){
+	ruleset_create_chain($ruleset, "PVEFW-FORWARD");
 
-	ruleset_addrule($ruleset, "proxmoxfw-FORWARD", "-m state --state RELATED,ESTABLISHED -j ACCEPT");
-	ruleset_addrule($ruleset, "proxmoxfw-FORWARD", "-m physdev --physdev-is-in --physdev-is-bridged -j BRIDGEFW-OUT");
-	ruleset_addrule($ruleset, "proxmoxfw-FORWARD", "-m physdev --physdev-is-out --physdev-is-bridged -j BRIDGEFW-IN");
+	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m state --state RELATED,ESTABLISHED -j ACCEPT");
+	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m physdev --physdev-is-in --physdev-is-bridged -j PVEFW-BRIDGE-OUT");
+	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m physdev --physdev-is-out --physdev-is-bridged -j PVEFW-BRIDGE-IN");
     }
 
     if (!ruleset_chain_exist($ruleset, "$bridge-IN")) {
 	ruleset_create_chain($ruleset, "$bridge-IN");
-	ruleset_addrule($ruleset, "proxmoxfw-FORWARD", "-i $bridge -j DROP");  # disable interbridge routing
-	ruleset_addrule($ruleset, "BRIDGEFW-IN", "-j $bridge-IN");
+	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i $bridge -j DROP");  # disable interbridge routing
+	ruleset_addrule($ruleset, "PVEFW-BRIDGE-IN", "-j $bridge-IN");
 	ruleset_addrule($ruleset, "$bridge-IN", "-j ACCEPT");
     }
 
     if (!ruleset_chain_exist($ruleset, "$bridge-OUT")) {
 	ruleset_create_chain($ruleset, "$bridge-OUT");
-	ruleset_addrule($ruleset, "proxmoxfw-FORWARD", "-o $bridge -j DROP"); # disable interbridge routing
-	ruleset_addrule($ruleset, "BRIDGEFW-OUT", "-j $bridge-OUT");
+	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o $bridge -j DROP"); # disable interbridge routing
+	ruleset_addrule($ruleset, "PVEFW-BRIDGE-OUT", "-j $bridge-OUT");
     }
 }
 
@@ -344,7 +343,7 @@ sub generate_tap_rules_direction {
     if ($direction eq 'OUT'){
 	# add tap->host rules
 	my $rule = "-m physdev --physdev-$physdevdirection $iface -j $tapchain";
-	ruleset_addrule($ruleset, "proxmoxfw-INPUT", $rule);
+	ruleset_addrule($ruleset, "PVEFW-INPUT", $rule);
     }
 }
 
@@ -358,48 +357,51 @@ sub enablehostfw {
     my $rules = parse_fw_rules($filename, $fh);
 
     # host inbound firewall
-    ruleset_create_chain($ruleset, "host-IN");
+    my $chain = "PVEFW-HOST-IN";
+    ruleset_create_chain($ruleset, $chain);
 
-    ruleset_addrule($ruleset, "host-IN", "-m state --state INVALID -j DROP");
-    ruleset_addrule($ruleset, "host-IN", "-m state --state RELATED,ESTABLISHED -j ACCEPT");
-    ruleset_addrule($ruleset, "host-IN", "-i lo -j ACCEPT");
-    ruleset_addrule($ruleset, "host-IN", "-m addrtype --dst-type MULTICAST -j ACCEPT");
-    ruleset_addrule($ruleset, "host-IN", "-p udp -m state --state NEW -m multiport --dports 5404,5405 -j ACCEPT");
-    ruleset_addrule($ruleset, "host-IN", "-p udp -m udp --dport 9000 -j ACCEPT");  #corosync
+    ruleset_addrule($ruleset, $chain, "-m state --state INVALID -j DROP");
+    ruleset_addrule($ruleset, $chain, "-m state --state RELATED,ESTABLISHED -j ACCEPT");
+    ruleset_addrule($ruleset, $chain, "-i lo -j ACCEPT");
+    ruleset_addrule($ruleset, $chain, "-m addrtype --dst-type MULTICAST -j ACCEPT");
+    ruleset_addrule($ruleset, $chain, "-p udp -m state --state NEW -m multiport --dports 5404,5405 -j ACCEPT");
+    ruleset_addrule($ruleset, $chain, "-p udp -m udp --dport 9000 -j ACCEPT");  #corosync
 
     if ($rules->{in}) {
         foreach my $rule (@{$rules->{in}}) {
             # we use RETURN because we need to check also tap rules
             $rule->{action} = 'RETURN' if $rule->{action} eq 'ACCEPT';
-            ruleset_generate_rule($ruleset, "host-IN", $rule);
+            ruleset_generate_rule($ruleset, $chain, $rule);
         }
     }
 
-    ruleset_addrule($ruleset, "host-IN", "-j LOG --log-prefix \"kvmhost-IN dropped: \" --log-level 4");
-    ruleset_addrule($ruleset, "host-IN", "-j DROP");
+    ruleset_addrule($ruleset, $chain, "-j LOG --log-prefix \"kvmhost-IN dropped: \" --log-level 4");
+    ruleset_addrule($ruleset, $chain, "-j DROP");
 
     # host outbound firewall
-    ruleset_create_chain($ruleset, "host-OUT");
-    ruleset_addrule($ruleset, "host-OUT", "-m state --state INVALID -j DROP");
-    ruleset_addrule($ruleset, "host-OUT", "-m state --state RELATED,ESTABLISHED -j ACCEPT");
-    ruleset_addrule($ruleset, "host-OUT", "-o lo -j ACCEPT");
-    ruleset_addrule($ruleset, "host-OUT", "-m addrtype --dst-type MULTICAST -j ACCEPT");
-    ruleset_addrule($ruleset, "host-OUT", "-p udp -m state --state NEW -m multiport --dports 5404,5405 -j ACCEPT");
-    ruleset_addrule($ruleset, "host-OUT", "-p udp -m udp --dport 9000 -j ACCEPT"); #corosync
+    my $chain = "PVEFW-HOST-OUT";
+    ruleset_create_chain($ruleset, $chain);
+
+    ruleset_addrule($ruleset, $chain, "-m state --state INVALID -j DROP");
+    ruleset_addrule($ruleset, $chain, "-m state --state RELATED,ESTABLISHED -j ACCEPT");
+    ruleset_addrule($ruleset, $chain, "-o lo -j ACCEPT");
+    ruleset_addrule($ruleset, $chain, "-m addrtype --dst-type MULTICAST -j ACCEPT");
+    ruleset_addrule($ruleset, $chain, "-p udp -m state --state NEW -m multiport --dports 5404,5405 -j ACCEPT");
+    ruleset_addrule($ruleset, $chain, "-p udp -m udp --dport 9000 -j ACCEPT"); #corosync
 
     if ($rules->{out}) {
         foreach my $rule (@{$rules->{out}}) {
             # we use RETURN because we need to check also tap rules
             $rule->{action} = 'RETURN' if $rule->{action} eq 'ACCEPT';
-            ruleset_generate_rule($ruleset, "host-OUT", $rule);
+            ruleset_generate_rule($ruleset, $chain, $rule);
         }
     }
 
-    ruleset_addrule($ruleset, "host-OUT", "-j LOG --log-prefix \"kvmhost-OUT dropped: \" --log-level 4");
-    ruleset_addrule($ruleset, "host-OUT", "-j DROP");
+    ruleset_addrule($ruleset, $chain, "-j LOG --log-prefix \"kvmhost-OUT dropped: \" --log-level 4");
+    ruleset_addrule($ruleset, $chain, "-j DROP");
     
-    ruleset_addrule($ruleset, "proxmoxfw-OUTPUT", "-j host-OUT");
-    ruleset_addrule($ruleset, "proxmoxfw-INPUT", "-j host-IN");
+    ruleset_addrule($ruleset, "PVEFW-OUTPUT", "-j PVEFW-HOST-OUT");
+    ruleset_addrule($ruleset, "PVEFW-INPUT", "-j PVEFW-HOST-IN");
 }
 
 sub generate_group_rules {
@@ -427,9 +429,9 @@ sub generate_group_rules {
 
     if ($rules->{out}) {
         foreach my $rule (@{$rules->{out}}) {
-            # we go the BRIDGEFW-IN because we need to check also other tap rules 
+            # we go the PVEFW-BRIDGE-IN because we need to check also other tap rules 
             # (and group rules can be set on any bridge, so we can't go to VMBRXX-IN)
-            $rule->{action} = 'BRIDGEFW-IN' if $rule->{action} eq 'ACCEPT';
+            $rule->{action} = 'PVEFW-BRIDGE-IN' if $rule->{action} eq 'ACCEPT';
             ruleset_generate_rule($rule, $chain, $rule);
         }
     }
@@ -596,8 +598,8 @@ sub compile {
     my $ruleset = {};
 
     # setup host firewall rules
-    ruleset_create_chain($ruleset, "proxmoxfw-INPUT");
-    ruleset_create_chain($ruleset, "proxmoxfw-OUTPUT");
+    ruleset_create_chain($ruleset, "PVEFW-INPUT");
+    ruleset_create_chain($ruleset, "PVEFW-OUTPUT");
 
     enablehostfw($ruleset);
 
@@ -701,16 +703,16 @@ sub compile_and_start {
 	$cmdlist .= ":$chain - [0:0]\n";
     }
 
-    my $rule = "INPUT -j proxmoxfw-INPUT";
+    my $rule = "INPUT -j PVEFW-INPUT";
     if (!PVE::Firewall::iptables_rule_exist($rule)) {
 	$cmdlist .= "-A $rule\n";
     }
-    $rule = "OUTPUT -j proxmoxfw-OUTPUT";
+    $rule = "OUTPUT -j PVEFW-OUTPUT";
     if (!PVE::Firewall::iptables_rule_exist($rule)) {
 	$cmdlist .= "-A $rule\n";
     }
 
-    $rule = "FORWARD -j proxmoxfw-FORWARD";
+    $rule = "FORWARD -j PVEFW-FORWARD";
     if (!PVE::Firewall::iptables_rule_exist($rule)) {
 	$cmdlist .= "-A $rule\n";
     }
