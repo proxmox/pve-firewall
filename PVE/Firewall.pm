@@ -395,7 +395,7 @@ sub enablehostfw {
     ruleset_addrule($ruleset, $chain, "-j DROP");
 
     # host outbound firewall
-    my $chain = "PVEFW-HOST-OUT";
+    $chain = "PVEFW-HOST-OUT";
     ruleset_create_chain($ruleset, $chain);
 
     ruleset_addrule($ruleset, $chain, "-m state --state INVALID -j DROP");
