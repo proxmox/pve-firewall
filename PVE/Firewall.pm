@@ -307,7 +307,7 @@ sub generate_bridge_chains {
 }
 
 sub generate_tap_rules_direction {
-    my ($ruleset, $iface, $netid, $rules, $bridge, $direction) = @_;
+    my ($ruleset, $iface, $netid, $macaddr, $rules, $bridge, $direction) = @_;
 
     my $tapchain = "$iface-$direction";
 
@@ -315,6 +315,10 @@ sub generate_tap_rules_direction {
 
     ruleset_addrule($ruleset, $tapchain, "-m state --state INVALID -j DROP");
     ruleset_addrule($ruleset, $tapchain, "-m state --state RELATED,ESTABLISHED -j ACCEPT");
+
+    if ($direction eq 'OUT' && defined($macaddr)) {
+	ruleset_addrule($ruleset, $tapchain, "-m mac ! --mac-source $macaddr -j DROP");
+    }
 
     if ($rules) {
         foreach my $rule (@$rules) {
@@ -621,8 +625,9 @@ sub compile {
 
 	    generate_bridge_chains($ruleset, $bridge);
 
-	    generate_tap_rules_direction($ruleset, $iface, $netid, $rules->{$vmid}->{in}, $bridge, 'IN');
-	    generate_tap_rules_direction($ruleset, $iface, $netid, $rules->{$vmid}->{out}, $bridge, 'OUT');
+	    my $macaddr = $net->{macaddr};
+	    generate_tap_rules_direction($ruleset, $iface, $netid, $macaddr, $rules->{$vmid}->{in}, $bridge, 'IN');
+	    generate_tap_rules_direction($ruleset, $iface, $netid, $macaddr, $rules->{$vmid}->{out}, $bridge, 'OUT');
 	}
     }
     return $ruleset;
