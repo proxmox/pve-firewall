@@ -341,6 +341,7 @@ sub generate_tap_rules_direction {
     if ($rules) {
         foreach my $rule (@$rules) {
 	    next if $rule->{iface} && $rule->{iface} ne $netid;
+	    # we go to $bridge-IN if accept in out rules
 	    if($rule->{action}  =~ m/^(GROUP-(\S+))$/){
 		$rule->{action} .= "-$direction";
 		# generate empty group rule if don't exist
@@ -348,9 +349,9 @@ sub generate_tap_rules_direction {
 		    generate_group_rules($ruleset, $group_rules, $2);
 		}
 		ruleset_generate_rule($ruleset, $tapchain, $rule);
-		ruleset_addrule($ruleset, $tapchain, "-m mark --mark 1 -g $bridge-IN");
+		my $accept_action = $direction eq 'OUT' ? "-g $bridge-IN" : '-j ACCEPT';
+		ruleset_addrule($ruleset, $tapchain, "-m mark --mark 1 $accept_action");
 	    } else {
-		# we go to vmbr-IN if accept in out rules
 		$rule->{action} = "$bridge-IN" if $rule->{action} eq 'ACCEPT' && $direction eq 'OUT';
 		ruleset_generate_rule($ruleset, $tapchain, $rule);
 	    }
