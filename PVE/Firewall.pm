@@ -237,7 +237,7 @@ sub iptables_rule_exist {
 }
 
 sub ruleset_generate_rule {
-    my ($ruleset, $chain, $rule) = @_;
+    my ($ruleset, $chain, $rule, $goto) = @_;
 
     my $cmd = '';
 
@@ -250,7 +250,11 @@ sub ruleset_generate_rule {
     $cmd .= " --dport $rule->{dport}" if $rule->{dport};
     $cmd .= "  --match multiport" if $rule->{nbsport} && $rule->{nbsport} > 1;
     $cmd .= " --sport $rule->{sport}" if $rule->{sport};
-    $cmd .= " -j $rule->{action}" if $rule->{action};
+
+    if (my $action = $rule->{action}) {
+	$goto = 1 if !defined($goto) && $action eq 'PVEFW-SET-ACCEPT-MARK';
+	$cmd .= $goto ? " -g $action" : " -j $action";
+    };
 
     ruleset_addrule($ruleset, $chain, $cmd) if $cmd;
 }
@@ -343,11 +347,14 @@ sub generate_tap_rules_direction {
 		if(!ruleset_chain_exist($ruleset, $rule->{action})){
 		    generate_group_rules($ruleset, $2);
 		}
+		ruleset_generate_rule($ruleset, $tapchain, $rule);
+		ruleset_addrule($ruleset, $tapchain, "-m mark --mark 1 -g $bridge-IN");
+	    } else {
+		# we go to vmbr-IN if accept in out rules
+		$rule->{action} = "$bridge-IN" if $rule->{action} eq 'ACCEPT' && $direction eq 'OUT';
+		ruleset_generate_rule($ruleset, $tapchain, $rule);
 	    }
-	    # we go to vmbr-IN if accept in out rules
-	    $rule->{action} = "$bridge-IN" if $rule->{action} eq 'ACCEPT' && $direction eq 'OUT';
-	    ruleset_generate_rule($ruleset, $tapchain, $rule);
-        }
+	}
     }
 
     ruleset_addrule($ruleset, $tapchain, "-j LOG --log-prefix \"$tapchain-dropped: \" --log-level 4");
@@ -444,12 +451,14 @@ sub generate_group_rules {
     $chain = "GROUP-${group}-OUT";
 
     ruleset_create_chain($ruleset, $chain);
+    ruleset_addrule($ruleset, $chain, "-j MARK --set-mark 0"); # clear mark
 
     if ($rules->{out}) {
         foreach my $rule (@{$rules->{out}}) {
-            # we go the PVEFW-BRIDGE-IN because we need to check also other tap rules 
-            # (and group rules can be set on any bridge, so we can't go to VMBRXX-IN)
-            $rule->{action} = 'PVEFW-BRIDGE-IN' if $rule->{action} eq 'ACCEPT';
+            # we go the PVEFW-SET-ACCEPT-MARK Instead of ACCEPT) because we need to 
+	    # check also other tap rules (and group rules can be set on any bridge, 
+	    # so we can't go to VMBRXX-IN)
+            $rule->{action} = 'PVEFW-SET-ACCEPT-MARK' if $rule->{action} eq 'ACCEPT';
             ruleset_generate_rule($ruleset, $chain, $rule);
         }
     }
@@ -618,6 +627,9 @@ sub compile {
     # setup host firewall rules
     ruleset_create_chain($ruleset, "PVEFW-INPUT");
     ruleset_create_chain($ruleset, "PVEFW-OUTPUT");
+
+    ruleset_create_chain($ruleset, "PVEFW-SET-ACCEPT-MARK");
+    ruleset_addrule($ruleset, "PVEFW-SET-ACCEPT-MARK", "-j MARK --set-mark 1");
 
     enablehostfw($ruleset);
 
