@@ -746,13 +746,21 @@ sub apply_ruleset {
 	    }
 	    $cmdlist .= print_sig_rule($chain, $stat->{sig});
 	} elsif ($stat->{action} eq 'delete') {
-	    $cmdlist .= "-F $chain\n";
-	    $cmdlist .= "-X $chain\n";
+	    die "internal error"; # this should not happen
 	} elsif ($stat->{action} eq 'exists') {
 	    # do nothing
 	} else {
 	    die "internal error - unknown status '$stat->{action}'";
 	}
+    }
+
+    foreach my $chain (keys %$statushash) {
+	next if $statushash->{$chain}->{action} ne 'delete';
+	$cmdlist .= "-F $chain\n";
+    }
+    foreach my $chain (keys %$statushash) {
+	next if $statushash->{$chain}->{action} ne 'delete';
+	$cmdlist .= "-X $chain\n";
     }
 
     $cmdlist .= "COMMIT\n";
