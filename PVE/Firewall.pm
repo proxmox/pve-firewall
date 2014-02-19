@@ -325,7 +325,7 @@ sub generate_bridge_chains {
 }
 
 sub generate_tap_rules_direction {
-    my ($ruleset, $iface, $netid, $macaddr, $rules, $bridge, $direction) = @_;
+    my ($ruleset, $group_rules, $iface, $netid, $macaddr, $rules, $bridge, $direction) = @_;
 
     my $tapchain = "$iface-$direction";
 
@@ -345,7 +345,7 @@ sub generate_tap_rules_direction {
 		$rule->{action} .= "-$direction";
 		# generate empty group rule if don't exist
 		if(!ruleset_chain_exist($ruleset, $rule->{action})){
-		    generate_group_rules($ruleset, $2);
+		    generate_group_rules($ruleset, $group_rules, $2);
 		}
 		ruleset_generate_rule($ruleset, $tapchain, $rule);
 		ruleset_addrule($ruleset, $tapchain, "-m mark --mark 1 -g $bridge-IN");
@@ -373,13 +373,9 @@ sub generate_tap_rules_direction {
 }
 
 sub enablehostfw {
-    my ($ruleset) = @_;
+    my ($ruleset, $rules, $group_rules) = @_;
 
-    my $filename = "/etc/pve/local/host.fw";
-    my $fh = IO::File->new($filename, O_RDONLY);
-    return if !$fh;
-
-    my $rules = parse_fw_rules($filename, $fh);
+    # fixme: allow security groups
 
     # host inbound firewall
     my $chain = "PVEFW-HOST-IN";
@@ -430,14 +426,12 @@ sub enablehostfw {
 }
 
 sub generate_group_rules {
-    my ($ruleset, $group) = @_;
+    my ($ruleset, $group_rules, $group) = @_;
 
-    my $filename = "/etc/pve/firewall/groups.fw";
-    my $fh = IO::File->new($filename, O_RDONLY);
-    return if !$fh;
+    my $rules = $group_rules->{$group};
 
-    my $rules = parse_fw_rules($filename, $fh, $group);
-
+    die "no such security group '$group'\n" if !$rules;
+    
     my $chain = "GROUP-${group}-IN";
 
     ruleset_create_chain($ruleset, $chain);
@@ -464,109 +458,190 @@ sub generate_group_rules {
     }
 }
 
-sub parse_fw_rules {
-    my ($filename, $fh, $group) = @_;
+my $MAX_NETS = 32;
+my $valid_netdev_names = {};
+for (my $i = 0; $i < $MAX_NETS; $i++)  {
+    $valid_netdev_names->{"net$i"} = 1;
+}
 
-    my $section;
-    my $securitygroup;
-    my $securitygroupexist;
-
-    my $res = { in => [], out => [] };
+sub parse_fw_rule {
+    my ($line, $need_iface, $allow_groups) = @_;
 
     my $macros = get_firewall_macros();
     my $protocols = get_etc_protocols();
-    
+
+    my ($action, $iface, $source, $dest, $proto, $dport, $sport);
+
+    $line =~ s/#.*$//;
+
+    my @data = split(/\s+/, $line);
+    my $expected_elements = $need_iface ? 7 : 6;
+
+    die "wrong number of rule elements\n" if scalar(@data) > $expected_elements;
+
+    if ($need_iface) {
+	($action, $iface, $source, $dest, $proto, $dport, $sport) = @data
+    } else {
+	($action, $source, $dest, $proto, $dport, $sport) =  @data;
+    }
+
+    die "incomplete rule\n" if !$action;
+
+    my $service;
+    if ($action =~ m/^(ACCEPT|DROP|REJECT)$/) {
+	# OK
+    } elsif ($allow_groups && $action =~ m/^GROUP-(:?\S+)$/) {
+	# OK
+    } elsif ($action =~ m/^(\S+)\((ACCEPT|DROP|REJECT)\)$/) {
+	($service, $action) = ($1, $2);
+	if (!$macros->{$service}) {
+	    die "unknown service '$service'\n";
+	}
+    } else {
+	die "unknown action '$action'\n";
+    }
+
+    if ($need_iface) {
+	$iface = undef if $iface && $iface eq '-';
+	die "unknown interface '$iface'\n" 
+	    if defined($iface) && !$valid_netdev_names->{$iface};
+    }
+
+    $proto = undef if $proto && $proto eq '-';
+    die "unknown protokol '$proto'\n" if $proto && 
+	!(defined($protocols->{byname}->{$proto}) ||
+	  defined($protocols->{byid}->{$proto}));
+
+    $source = undef if $source && $source eq '-';
+    $dest = undef if $dest && $dest eq '-';
+
+    $dport = undef if $dport && $dport eq '-';
+    $sport = undef if $sport && $sport eq '-';
+
+    my $nbdport = undef;
+    my $nbsport = undef;
+    my $nbsource = undef;
+    my $nbdest = undef;
+
+    $nbsource = parse_address_list($source) if $source;
+    $nbdest = parse_address_list($dest) if $dest;
+    $nbdport = parse_port_name_number_or_range($dport) if $dport;
+    $nbsport = parse_port_name_number_or_range($sport) if $sport;
+
+    return {
+	action => $action,
+	service => $service,
+	iface => $iface,
+	source => $source,
+	dest => $dest,
+	nbsource => $nbsource,
+	nbdest => $nbdest,
+	proto => $proto,
+	dport => $dport,
+	sport => $sport,
+	nbdport => $nbdport,
+	nbsport => $nbsport,
+    };
+}
+
+sub parse_vm_fw_rules {
+    my ($filename, $fh) = @_;
+
+    my $res = { in => [], out => [] };
+
+    my $section;
+
     while (defined(my $line = <$fh>)) {
 	next if $line =~ m/^#/;
 	next if $line =~ m/^\s*$/;
 
-	if ($line =~ m/^\[(in|out)(:(\S+))?\]\s*$/i) {
+	if ($line =~ m/^\[(in|out)\]\s*$/i) {
 	    $section = lc($1);
-	    $securitygroup = lc($3) if $3;
-	    $securitygroupexist = 1 if $securitygroup &&  $securitygroup eq $group;
 	    next;
 	}
-	next if !$section;
-	next if $group && $securitygroup ne $group;
-
-	my ($action, $iface, $source, $dest, $proto, $dport, $sport) =
-	    split(/\s+/, $line);
-
-	if (!$action) {
-	    warn "skip incomplete line\n";
+	if (!$section) {
+	    warn "$filename (line $.): skip line - no section";
 	    next;
 	}
 
-	my $service;
-	if ($action =~ m/^(ACCEPT|DROP|REJECT|GROUP-(\S+))$/) {
-	    # OK
-	} elsif ($action =~ m/^(\S+)\((ACCEPT|DROP|REJECT)\)$/) {
-	    ($service, $action) = ($1, $2);
-	    if (!$macros->{$service}) {
-		warn "unknown service '$service'\n";
-		next;
-	    }
-	} else {
-	    warn "unknown action '$action'\n";
-	    next;
-	}
-
-	$iface = undef if $iface && $iface eq '-';
-	if ($iface && $iface !~ m/^(net0|net1|net2|net3|net4|net5)$/) {
-	    warn "unknown interface '$iface'\n";
-	    next;
-	}
-
-	$proto = undef if $proto && $proto eq '-';
-	if ($proto && !(defined($protocols->{byname}->{$proto}) ||
-			defined($protocols->{byid}->{$proto}))) {
-	    warn "unknown protokol '$proto'\n";
-	    next;
-	}
-
-	$source = undef if $source && $source eq '-';
-	$dest = undef if $dest && $dest eq '-';
-
-	$dport = undef if $dport && $dport eq '-';
-	$sport = undef if $sport && $sport eq '-';
-	my $nbdport = undef;
-	my $nbsport = undef;
-	my $nbsource = undef;
-	my $nbdest = undef;
-
-	eval {
-	    $nbsource = parse_address_list($source) if $source;
-	    $nbdest = parse_address_list($dest) if $dest;
-	    $nbdport = parse_port_name_number_or_range($dport) if $dport;
-	    $nbsport = parse_port_name_number_or_range($sport) if $sport;
-	};
+	my $rule;
+	eval { $rule = parse_fw_rule($line, 1, 1); };
 	if (my $err = $@) {
-	    warn $err;
+	    warn "$filename (line $.): $err";
 	    next;
-
 	}
-
-
-	my $rule = {
-	    action => $action,
-	    service => $service,
-	    iface => $iface,
-	    source => $source,
-	    dest => $dest,
-	    nbsource => $nbsource,
-	    nbdest => $nbdest,
-	    proto => $proto,
-	    dport => $dport,
-	    sport => $sport,
-	    nbdport => $nbdport,
-	    nbsport => $nbsport,
-
-	};
 
 	push @{$res->{$section}}, $rule;
     }
 
-    die "security group $group don't exist" if $group && !$securitygroupexist;
+    return $res;
+}
+
+sub parse_host_fw_rules {
+    my ($filename, $fh) = @_;
+
+    my $res = { in => [], out => [] };
+
+    my $section;
+
+    while (defined(my $line = <$fh>)) {
+	next if $line =~ m/^#/;
+	next if $line =~ m/^\s*$/;
+
+	if ($line =~ m/^\[(in|out)\]\s*$/i) {
+	    $section = lc($1);
+	    next;
+	}
+	if (!$section) {
+	    warn "$filename (line $.): skip line - no section";
+	    next;
+	}
+
+	my $rule;
+	eval { $rule = parse_fw_rule($line, 1, 1); };
+	if (my $err = $@) {
+	    warn "$filename (line $.): $err";
+	    next;
+	}
+
+	push @{$res->{$section}}, $rule;
+    }
+
+    return $res;
+}
+
+sub parse_group_fw_rules {
+    my ($filename, $fh) = @_;
+
+    my $section;
+    my $group;
+
+    my $res = { in => [], out => [] };
+   
+    while (defined(my $line = <$fh>)) {
+	next if $line =~ m/^#/;
+	next if $line =~ m/^\s*$/;
+
+	if ($line =~ m/^\[(in|out):(\S+)\]\s*$/i) {
+	    $section = lc($1);
+	    $group = lc($2);
+	    next;
+	}
+	if (!$section || !$group) {
+	    warn "$filename (line $.): skip line - no section";
+	    next;
+	}
+
+	my $rule;
+	eval { $rule = parse_fw_rule($line, 0, 0); };
+	if (my $err = $@) {
+	    warn "$filename (line $.): $err";
+	    next;
+	}
+
+	push @{$res->{$group}->{$section}}, $rule;
+    }
+
     return $res;
 }
 
@@ -610,7 +685,7 @@ sub read_vm_firewall_rules {
 	my $fh = IO::File->new($filename, O_RDONLY);
 	next if !$fh;
 
-	$rules->{$vmid} = parse_fw_rules($filename, $fh);
+	$rules->{$vmid} = parse_vm_fw_rules($filename, $fh);
     }
 
     return $rules;
@@ -619,6 +694,12 @@ sub read_vm_firewall_rules {
 sub compile {
     my $vmdata = read_local_vm_config();
     my $rules = read_vm_firewall_rules($vmdata);
+    
+    my $group_rules = {};
+    my $filename = "/etc/pve/firewall/groups.fw";
+    if (my $fh = IO::File->new($filename, O_RDONLY)) {
+	$group_rules = parse_group_fw_rules($filename, $fh);
+    }
 
     #print Dumper($rules);
 
@@ -631,7 +712,11 @@ sub compile {
     ruleset_create_chain($ruleset, "PVEFW-SET-ACCEPT-MARK");
     ruleset_addrule($ruleset, "PVEFW-SET-ACCEPT-MARK", "-j MARK --set-mark 1");
 
-    enablehostfw($ruleset);
+    $filename = "/etc/pve/local/host.fw";
+    if (my $fh = IO::File->new($filename, O_RDONLY)) {
+	my $host_rules = parse_host_fw_rules($filename, $fh);
+	enablehostfw($ruleset, $host_rules, $group_rules);
+    }
 
     # generate firewall rules for QEMU VMs 
     foreach my $vmid (keys %{$vmdata->{qemu}}) {
@@ -652,8 +737,8 @@ sub compile {
 	    generate_bridge_chains($ruleset, $bridge);
 
 	    my $macaddr = $net->{macaddr};
-	    generate_tap_rules_direction($ruleset, $iface, $netid, $macaddr, $rules->{$vmid}->{in}, $bridge, 'IN');
-	    generate_tap_rules_direction($ruleset, $iface, $netid, $macaddr, $rules->{$vmid}->{out}, $bridge, 'OUT');
+	    generate_tap_rules_direction($ruleset, $group_rules, $iface, $netid, $macaddr, $rules->{$vmid}->{in}, $bridge, 'IN');
+	    generate_tap_rules_direction($ruleset, $group_rules, $iface, $netid, $macaddr, $rules->{$vmid}->{out}, $bridge, 'OUT');
 	}
     }
     return $ruleset;
