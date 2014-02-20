@@ -638,7 +638,7 @@ sub generate_bridge_chains {
     if (!ruleset_chain_exist($ruleset, "PVEFW-FORWARD")){
 	ruleset_create_chain($ruleset, "PVEFW-FORWARD");
 
-	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m state --state RELATED,ESTABLISHED -j ACCEPT");
+	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
 	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m physdev --physdev-is-in --physdev-is-bridged -j PVEFW-BRIDGE-OUT");
 	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m physdev --physdev-is-out --physdev-is-bridged -j PVEFW-BRIDGE-IN");
     }
@@ -664,8 +664,8 @@ sub generate_tap_rules_direction {
 
     ruleset_create_chain($ruleset, $tapchain);
 
-    ruleset_addrule($ruleset, $tapchain, "-m state --state INVALID -j DROP");
-    ruleset_addrule($ruleset, $tapchain, "-m state --state RELATED,ESTABLISHED -j ACCEPT");
+    ruleset_addrule($ruleset, $tapchain, "-m conntrack --ctstate INVALID -j DROP");
+    ruleset_addrule($ruleset, $tapchain, "-m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
 
     if ($direction eq 'OUT' && defined($macaddr)) {
 	ruleset_addrule($ruleset, $tapchain, "-m mac ! --mac-source $macaddr -j DROP");
@@ -715,11 +715,11 @@ sub enablehostfw {
     my $chain = "PVEFW-HOST-IN";
     ruleset_create_chain($ruleset, $chain);
 
-    ruleset_addrule($ruleset, $chain, "-m state --state INVALID -j DROP");
-    ruleset_addrule($ruleset, $chain, "-m state --state RELATED,ESTABLISHED -j ACCEPT");
+    ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate INVALID -j DROP");
+    ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
     ruleset_addrule($ruleset, $chain, "-i lo -j ACCEPT");
     ruleset_addrule($ruleset, $chain, "-m addrtype --dst-type MULTICAST -j ACCEPT");
-    ruleset_addrule($ruleset, $chain, "-p udp -m state --state NEW -m multiport --dports 5404,5405 -j ACCEPT");
+    ruleset_addrule($ruleset, $chain, "-p udp -m conntrack --ctstate NEW -m multiport --dports 5404,5405 -j ACCEPT");
     ruleset_addrule($ruleset, $chain, "-p udp -m udp --dport 9000 -j ACCEPT");  #corosync
 
     if ($rules->{in}) {
@@ -737,11 +737,11 @@ sub enablehostfw {
     $chain = "PVEFW-HOST-OUT";
     ruleset_create_chain($ruleset, $chain);
 
-    ruleset_addrule($ruleset, $chain, "-m state --state INVALID -j DROP");
-    ruleset_addrule($ruleset, $chain, "-m state --state RELATED,ESTABLISHED -j ACCEPT");
+    ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate INVALID -j DROP");
+    ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
     ruleset_addrule($ruleset, $chain, "-o lo -j ACCEPT");
     ruleset_addrule($ruleset, $chain, "-m addrtype --dst-type MULTICAST -j ACCEPT");
-    ruleset_addrule($ruleset, $chain, "-p udp -m state --state NEW -m multiport --dports 5404,5405 -j ACCEPT");
+    ruleset_addrule($ruleset, $chain, "-p udp -m conntrack --ctstate NEW -m multiport --dports 5404,5405 -j ACCEPT");
     ruleset_addrule($ruleset, $chain, "-p udp -m udp --dport 9000 -j ACCEPT"); #corosync
 
     if ($rules->{out}) {
