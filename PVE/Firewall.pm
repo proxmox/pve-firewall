@@ -261,7 +261,7 @@ sub ruleset_generate_rule {
     $cmd .= " -m iprange --src-range" if $rule->{nbsource} && $rule->{nbsource} > 1;
     $cmd .= " -s $rule->{source}" if $rule->{source};
     $cmd .= " -m iprange --dst-range" if $rule->{nbdest} && $rule->{nbdest} > 1;
-    $cmd .= " -d $rule->{dest}" if $rule->{destination};
+    $cmd .= " -d $rule->{dest}" if $rule->{dest};
     $cmd .= " -p $rule->{proto}" if $rule->{proto};
     $cmd .= "  --match multiport" if $rule->{nbdport} && $rule->{nbdport} > 1;
     $cmd .= " --dport $rule->{dport}" if $rule->{dport};
