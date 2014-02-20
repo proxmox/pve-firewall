@@ -16,17 +16,333 @@ use Data::Dumper;
 my $pve_fw_lock_filename = "/var/lock/pvefw.lck";
 
 # todo: define more MACROS
-# inspired by: /usr/share/shorewall/macro.*
+# imported/converted from: /usr/share/shorewall/macro.*
 my $pve_fw_macros = {
-    BitTorrent => [
-	{ action => 'PARAM', proto => 'tcp', dport => '6881:6889' },
-	{ action => 'PARAM', proto => 'udp', dport => '6881' } 
+    'Amanda' => [
+	{ action => 'PARAM', proto => 'udp', dport => '10080' },
+	{ action => 'PARAM', proto => 'tcp', dport => '10080' },
     ],
-    HTTP => [
+    'Auth' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '113' },
+    ],
+    'BGP' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '179' },
+    ],
+    'BitTorrent' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '6881:6889' },
+	{ action => 'PARAM', proto => 'udp', dport => '6881' },
+    ],
+    'BitTorrent32' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '6881:6999' },
+	{ action => 'PARAM', proto => 'udp', dport => '6881' },
+    ],
+    'CVS' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '2401' },
+    ],
+    'Citrix' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '1494' },
+	{ action => 'PARAM', proto => 'udp', dport => '1604' },
+	{ action => 'PARAM', proto => 'tcp', dport => '2598' },
+    ],
+    'DAAP' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '3689' },
+	{ action => 'PARAM', proto => 'udp', dport => '3689' },
+    ],
+    'DCC' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '6277' },
+    ],
+    'DHCPfwd' => [
+	{ action => 'PARAM', proto => 'udp', dport => '67:68', sport => '67:68' },
+	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'udp', dport => '67:68', sport => '67:68' },
+    ],
+    'DNS' => [
+	{ action => 'PARAM', proto => 'udp', dport => '53' },
+	{ action => 'PARAM', proto => 'tcp', dport => '53' },
+    ],
+    'Distcc' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '3632' },
+    ],
+    'Edonkey' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '4662' },
+	{ action => 'PARAM', proto => 'udp', dport => '4665' },
+    ],
+    'FTP' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '21' },
+    ],
+    'Finger' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '79' },
+    ],
+    'GNUnet' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '2086' },
+	{ action => 'PARAM', proto => 'udp', dport => '2086' },
+	{ action => 'PARAM', proto => 'tcp', dport => '1080' },
+	{ action => 'PARAM', proto => 'udp', dport => '1080' },
+    ],
+    'GRE' => [
+	{ action => 'PARAM', proto => '47' },
+	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => '47' },
+    ],
+    'Git' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '9418' },
+    ],
+    'Gnutella' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '6346' },
+	{ action => 'PARAM', proto => 'udp', dport => '6346' },
+    ],
+    'HKP' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '11371' },
+    ],
+    'HTTP' => [
 	{ action => 'PARAM', proto => 'tcp', dport => '80' },
     ],
-    HTTPS => [
+    'HTTPS' => [
 	{ action => 'PARAM', proto => 'tcp', dport => '443' },
+    ],
+    'ICPV2' => [
+	{ action => 'PARAM', proto => 'udp', dport => '3130' },
+    ],
+    'ICQ' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '5190' },
+    ],
+    'IMAP' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '143' },
+    ],
+    'IMAPS' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '993' },
+    ],
+    'IPIP' => [
+	{ action => 'PARAM', proto => '94' },
+	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => '94' },
+    ],
+    'IPP' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '631' },
+    ],
+    'IPPbrd' => [
+	{ action => 'PARAM', proto => 'udp', dport => '631' },
+    ],
+    'IPPserver' => [
+	{ action => 'PARAM', source => 'SOURCE', dest => 'DEST', proto => 'tcp', dport => '631' },
+	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'udp', dport => '631' },
+    ],
+    'IPsec' => [
+	{ action => 'PARAM', proto => 'udp', dport => '500', sport => '500' },
+	{ action => 'PARAM', proto => '50' },
+	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'udp', dport => '500', sport => '500' },
+	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => '50' },
+    ],
+    'IPsecah' => [
+	{ action => 'PARAM', proto => 'udp', dport => '500', sport => '500' },
+	{ action => 'PARAM', proto => '51' },
+	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'udp', dport => '500', sport => '500' },
+	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => '51' },
+    ],
+    'IPsecnat' => [
+	{ action => 'PARAM', proto => 'udp', dport => '500' },
+	{ action => 'PARAM', proto => 'udp', dport => '4500' },
+	{ action => 'PARAM', proto => '50' },
+	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'udp', dport => '500' },
+	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'udp', dport => '4500' },
+	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => '50' },
+    ],
+    'IRC' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '6667' },
+    ],
+    'JabberPlain' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '5222' },
+    ],
+    'JabberSecure' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '5223' },
+    ],
+    'Jabberd' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '5269' },
+    ],
+    'Jetdirect' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '9100' },
+    ],
+    'L2TP' => [
+	{ action => 'PARAM', proto => 'udp', dport => '1701' },
+	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'udp', dport => '1701' },
+    ],
+    'LDAP' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '389' },
+    ],
+    'LDAPS' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '636' },
+    ],
+    'MSNP' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '1863' },
+    ],
+    'MSSQL' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '1433' },
+    ],
+    'Mail' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '25' },
+	{ action => 'PARAM', proto => 'tcp', dport => '465' },
+	{ action => 'PARAM', proto => 'tcp', dport => '587' },
+    ],
+    'Munin' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '4949' },
+    ],
+    'MySQL' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '3306' },
+    ],
+    'NNTP' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '119' },
+    ],
+    'NNTPS' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '563' },
+    ],
+    'NTP' => [
+	{ action => 'PARAM', proto => 'udp', dport => '123' },
+    ],
+    'NTPbi' => [
+	{ action => 'PARAM', proto => 'udp', dport => '123' },
+	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'udp', dport => '123' },
+    ],
+    'NTPbrd' => [
+	{ action => 'PARAM', proto => 'udp', dport => '123' },
+	{ action => 'PARAM', proto => 'udp', dport => '1024:65535', sport => '123' },
+    ],
+    'OSPF' => [
+	{ action => 'PARAM', proto => '89' },
+    ],
+    'OpenVPN' => [
+	{ action => 'PARAM', proto => 'udp', dport => '1194' },
+    ],
+    'PCA' => [
+	{ action => 'PARAM', proto => 'udp', dport => '5632' },
+	{ action => 'PARAM', proto => 'tcp', dport => '5631' },
+    ],
+    'POP3' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '110' },
+    ],
+    'POP3S' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '995' },
+    ],
+    'PPtP' => [
+	{ action => 'PARAM', proto => '47' },
+	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => '47' },
+	{ action => 'PARAM', proto => 'tcp', dport => '1723' },
+    ],
+    'Ping' => [
+	{ action => 'PARAM', proto => 'icmp', dport => '8' },
+    ],
+    'PostgreSQL' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '5432' },
+    ],
+    'Printer' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '515' },
+    ],
+    'RDP' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '3389' },
+    ],
+    'RIPbi' => [
+	{ action => 'PARAM', proto => 'udp', dport => '520' },
+	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'udp', dport => '520' },
+    ],
+    'RNDC' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '953' },
+    ],
+    'Razor' => [
+	{ action => 'ACCEPT', proto => 'tcp', dport => '2703' },
+    ],
+    'Rdate' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '37' },
+    ],
+    'Rsync' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '873' },
+    ],
+    'SANE' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '6566' },
+    ],
+    'SMB' => [
+	{ action => 'PARAM', proto => 'udp', dport => '135,445' },
+	{ action => 'PARAM', proto => 'udp', dport => '137:139' },
+	{ action => 'PARAM', proto => 'udp', dport => '1024:65535', sport => '137' },
+	{ action => 'PARAM', proto => 'tcp', dport => '135,139,445' },
+    ],
+    'SMBBI' => [
+	{ action => 'PARAM', proto => 'udp', dport => '135,445' },
+	{ action => 'PARAM', proto => 'udp', dport => '137:139' },
+	{ action => 'PARAM', proto => 'udp', dport => '1024:65535', sport => '137' },
+	{ action => 'PARAM', proto => 'tcp', dport => '135,139,445' },
+	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'udp', dport => '135,445' },
+	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'udp', dport => '137:139' },
+	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'udp', dport => '1024:65535', sport => '137' },
+	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'tcp', dport => '135,139,445' },
+    ],
+    'SMBswat' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '901' },
+    ],
+    'SMTP' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '25' },
+    ],
+    'SMTPS' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '465' },
+    ],
+    'SNMP' => [
+	{ action => 'PARAM', proto => 'udp', dport => '161:162' },
+	{ action => 'PARAM', proto => 'tcp', dport => '161' },
+    ],
+    'SPAMD' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '783' },
+    ],
+    'SSH' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '22' },
+    ],
+    'SVN' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '3690' },
+    ],
+    'SixXS' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '3874' },
+	{ action => 'PARAM', proto => 'udp', dport => '3740' },
+	{ action => 'PARAM', proto => '41' },
+	{ action => 'PARAM', proto => 'udp', dport => '5072,8374' },
+    ],
+    'Squid' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '3128' },
+    ],
+    'Submission' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '587' },
+    ],
+    'Syslog' => [
+	{ action => 'PARAM', proto => 'udp', dport => '514' },
+	{ action => 'PARAM', proto => 'tcp', dport => '514' },
+    ],
+    'TFTP' => [
+	{ action => 'PARAM', proto => 'udp', dport => '69' },
+    ],
+    'Telnet' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '23' },
+    ],
+    'Telnets' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '992' },
+    ],
+    'Time' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '37' },
+    ],
+    'Trcrt' => [
+	{ action => 'PARAM', proto => 'udp', dport => '33434:33524' },
+	{ action => 'PARAM', proto => 'icmp', dport => '8' },
+    ],
+    'VNC' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '5900:5909' },
+    ],
+    'VNCL' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '5500' },
+    ],
+    'Web' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '80' },
+	{ action => 'PARAM', proto => 'tcp', dport => '443' },
+    ],
+    'Webcache' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '8080' },
+    ],
+    'Webmin' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '10000' },
+    ],
+    'Whois' => [
+	{ action => 'PARAM', proto => 'tcp', dport => '43' },
     ],
 };
 
@@ -143,7 +459,7 @@ sub parse_port_name_number_or_range {
 	my $portlist = "";
 	foreach my $pon (split(':', $item, 2)) {
 	    if ($pon =~ m/^\d+$/){
-		die "invalid port '$pon'\n" if $pon < 0 && $pon > 65536;
+		die "invalid port '$pon'\n" if $pon < 0 && $pon > 65535;
 	    }else{
 		die "invalid port $services->{byname}->{$pon}\n" if !$services->{byname}->{$pon};
 	    }
@@ -565,7 +881,14 @@ sub parse_fw_rule {
 	    my $rule = {};
 	    foreach my $k (keys %$templ) {
 		my $v = $templ->{$k};
-		$v = $param->{$k} if $v eq 'PARAM';
+		if ($v eq 'PARAM') {
+		    $v = $param->{$k};
+		} elsif ($v eq 'DEST') {
+		    $v = $param->{dest};
+		} elsif ($v eq 'SOURCE') {
+		    $v = $param->{source};
+		}
+
 		die "missing parameter '$k' in macro '$macro_name'\n" if !defined($v);
 		$rule->{$k} = $v;
 	    }
