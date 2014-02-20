@@ -15,22 +15,39 @@ use Data::Dumper;
 
 my $pve_fw_lock_filename = "/var/lock/pvefw.lck";
 
-my $macros;
+# todo: define more MACROS
+# inspired by: /usr/share/shorewall/macro.*
+my $pve_fw_macros = {
+    BitTorrent => [
+	{ action => 'PARAM', proto => 'tcp', dport => '6881:6889' },
+	{ action => 'PARAM', proto => 'udp', dport => '6881' } 
+    ],
+    HTTP => [
+	{ action => 'PARAM', proto => 'tcp', dport => '80' },
+    ],
+    HTTPS => [
+	{ action => 'PARAM', proto => 'tcp', dport => '443' },
+    ],
+};
 
-# todo: implement some kind of MACROS, like shorewall /usr/share/shorewall/macro.*
+my $pve_fw_parsed_macros;
+my $pve_fw_preferred_macro_names = {};
+
 sub get_firewall_macros {
 
-    return $macros if $macros;
+    return $pve_fw_parsed_macros if $pve_fw_parsed_macros;
+    
+    $pve_fw_parsed_macros = {};
 
-    #foreach my $path (</usr/share/shorewall/macro.*>) {
-    #  if ($path =~ m|/macro\.(\S+)$|) {
-    #    $macros->{$1} = 1;
-    #  }
-    #}
+    foreach my $k (keys %$pve_fw_macros) {
+	my $name = lc($k);
 
-    $macros = {}; # fixme: implemet me
+	my $macro =  $pve_fw_macros->{$k};
+	$pve_fw_preferred_macro_names->{$name} = $k;
+	$pve_fw_parsed_macros->{$name} = $macro;
+    }
 
-    return $macros;
+    return $pve_fw_parsed_macros;
 }
 
 my $etc_services;
@@ -488,16 +505,20 @@ sub parse_fw_rule {
 
     die "incomplete rule\n" if !$action;
 
-    my $service;
+    my $macro;
+    my $macro_name;
+
     if ($action =~ m/^(ACCEPT|DROP|REJECT)$/) {
 	# OK
     } elsif ($allow_groups && $action =~ m/^GROUP-(:?\S+)$/) {
 	# OK
     } elsif ($action =~ m/^(\S+)\((ACCEPT|DROP|REJECT)\)$/) {
-	($service, $action) = ($1, $2);
-	if (!$macros->{$service}) {
-	    die "unknown service '$service'\n";
-	}
+	($macro_name, $action) = ($1, $2);
+	my $lc_macro_name = lc($macro_name);
+	my $preferred_name = $pve_fw_preferred_macro_names->{$lc_macro_name};
+	$macro_name = $preferred_name if $preferred_name;
+	$macro = $macros->{$lc_macro_name};
+	die "unknown macro '$macro_name'\n" if !$macro;
     } else {
 	die "unknown action '$action'\n";
     }
@@ -519,19 +540,16 @@ sub parse_fw_rule {
     $dport = undef if $dport && $dport eq '-';
     $sport = undef if $sport && $sport eq '-';
 
-    my $nbdport = undef;
-    my $nbsport = undef;
     my $nbsource = undef;
     my $nbdest = undef;
 
     $nbsource = parse_address_list($source) if $source;
     $nbdest = parse_address_list($dest) if $dest;
-    $nbdport = parse_port_name_number_or_range($dport) if $dport;
-    $nbsport = parse_port_name_number_or_range($sport) if $sport;
+ 
+    my $rules = [];
 
-    return {
+    my $param = {
 	action => $action,
-	service => $service,
 	iface => $iface,
 	source => $source,
 	dest => $dest,
@@ -540,9 +558,31 @@ sub parse_fw_rule {
 	proto => $proto,
 	dport => $dport,
 	sport => $sport,
-	nbdport => $nbdport,
-	nbsport => $nbsport,
     };
+
+    if ($macro) {
+	foreach my $templ (@$macro) {
+	    my $rule = {};
+	    foreach my $k (keys %$templ) {
+		my $v = $templ->{$k};
+		$v = $param->{$k} if $v eq 'PARAM';
+		die "missing parameter '$k' in macro '$macro_name'\n" if !defined($v);
+		$rule->{$k} = $v;
+	    }
+	    push @$rules, $rule;
+	}
+    } else {
+	push @$rules, $param;
+    }
+
+    foreach my $rule (@$rules) {
+	$rule->{nbdport} = parse_port_name_number_or_range($rule->{dport}) 
+	    if defined($rule->{dport});
+	$rule->{nbsport} = parse_port_name_number_or_range($rule->{sport}) 
+	    if defined($rule->{sport});
+    }
+
+    return $rules;
 }
 
 sub parse_vm_fw_rules {
@@ -556,23 +596,26 @@ sub parse_vm_fw_rules {
 	next if $line =~ m/^#/;
 	next if $line =~ m/^\s*$/;
 
+	my $linenr = $fh->input_line_number();
+	my $prefix = "$filename (line $linenr)";
+
 	if ($line =~ m/^\[(in|out)\]\s*$/i) {
 	    $section = lc($1);
 	    next;
 	}
 	if (!$section) {
-	    warn "$filename (line $.): skip line - no section";
+	    warn "$prefix: skip line - no section";
 	    next;
 	}
 
-	my $rule;
-	eval { $rule = parse_fw_rule($line, 1, 1); };
+	my $rules;
+	eval { $rules = parse_fw_rule($line, 1, 1); };
 	if (my $err = $@) {
-	    warn "$filename (line $.): $err";
+	    warn "$prefix: $err";
 	    next;
 	}
 
-	push @{$res->{$section}}, $rule;
+	push @{$res->{$section}}, @$rules;
     }
 
     return $res;
@@ -589,23 +632,26 @@ sub parse_host_fw_rules {
 	next if $line =~ m/^#/;
 	next if $line =~ m/^\s*$/;
 
+	my $linenr = $fh->input_line_number();
+	my $prefix = "$filename (line $linenr)";
+
 	if ($line =~ m/^\[(in|out)\]\s*$/i) {
 	    $section = lc($1);
 	    next;
 	}
 	if (!$section) {
-	    warn "$filename (line $.): skip line - no section";
+	    warn "$prefix: skip line - no section";
 	    next;
 	}
 
-	my $rule;
-	eval { $rule = parse_fw_rule($line, 1, 1); };
+	my $rules;
+	eval { $rules = parse_fw_rule($line, 1, 1); };
 	if (my $err = $@) {
-	    warn "$filename (line $.): $err";
+	    warn "$prefix: $err";
 	    next;
 	}
 
-	push @{$res->{$section}}, $rule;
+	push @{$res->{$section}}, @$rules;
     }
 
     return $res;
@@ -623,24 +669,27 @@ sub parse_group_fw_rules {
 	next if $line =~ m/^#/;
 	next if $line =~ m/^\s*$/;
 
+	my $linenr = $fh->input_line_number();
+	my $prefix = "$filename (line $linenr)";
+
 	if ($line =~ m/^\[(in|out):(\S+)\]\s*$/i) {
 	    $section = lc($1);
 	    $group = lc($2);
 	    next;
 	}
 	if (!$section || !$group) {
-	    warn "$filename (line $.): skip line - no section";
+	    warn "$prefix: skip line - no section";
 	    next;
 	}
 
-	my $rule;
-	eval { $rule = parse_fw_rule($line, 0, 0); };
+	my $rules;
+	eval { $rules = parse_fw_rule($line, 0, 0); };
 	if (my $err = $@) {
-	    warn "$filename (line $.): $err";
+	    warn "$prefix: $err";
 	    next;
 	}
 
-	push @{$res->{$group}->{$section}}, $rule;
+	push @{$res->{$group}->{$section}}, @$rules;
     }
 
     return $res;
