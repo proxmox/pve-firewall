@@ -1114,6 +1114,10 @@ sub compile {
 	    generate_tap_rules_direction($ruleset, $group_rules, $iface, $netid, $macaddr, $rules->{$vmid}->{out}, $bridge, 'OUT');
 	}
     }
+
+    # allow traffic from lo (ourself)
+    ruleset_addrule($ruleset, "PVEFW-INPUT", "-i lo -j ACCEPT");
+
     return $ruleset;
 }
 
