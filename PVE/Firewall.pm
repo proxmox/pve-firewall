@@ -908,10 +908,29 @@ sub parse_fw_rule {
     return $rules;
 }
 
+sub parse_fw_option {
+    my ($line) = @_;
+
+    my ($opt, $value);
+
+    if ($line =~ m/^enable:\s*(0|1)\s*$/i) {
+	$opt = 'enable';
+	$value = int($1);
+    } elsif ($line =~ m/^(policy-(in|out)):\s*(ACCEPT|DROP|REJECT)\s*$/i) {
+	$opt = lc($1);
+	$value = uc($3);
+     } else {
+	chomp $line;
+	die "can't parse option '$line'\n"
+    }
+
+    return ($opt, $value);
+}
+
 sub parse_vm_fw_rules {
     my ($filename, $fh) = @_;
 
-    my $res = { in => [], out => [] };
+    my $res = { in => [], out => [], options => {}};
 
     my $section;
 
@@ -922,12 +941,24 @@ sub parse_vm_fw_rules {
 	my $linenr = $fh->input_line_number();
 	my $prefix = "$filename (line $linenr)";
 
-	if ($line =~ m/^\[(in|out)\]\s*$/i) {
+	if ($line =~ m/^\[(\S+)\]\s*$/i) {
 	    $section = lc($1);
+	    warn "$prefix: ignore unknown section '$section'\n" if !$res->{$section};
 	    next;
 	}
 	if (!$section) {
 	    warn "$prefix: skip line - no section";
+	    next;
+	}
+
+	next if !$res->{$section}; # skip undefined section
+
+	if ($section eq 'options') {
+	    eval { 
+		my ($opt, $value) = parse_fw_option($line); 
+		$res->{options}->{$opt} = $value;
+	    };
+	    warn "$prefix: $@" if $@;
 	    next;
 	}
 
