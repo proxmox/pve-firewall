@@ -1109,23 +1109,30 @@ sub compile {
 
     my $ruleset = {};
 
-    # setup host firewall rules
     ruleset_create_chain($ruleset, "PVEFW-INPUT");
     ruleset_create_chain($ruleset, "PVEFW-OUTPUT");
+    ruleset_create_chain($ruleset, "PVEFW-FORWARD");
 
     ruleset_create_chain($ruleset, "PVEFW-SET-ACCEPT-MARK");
     ruleset_addrule($ruleset, "PVEFW-SET-ACCEPT-MARK", "-j MARK --set-mark 1");
 
+    my $enable_hostfw = 0;
     $filename = "/etc/pve/local/host.fw";
     if (my $fh = IO::File->new($filename, O_RDONLY)) {
 	my $host_rules = parse_host_fw_rules($filename, $fh);
+
+	$enable_hostfw = 1;
+
 	enablehostfw($ruleset, $host_rules, $group_rules);
     }
 
     # generate firewall rules for QEMU VMs 
     foreach my $vmid (keys %{$vmdata->{qemu}}) {
 	my $conf = $vmdata->{qemu}->{$vmid};
+
 	next if !$rules->{$vmid};
+	my $options = $rules->{$vmid}->{options};
+	next if defined($options->{enable}) && ($options->{enable} == 0);
 
 	foreach my $netid (keys %$conf) {
 	    next if $netid !~ m/^net(\d+)$/;
@@ -1138,6 +1145,7 @@ sub compile {
 
 	    $bridge .= "v$net->{tag}" if $net->{tag};
 
+
 	    generate_bridge_chains($ruleset, $bridge);
 
 	    my $macaddr = $net->{macaddr};
@@ -1146,8 +1154,10 @@ sub compile {
 	}
     }
 
-    # allow traffic from lo (ourself)
-    ruleset_addrule($ruleset, "PVEFW-INPUT", "-i lo -j ACCEPT");
+    if ($enable_hostfw) {
+	# allow traffic from lo (ourself)
+	ruleset_addrule($ruleset, "PVEFW-INPUT", "-i lo -j ACCEPT");
+    }
 
     return $ruleset;
 }
@@ -1265,6 +1275,9 @@ sub apply_ruleset {
     }
     foreach my $chain (keys %$statushash) {
 	next if $statushash->{$chain}->{action} ne 'delete';
+	next if $chain eq 'PVEFW-INPUT';
+	next if $chain eq 'PVEFW-OUTPUT';
+	next if $chain eq 'PVEFW-FORWARD';
 	$cmdlist .= "-X $chain\n";
     }
 
