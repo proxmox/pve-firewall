@@ -632,33 +632,27 @@ sub ruleset_insertrule {
 sub generate_bridge_chains {
     my ($ruleset, $bridge) = @_;
 
-    if (!ruleset_chain_exist($ruleset, "PVEFW-BRIDGE-IN")){
-	ruleset_create_chain($ruleset, "PVEFW-BRIDGE-IN");
-    }
-
-    if (!ruleset_chain_exist($ruleset, "PVEFW-BRIDGE-OUT")){
-	ruleset_create_chain($ruleset, "PVEFW-BRIDGE-OUT");
-    }
-
     if (!ruleset_chain_exist($ruleset, "PVEFW-FORWARD")){
 	ruleset_create_chain($ruleset, "PVEFW-FORWARD");
-
 	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
-	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m physdev --physdev-is-in --physdev-is-bridged -j PVEFW-BRIDGE-OUT");
-	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m physdev --physdev-is-out --physdev-is-bridged -j PVEFW-BRIDGE-IN");
     }
 
-    if (!ruleset_chain_exist($ruleset, "$bridge-IN")) {
-	ruleset_create_chain($ruleset, "$bridge-IN");
-	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i $bridge -j DROP");  # disable interbridge routing
-	ruleset_addrule($ruleset, "PVEFW-BRIDGE-IN", "-j $bridge-IN");
-	ruleset_addrule($ruleset, "$bridge-IN", "-j ACCEPT");
+    if (!ruleset_chain_exist($ruleset, "$bridge")) {
+	ruleset_create_chain($ruleset, "$bridge");
+	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o $bridge -m physdev --physdev-is-bridged -j $bridge");
+	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i $bridge -m physdev --physdev-is-bridged -j $bridge");
+	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o $bridge -j DROP");  # disable interbridge routing
+	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i $bridge -j DROP"); # disable interbridge routing
     }
 
     if (!ruleset_chain_exist($ruleset, "$bridge-OUT")) {
 	ruleset_create_chain($ruleset, "$bridge-OUT");
-	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o $bridge -j DROP"); # disable interbridge routing
-	ruleset_addrule($ruleset, "PVEFW-BRIDGE-OUT", "-j $bridge-OUT");
+	ruleset_addrule($ruleset, "$bridge", "-m physdev --physdev-is-bridged --physdev-is-in -j $bridge-OUT");
+    }
+
+    if (!ruleset_chain_exist($ruleset, "$bridge-IN")) {
+	ruleset_create_chain($ruleset, "$bridge-IN");
+	ruleset_addrule($ruleset, "$bridge", "-m physdev --physdev-is-bridged --physdev-is-out -j $bridge-IN");
     }
 }
 
