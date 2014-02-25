@@ -657,7 +657,10 @@ sub generate_bridge_chains {
 }
 
 sub generate_tap_rules_direction {
-    my ($ruleset, $group_rules, $iface, $netid, $macaddr, $rules, $bridge, $direction) = @_;
+    my ($ruleset, $group_rules, $iface, $netid, $macaddr, $vmfw_conf, $bridge, $direction) = @_;
+
+    my $rules = $vmfw_conf->{lc($direction)};
+    my $options = $vmfw_conf->{options};
 
     my $tapchain = "$iface-$direction";
 
@@ -1128,10 +1131,9 @@ sub compile {
     # generate firewall rules for QEMU VMs 
     foreach my $vmid (keys %{$vmdata->{qemu}}) {
 	my $conf = $vmdata->{qemu}->{$vmid};
-
-	next if !$rules->{$vmid};
-	my $options = $rules->{$vmid}->{options};
-	next if defined($options->{enable}) && ($options->{enable} == 0);
+	my $vmfw_conf = $rules->{$vmid};
+	next if !$vmfw_conf;
+	next if defined($vmfw_conf->{options}->{enable}) && ($vmfw_conf->{options}->{enable} == 0);
 
 	foreach my $netid (keys %$conf) {
 	    next if $netid !~ m/^net(\d+)$/;
@@ -1148,8 +1150,8 @@ sub compile {
 	    generate_bridge_chains($ruleset, $bridge);
 
 	    my $macaddr = $net->{macaddr};
-	    generate_tap_rules_direction($ruleset, $group_rules, $iface, $netid, $macaddr, $rules->{$vmid}->{in}, $bridge, 'IN');
-	    generate_tap_rules_direction($ruleset, $group_rules, $iface, $netid, $macaddr, $rules->{$vmid}->{out}, $bridge, 'OUT');
+	    generate_tap_rules_direction($ruleset, $group_rules, $iface, $netid, $macaddr, $vmfw_conf, $bridge, 'IN');
+	    generate_tap_rules_direction($ruleset, $group_rules, $iface, $netid, $macaddr, $vmfw_conf, $bridge, 'OUT');
 	}
     }
 
