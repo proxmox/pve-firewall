@@ -693,8 +693,31 @@ sub generate_tap_rules_direction {
 	}
     }
 
-    ruleset_addrule($ruleset, $tapchain, "-j LOG --log-prefix \"$tapchain-dropped: \" --log-level 4");
-    ruleset_addrule($ruleset, $tapchain, "-j DROP");
+    # implement policy
+    my $policy;
+
+    if ($direction eq 'OUT') {
+	$policy = $options->{'policy-out'} || 'ACCEPT'; # allow everything by default
+    } else {
+	$policy = $options->{'policy-in'} || 'DROP'; # allow everything by default
+    }
+
+    if ($policy eq 'ACCEPT') {
+	if ($direction eq 'OUT') {
+	    ruleset_addrule($ruleset, $tapchain, "-j RETURN");
+	} else {
+	    ruleset_addrule($ruleset, $tapchain, "-j ACCEPT");
+	}
+    } elsif ($policy eq 'DROP') {
+	ruleset_addrule($ruleset, $tapchain, "-j LOG --log-prefix \"$tapchain-dropped: \" --log-level 4");
+	ruleset_addrule($ruleset, $tapchain, "-j DROP");
+    } elsif ($policy eq 'REJECT') {
+	ruleset_addrule($ruleset, $tapchain, "-j LOG --log-prefix \"$tapchain-reject: \" --log-level 4");
+	ruleset_addrule($ruleset, $tapchain, "-j REJECT");
+    } else {
+	# should not happen
+	die "internal error: unknown policy '$policy'";
+    }
 
     # plug the tap chain to bridge chain
     my $physdevdirection = $direction eq 'IN' ? "out" : "in";
