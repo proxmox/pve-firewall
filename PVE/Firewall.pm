@@ -512,7 +512,7 @@ sub iptables_get_chains {
 	return 1 if $name =~ m/^PVEFW-\S+$/;
 
 	return 1 if $name =~ m/^tap\d+i\d+-(:?IN|OUT)$/;
-	return 1 if $name =~ m/^vmbr\d+-(:?IN|OUT)$/;
+	return 1 if $name =~ m/^vmbr\d+-(:?FW|IN|OUT)$/;
 	return 1 if $name =~ m/^GROUP-(:?[^\s\-]+)-(:?IN|OUT)$/;
 
 	return undef;
@@ -637,22 +637,22 @@ sub generate_bridge_chains {
 	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
     }
 
-    if (!ruleset_chain_exist($ruleset, "$bridge")) {
-	ruleset_create_chain($ruleset, "$bridge");
-	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o $bridge -m physdev --physdev-is-bridged -j $bridge");
-	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i $bridge -m physdev --physdev-is-bridged -j $bridge");
+    if (!ruleset_chain_exist($ruleset, "$bridge-FW")) {
+	ruleset_create_chain($ruleset, "$bridge-FW");
+	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o $bridge -m physdev --physdev-is-bridged -j $bridge-FW");
+	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i $bridge -m physdev --physdev-is-bridged -j $bridge-FW");
 	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o $bridge -j DROP");  # disable interbridge routing
 	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i $bridge -j DROP"); # disable interbridge routing
     }
 
     if (!ruleset_chain_exist($ruleset, "$bridge-OUT")) {
 	ruleset_create_chain($ruleset, "$bridge-OUT");
-	ruleset_addrule($ruleset, "$bridge", "-m physdev --physdev-is-bridged --physdev-is-in -j $bridge-OUT");
+	ruleset_addrule($ruleset, "$bridge-FW", "-m physdev --physdev-is-bridged --physdev-is-in -j $bridge-OUT");
     }
 
     if (!ruleset_chain_exist($ruleset, "$bridge-IN")) {
 	ruleset_create_chain($ruleset, "$bridge-IN");
-	ruleset_addrule($ruleset, "$bridge", "-m physdev --physdev-is-bridged --physdev-is-out -j $bridge-IN");
+	ruleset_addrule($ruleset, "$bridge-FW", "-m physdev --physdev-is-bridged --physdev-is-out -j $bridge-IN");
     }
 }
 
