@@ -653,6 +653,7 @@ sub generate_bridge_chains {
     if (!ruleset_chain_exist($ruleset, "$bridge-IN")) {
 	ruleset_create_chain($ruleset, "$bridge-IN");
 	ruleset_addrule($ruleset, "$bridge-FW", "-m physdev --physdev-is-bridged --physdev-is-out -j $bridge-IN");
+	ruleset_addrule($ruleset, "$bridge-FW", "-j ACCEPT");
     }
 }
 
