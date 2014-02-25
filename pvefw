@@ -41,7 +41,6 @@ __PACKAGE__->register_method ({
 		description => "Verbose output.",
 		type => "boolean",
 		optional => 1,
-		default => 0,
 	    },
 	},
     },
@@ -49,6 +48,11 @@ __PACKAGE__->register_method ({
 
     code => sub {
 	my ($param) = @_;
+
+	my $rpcenv = PVE::RPCEnvironment::get();
+
+	$param->{verbose} = 1 
+	    if !defined($param->{verbose}) && ($rpcenv->{type} eq 'cli');
 
 	my $code = sub {
 	    my $ruleset = PVE::Firewall::compile();
