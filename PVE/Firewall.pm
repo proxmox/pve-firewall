@@ -389,6 +389,7 @@ sub get_etc_services {
 
 	if ($line =~ m!^(\S+)\s+(\S+)/(tcp|udp).*$!) {
 	    $services->{byid}->{$2}->{name} = $1;
+	    $services->{byid}->{$2}->{port} = $2;
 	    $services->{byid}->{$2}->{$3} = 1;
 	    $services->{byname}->{$1} = $services->{byid}->{$2};
 	}
@@ -457,9 +458,13 @@ sub parse_port_name_number_or_range {
     my $nbports = 0;
     foreach my $item (split(/,/, $str)) {
 	my $portlist = "";
+	my $oldpon = undef;
 	foreach my $pon (split(':', $item, 2)) {
+	    $pon = $services->{byname}->{$pon}->{port} if $services->{byname}->{$pon}->{port};
 	    if ($pon =~ m/^\d+$/){
 		die "invalid port '$pon'\n" if $pon < 0 && $pon > 65535;
+		die "port '$pon' must be bigger than port '$oldpon' \n" if $oldpon && ($pon < $oldpon);
+		$oldpon = $pon;
 	    }else{
 		die "invalid port $services->{byname}->{$pon}\n" if !$services->{byname}->{$pon};
 	    }
