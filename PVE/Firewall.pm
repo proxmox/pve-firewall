@@ -684,10 +684,10 @@ sub generate_tap_rules_direction {
 		    generate_group_rules($ruleset, $group_rules, $2);
 		}
 		ruleset_generate_rule($ruleset, $tapchain, $rule);
-		ruleset_addrule($ruleset, $tapchain, "-m mark --mark 1 -g $bridge-IN")
+		ruleset_addrule($ruleset, $tapchain, "-m mark --mark 1 -j RETURN")
 		    if $direction eq 'OUT';
 	    } else {
-		$rule->{action} = "$bridge-IN" if $rule->{action} eq 'ACCEPT' && $direction eq 'OUT';
+		$rule->{action} = "RETURN" if $rule->{action} eq 'ACCEPT' && $direction eq 'OUT';
 		ruleset_generate_rule($ruleset, $tapchain, $rule);
 	    }
 	}
