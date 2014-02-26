@@ -653,7 +653,7 @@ sub generate_bridge_chains {
     if (!ruleset_chain_exist($ruleset, "$bridge-IN")) {
 	ruleset_create_chain($ruleset, "$bridge-IN");
 	ruleset_addrule($ruleset, "$bridge-FW", "-m physdev --physdev-is-bridged --physdev-is-out -j $bridge-IN");
-	ruleset_addrule($ruleset, "$bridge-FW", "-j ACCEPT");
+	ruleset_addrule($ruleset, "$bridge-FW", "-m mark --mark 1 -j ACCEPT");
     }
 }
 
@@ -688,7 +688,7 @@ sub generate_tap_rules_direction {
 		ruleset_addrule($ruleset, $tapchain, "-m mark --mark 1 -j RETURN")
 		    if $direction eq 'OUT';
 	    } else {
-		$rule->{action} = "RETURN" if $rule->{action} eq 'ACCEPT' && $direction eq 'OUT';
+		$rule->{action} = "PVEFW-SET-ACCEPT-MARK" if $rule->{action} eq 'ACCEPT' && $direction eq 'OUT';
 		ruleset_generate_rule($ruleset, $tapchain, $rule);
 	    }
 	}
@@ -705,7 +705,7 @@ sub generate_tap_rules_direction {
 
     if ($policy eq 'ACCEPT') {
 	if ($direction eq 'OUT') {
-	    ruleset_addrule($ruleset, $tapchain, "-j RETURN");
+	    ruleset_addrule($ruleset, $tapchain, "-g PVEFW-SET-ACCEPT-MARK");
 	} else {
 	    ruleset_addrule($ruleset, $tapchain, "-j ACCEPT");
 	}
