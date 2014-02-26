@@ -417,6 +417,20 @@ my $pve_std_chains = {
 	# Drop DNS replies
 	{ action => 'DROP', proto => 'udp', sport => 53 },
     ],
+    'PVEFW-logflags' => [
+	# same as shorewall logflags action.
+	"-j LOG --log-prefix \"logflags-dropped:\" --log-level 4 --log-ip-options",
+	"-j DROP",
+    ],
+    'PVEFW-tcpflags' => [
+	# same as shorewall tcpflags action.
+	# Packets arriving on this interface are checked for som illegal combinations of TCP flags
+	"-p tcp -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG FIN,PSH,URG -g PVEFW-logflags",
+	"-p tcp -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG NONE -g PVEFW-logflags",
+	"-p tcp -m tcp --tcp-flags SYN,RST SYN,RST -g PVEFW-logflags",
+	"-p tcp -m tcp --tcp-flags FIN,SYN FIN,SYN -g PVEFW-logflags",
+	"-p tcp -m tcp --sport 0 --tcp-flags FIN,SYN,RST,ACK SYN -g PVEFW-logflags",
+    ],
 };
 
 # iptables -p icmp -h
@@ -811,6 +825,10 @@ sub generate_tap_rules_direction {
 	ruleset_addrule($ruleset, $tapchain, "-m mac ! --mac-source $macaddr -j DROP");
     }
 
+    if ($options->{tcpflags}) {
+	ruleset_addrule($ruleset, $tapchain, "-p tcp -j PVEFW-tcpflags");
+    }
+
     if ($rules) {
         foreach my $rule (@$rules) {
 	    next if $rule->{iface} && $rule->{iface} ne $netid;
@@ -1078,7 +1096,7 @@ sub parse_fw_option {
 
     my ($opt, $value);
 
-    if ($line =~ m/^(enable|macfilter):\s*(0|1)\s*$/i) {
+    if ($line =~ m/^(enable|macfilter|tcpflags):\s*(0|1)\s*$/i) {
 	$opt = lc($1);
 	$value = int($2);
     } elsif ($line =~ m/^(policy-(in|out)):\s*(ACCEPT|DROP|REJECT)\s*$/i) {
