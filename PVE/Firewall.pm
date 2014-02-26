@@ -15,7 +15,6 @@ use Data::Dumper;
 
 my $pve_fw_lock_filename = "/var/lock/pvefw.lck";
 
-# todo: define more MACROS
 # imported/converted from: /usr/share/shorewall/macro.*
 my $pve_fw_macros = {
     'Amanda' => [
@@ -352,7 +351,7 @@ my $pve_fw_preferred_macro_names = {};
 sub get_firewall_macros {
 
     return $pve_fw_parsed_macros if $pve_fw_parsed_macros;
-    
+
     $pve_fw_parsed_macros = {};
 
     foreach my $k (keys %$pve_fw_macros) {
@@ -397,8 +396,8 @@ sub get_etc_services {
 
     close($fh);
 
-    $etc_services = $services;    
-    
+    $etc_services = $services;
+
 
     return $etc_services;
 }
@@ -780,7 +779,7 @@ sub enablehostfw {
 
     ruleset_addrule($ruleset, $chain, "-j LOG --log-prefix \"kvmhost-OUT dropped: \" --log-level 4");
     ruleset_addrule($ruleset, $chain, "-j DROP");
-    
+
     ruleset_addrule($ruleset, "PVEFW-OUTPUT", "-j PVEFW-HOST-OUT");
     ruleset_addrule($ruleset, "PVEFW-INPUT", "-j PVEFW-HOST-IN");
 }
@@ -791,7 +790,7 @@ sub generate_group_rules {
     my $rules = $group_rules->{$group};
 
     die "no such security group '$group'\n" if !$rules;
-    
+
     my $chain = "GROUP-${group}-IN";
 
     ruleset_create_chain($ruleset, $chain);
@@ -809,8 +808,8 @@ sub generate_group_rules {
 
     if ($rules->{out}) {
         foreach my $rule (@{$rules->{out}}) {
-            # we go the PVEFW-SET-ACCEPT-MARK Instead of ACCEPT) because we need to 
-	    # check also other tap rules (and group rules can be set on any bridge, 
+            # we go the PVEFW-SET-ACCEPT-MARK Instead of ACCEPT) because we need to
+	    # check also other tap rules (and group rules can be set on any bridge,
 	    # so we can't go to VMBRXX-IN)
             $rule->{action} = 'PVEFW-SET-ACCEPT-MARK' if $rule->{action} eq 'ACCEPT';
             ruleset_generate_rule($ruleset, $chain, $rule);
@@ -867,12 +866,12 @@ sub parse_fw_rule {
 
     if ($need_iface) {
 	$iface = undef if $iface && $iface eq '-';
-	die "unknown interface '$iface'\n" 
+	die "unknown interface '$iface'\n"
 	    if defined($iface) && !$valid_netdev_names->{$iface};
     }
 
     $proto = undef if $proto && $proto eq '-';
-    die "unknown protokol '$proto'\n" if $proto && 
+    die "unknown protokol '$proto'\n" if $proto &&
 	!(defined($protocols->{byname}->{$proto}) ||
 	  defined($protocols->{byid}->{$proto}));
 
@@ -887,7 +886,7 @@ sub parse_fw_rule {
 
     $nbsource = parse_address_list($source) if $source;
     $nbdest = parse_address_list($dest) if $dest;
- 
+
     my $rules = [];
 
     my $param = {
@@ -925,9 +924,9 @@ sub parse_fw_rule {
     }
 
     foreach my $rule (@$rules) {
-	$rule->{nbdport} = parse_port_name_number_or_range($rule->{dport}) 
+	$rule->{nbdport} = parse_port_name_number_or_range($rule->{dport})
 	    if defined($rule->{dport});
-	$rule->{nbsport} = parse_port_name_number_or_range($rule->{sport}) 
+	$rule->{nbsport} = parse_port_name_number_or_range($rule->{sport})
 	    if defined($rule->{sport});
     }
 
@@ -980,8 +979,8 @@ sub parse_vm_fw_rules {
 	next if !$res->{$section}; # skip undefined section
 
 	if ($section eq 'options') {
-	    eval { 
-		my ($opt, $value) = parse_fw_option($line); 
+	    eval {
+		my ($opt, $value) = parse_fw_option($line);
 		$res->{options}->{$opt} = $value;
 	    };
 	    warn "$prefix: $@" if $@;
@@ -1044,7 +1043,7 @@ sub parse_group_fw_rules {
     my $group;
 
     my $res = { in => [], out => [] };
-   
+
     while (defined(my $line = <$fh>)) {
 	next if $line =~ m/^#/;
 	next if $line =~ m/^\s*$/;
@@ -1124,7 +1123,7 @@ sub read_vm_firewall_rules {
 sub compile {
     my $vmdata = read_local_vm_config();
     my $rules = read_vm_firewall_rules($vmdata);
-    
+
     my $group_rules = {};
     my $filename = "/etc/pve/firewall/groups.fw";
     if (my $fh = IO::File->new($filename, O_RDONLY)) {
@@ -1152,7 +1151,7 @@ sub compile {
 	enablehostfw($ruleset, $host_rules, $group_rules);
     }
 
-    # generate firewall rules for QEMU VMs 
+    # generate firewall rules for QEMU VMs
     foreach my $vmid (keys %{$vmdata->{qemu}}) {
 	my $conf = $vmdata->{qemu}->{$vmid};
 	my $vmfw_conf = $rules->{$vmid};
@@ -1225,7 +1224,7 @@ sub get_ruleset_status {
 	    $statushash->{$chain}->{sig} = $sig;
 	    print "delete $chain ($sig)\n" if $verbose;
 	}
-    }    
+    }
 
     return $statushash;
 }
@@ -1312,7 +1311,7 @@ sub apply_ruleset {
 
     iptables_restore_cmdlist($cmdlist);
 
-    # test: re-read status and check if everything is up to date 
+    # test: re-read status and check if everything is up to date
     $statushash = get_ruleset_status($ruleset);
 
     my $errors;
