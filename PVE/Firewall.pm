@@ -806,7 +806,8 @@ sub generate_tap_rules_direction {
     ruleset_addrule($ruleset, $tapchain, "-m conntrack --ctstate INVALID -j DROP");
     ruleset_addrule($ruleset, $tapchain, "-m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
 
-    if ($direction eq 'OUT' && defined($macaddr)) {
+    if ($direction eq 'OUT' && defined($macaddr) && 
+	!(defined($options->{macfilter}) && $options->{macfilter} == 0)) {
 	ruleset_addrule($ruleset, $tapchain, "-m mac ! --mac-source $macaddr -j DROP");
     }
 
@@ -1077,13 +1078,13 @@ sub parse_fw_option {
 
     my ($opt, $value);
 
-    if ($line =~ m/^enable:\s*(0|1)\s*$/i) {
-	$opt = 'enable';
-	$value = int($1);
+    if ($line =~ m/^(enable|macfilter):\s*(0|1)\s*$/i) {
+	$opt = lc($1);
+	$value = int($2);
     } elsif ($line =~ m/^(policy-(in|out)):\s*(ACCEPT|DROP|REJECT)\s*$/i) {
 	$opt = lc($1);
 	$value = uc($3);
-     } else {
+    } else {
 	chomp $line;
 	die "can't parse option '$line'\n"
     }
