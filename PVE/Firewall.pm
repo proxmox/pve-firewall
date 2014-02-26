@@ -348,6 +348,12 @@ my $pve_fw_macros = {
 my $pve_fw_parsed_macros;
 my $pve_fw_preferred_macro_names = {};
 
+my $pve_std_chains = {
+    'PVEFW-SET-ACCEPT-MARK' => [
+	"-j MARK --set-mark 1",
+    ],
+};
+
 # iptables -p icmp -h
 my $icmp_type_names = {
     any => 1,
@@ -1186,6 +1192,21 @@ sub read_vm_firewall_rules {
     return $rules;
 }
 
+sub generate_std_chains {
+    my ($ruleset) = @_;
+
+    foreach my $chain (keys %$pve_std_chains) {
+	ruleset_create_chain($ruleset, $chain);
+	foreach my $rule (@{$pve_std_chains->{$chain}}) {
+	    if (ref($rule)) {
+		ruleset_generate_rule($ruleset, $chain, $rule);
+	    } else {
+		ruleset_addrule($ruleset, $chain, $rule);
+	    }
+	}
+    }
+}
+
 sub compile {
     my $vmdata = read_local_vm_config();
     my $rules = read_vm_firewall_rules($vmdata);
@@ -1204,8 +1225,7 @@ sub compile {
     ruleset_create_chain($ruleset, "PVEFW-OUTPUT");
     ruleset_create_chain($ruleset, "PVEFW-FORWARD");
 
-    ruleset_create_chain($ruleset, "PVEFW-SET-ACCEPT-MARK");
-    ruleset_addrule($ruleset, "PVEFW-SET-ACCEPT-MARK", "-j MARK --set-mark 1");
+    generate_std_chains($ruleset);
 
     my $enable_hostfw = 0;
     $filename = "/etc/pve/local/host.fw";
