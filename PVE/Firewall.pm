@@ -352,6 +352,71 @@ my $pve_std_chains = {
     'PVEFW-SET-ACCEPT-MARK' => [
 	"-j MARK --set-mark 1",
     ],
+    'PVEFW-DropBroadcast' => [
+	# same as shorewall 'Broadcast'
+	# simply DROP BROADCAST/MULTICAST/ANYCAST
+	# we can use this to reduce logging
+	{ action => 'DROP', dsttype => 'BROADCAST' },
+	{ action => 'DROP', dsttype => 'MULTICAST' },
+	{ action => 'DROP', dsttype => 'ANYCAST' },
+	{ action => 'DROP', dest => '224.0.0.0/4' }, 
+    ],
+    'PVEFW-reject' => [
+	# same as shorewall 'reject'
+	{ action => 'DROP', dsttype => 'BROADCAST' },
+	{ action => 'DROP', source => '224.0.0.0/4' }, 
+	{ action => 'DROP', proto => 'icmp' },
+	"-p tcp -j REJECT --reject-with tcp-reset",
+	"-p udp -j REJECT --reject-with icmp-port-unreachable",
+	"-p icmp -j REJECT --reject-with icmp-host-unreachable",
+	"-j REJECT --reject-with icmp-host-prohibited",
+    ],
+    'PVEFW-Drop' => [
+	# same as shorewall 'Drop', which is equal to DROP, 
+	# but REJECT/DROP some packages to reduce logging,
+	# and ACCEPT critical ICMP types
+	{ action => 'PVEFW-reject',  proto => 'tcp', dport => '43' }, # REJECT 'auth'
+	# we are not interested in BROADCAST/MULTICAST/ANYCAST
+	{ action => 'PVEFW-DropBroadcast' },
+	# ACCEPT critical ICMP types
+	{ action => 'ACCEPT', proto => 'icmp', dport => 'fragmentation-needed' },
+	{ action => 'ACCEPT', proto => 'icmp', dport => 'time-exceeded' },
+	# Drop packets with INVALID state
+	"-m conntrack --ctstate INVALID -j DROP",
+	# Drop Microsoft SMB noise
+	{ action => 'DROP', proto => 'udp', dport => '135,445', nbdport => 2 },
+	{ action => 'DROP', proto => 'udp', dport => '137:139'},
+	{ action => 'DROP', proto => 'udp', dport => '1024:65535', sport => 137 },
+	{ action => 'DROP', proto => 'tcp', dport => '135,139,445', nbdport => 3 },
+	{ action => 'DROP', proto => 'udp', dport => 1900 }, # UPnP
+	# Drop new/NotSyn traffic so that it doesn't get logged
+	"-p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN -j DROP",
+	# Drop DNS replies
+	{ action => 'DROP', proto => 'udp', sport => 53 },
+    ],
+    'PVEFW-Reject' => [
+	# same as shorewall 'Reject', which is equal to Reject, 
+	# but REJECT/DROP some packages to reduce logging,
+	# and ACCEPT critical ICMP types
+	{ action => 'PVEFW-reject',  proto => 'tcp', dport => '43' }, # REJECT 'auth'
+	# we are not interested in BROADCAST/MULTICAST/ANYCAST
+	{ action => 'PVEFW-DropBroadcast' },
+	# ACCEPT critical ICMP types
+	{ action => 'ACCEPT', proto => 'icmp', dport => 'fragmentation-needed' },
+	{ action => 'ACCEPT', proto => 'icmp', dport => 'time-exceeded' },
+	# Drop packets with INVALID state
+	"-m conntrack --ctstate INVALID -j DROP",
+	# Drop Microsoft SMB noise
+	{ action => 'PVEFW-reject', proto => 'udp', dport => '135,445', nbdport => 2 },
+	{ action => 'PVEFW-reject', proto => 'udp', dport => '137:139'},
+	{ action => 'PVEFW-reject', proto => 'udp', dport => '1024:65535', sport => 137 },
+	{ action => 'PVEFW-reject', proto => 'tcp', dport => '135,139,445', nbdport => 3 },
+	{ action => 'DROP', proto => 'udp', dport => 1900 }, # UPnP
+	# Drop new/NotSyn traffic so that it doesn't get logged
+	"-p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN -j DROP",
+	# Drop DNS replies
+	{ action => 'DROP', proto => 'udp', sport => 53 },
+    ],
 };
 
 # iptables -p icmp -h
