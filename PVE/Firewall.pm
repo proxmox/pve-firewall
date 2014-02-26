@@ -418,7 +418,7 @@ my $pve_std_chains = {
 	{ action => 'DROP', proto => 'udp', sport => 53 },
     ],
     'PVEFW-logflags' => [
-	# same as shorewall logflags action.
+	# same as shorewall logflags action. (fixme: enable/disable logging)
 	"-j LOG --log-prefix \"logflags-dropped:\" --log-level 4 --log-ip-options",
 	"-j DROP",
     ],
@@ -430,6 +430,18 @@ my $pve_std_chains = {
 	"-p tcp -m tcp --tcp-flags SYN,RST SYN,RST -g PVEFW-logflags",
 	"-p tcp -m tcp --tcp-flags FIN,SYN FIN,SYN -g PVEFW-logflags",
 	"-p tcp -m tcp --sport 0 --tcp-flags FIN,SYN,RST,ACK SYN -g PVEFW-logflags",
+    ],
+    'PVEFW-smurflog' => [
+	# same as shorewall smurflog. (fixme: enable/disable logging)
+	"-j LOG --log-prefix \"smurfs-dropped\" --log-level 4",
+	"-j DROP",
+    ],
+    'PVEFW-smurfs' => [
+	# same as shorewall smurfs action
+	# Filter packets for smurfs (packets with a broadcast address as the source).
+	"-s 0.0.0.0/32 -j RETURN",
+	"-m addrtype --src-type BROADCAST -g PVEFW-smurflog",
+	"-s 224.0.0.0/4 -g PVEFW-smurflog",
     ],
 };
 
@@ -817,6 +829,14 @@ sub generate_tap_rules_direction {
 
     ruleset_create_chain($ruleset, $tapchain);
 
+    if (!(defined($options->{nosmurfs}) && $options->{nosmurfs} == 0)) {
+	ruleset_addrule($ruleset, $tapchain, "-m conntrack --ctstate INVALID,NEW -j PVEFW-smurfs");
+    }
+
+    if ($options->{tcpflags}) {
+	ruleset_addrule($ruleset, $tapchain, "-p tcp -j PVEFW-tcpflags");
+    }
+
     ruleset_addrule($ruleset, $tapchain, "-m conntrack --ctstate INVALID -j DROP");
     ruleset_addrule($ruleset, $tapchain, "-m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
 
@@ -825,9 +845,6 @@ sub generate_tap_rules_direction {
 	ruleset_addrule($ruleset, $tapchain, "-m mac ! --mac-source $macaddr -j DROP");
     }
 
-    if ($options->{tcpflags}) {
-	ruleset_addrule($ruleset, $tapchain, "-p tcp -j PVEFW-tcpflags");
-    }
 
     if ($rules) {
         foreach my $rule (@$rules) {
@@ -1096,7 +1113,7 @@ sub parse_fw_option {
 
     my ($opt, $value);
 
-    if ($line =~ m/^(enable|macfilter|tcpflags):\s*(0|1)\s*$/i) {
+    if ($line =~ m/^(enable|macfilter|nosmurfs|tcpflags):\s*(0|1)\s*$/i) {
 	$opt = lc($1);
 	$value = int($2);
     } elsif ($line =~ m/^(policy-(in|out)):\s*(ACCEPT|DROP|REJECT)\s*$/i) {
