@@ -846,11 +846,13 @@ sub generate_tap_rules_direction {
 	    ruleset_addrule($ruleset, $tapchain, "-j ACCEPT");
 	}
     } elsif ($policy eq 'DROP') {
+	ruleset_addrule($ruleset, $tapchain, "-j PVEFW-Drop");
 	ruleset_addrule($ruleset, $tapchain, "-j LOG --log-prefix \"$tapchain-dropped: \" --log-level 4");
 	ruleset_addrule($ruleset, $tapchain, "-j DROP");
     } elsif ($policy eq 'REJECT') {
+	ruleset_addrule($ruleset, $tapchain, "-j PVEFW-Reject");
 	ruleset_addrule($ruleset, $tapchain, "-j LOG --log-prefix \"$tapchain-reject: \" --log-level 4");
-	ruleset_addrule($ruleset, $tapchain, "-j REJECT");
+	ruleset_addrule($ruleset, $tapchain, "-g PVEFW-reject");
     } else {
 	# should not happen
 	die "internal error: unknown policy '$policy'";
