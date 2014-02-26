@@ -348,6 +348,47 @@ my $pve_fw_macros = {
 my $pve_fw_parsed_macros;
 my $pve_fw_preferred_macro_names = {};
 
+# iptables -p icmp -h
+my $icmp_type_names = {
+    any => 1,
+    'echo-reply' => 1,
+    'destination-unreachable' => 1,
+    'network-unreachable' => 1,
+    'host-unreachable' => 1,
+    'protocol-unreachable' => 1,
+    'port-unreachable' => 1,
+    'fragmentation-needed' => 1,
+    'source-route-failed' => 1,
+    'network-unknown' => 1,
+    'host-unknown' => 1,
+    'network-prohibited' => 1,
+    'host-prohibited' => 1,
+    'TOS-network-unreachable' => 1,
+    'TOS-host-unreachable' => 1,
+    'communication-prohibited' => 1,
+    'host-precedence-violation' => 1,
+    'precedence-cutoff' => 1,
+    'source-quench' => 1,
+    'redirect' => 1,
+    'network-redirect' => 1,
+    'host-redirect' => 1,
+    'TOS-network-redirect' => 1,
+    'TOS-host-redirect' => 1,
+    'echo-request' => 1,
+    'router-advertisement' => 1,
+    'router-solicitation' => 1,
+    'time-exceeded' => 1,
+    'ttl-zero-during-transit' => 1,
+    'ttl-zero-during-reassembly' => 1,
+    'parameter-problem' => 1,
+    'ip-header-bad' => 1,
+    'required-option-missing' => 1,
+    'timestamp-request' => 1,
+    'timestamp-reply' => 1,
+    'address-mask-request' => 1,
+    'address-mask-reply' => 1,
+};
+
 sub get_firewall_macros {
 
     return $pve_fw_parsed_macros if $pve_fw_parsed_macros;
@@ -458,6 +499,7 @@ sub parse_port_name_number_or_range {
     foreach my $item (split(/,/, $str)) {
 	my $portlist = "";
 	my $oldpon = undef;
+	$nbports++;
 	foreach my $pon (split(':', $item, 2)) {
 	    $pon = $services->{byname}->{$pon}->{port} if $services->{byname}->{$pon}->{port};
 	    if ($pon =~ m/^\d+$/){
@@ -467,7 +509,6 @@ sub parse_port_name_number_or_range {
 	    }else{
 		die "invalid port $services->{byname}->{$pon}\n" if !$services->{byname}->{$pon};
 	    }
-	    $nbports++;
 	}
     }
 
@@ -583,10 +624,35 @@ sub ruleset_generate_rule {
     $cmd .= " -m iprange --dst-range" if $rule->{nbdest} && $rule->{nbdest} > 1;
     $cmd .= " -d $rule->{dest}" if $rule->{dest};
     $cmd .= " -p $rule->{proto}" if $rule->{proto};
-    $cmd .= "  --match multiport" if $rule->{nbdport} && $rule->{nbdport} > 1;
-    $cmd .= " --dport $rule->{dport}" if $rule->{dport};
-    $cmd .= "  --match multiport" if $rule->{nbsport} && $rule->{nbsport} > 1;
-    $cmd .= " --sport $rule->{sport}" if $rule->{sport};
+
+    if (($rule->{nbdport} && $rule->{nbdport} > 1) ||
+	($rule->{nbsport} && $rule->{nbsport} > 1)) {
+	$cmd .= " --match multiport" 
+    }
+
+    if ($rule->{dport}) {
+	if ($rule->{proto} && $rule->{proto} eq 'icmp') {
+	    # Note: we use dport to store --icmp-type
+	    die "unknown icmp-type\n" if !$icmp_type_names->{$rule->{dport}};
+	    $cmd .= " -m icmp --icmp-type $rule->{dport}";
+	} else {
+	    if ($rule->{nbdport} && $rule->{nbdport} > 1) {
+		$cmd .= " --dports $rule->{dport}";
+	    } else {
+		$cmd .= " --dport $rule->{dport}";
+	    }
+	}
+    }
+
+    if ($rule->{sport}) {
+	if ($rule->{nbsport} && $rule->{nbsport} > 1) {
+	    $cmd .= " --sports $rule->{sport}";
+	} else {
+	    $cmd .= " --sport $rule->{sport}";
+	}
+    }
+
+    $cmd .= " -m addrtype --dst-type $rule->{dsttype}" if $rule->{dsttype};
 
     if (my $action = $rule->{action}) {
 	$goto = 1 if !defined($goto) && $action eq 'PVEFW-SET-ACCEPT-MARK';
