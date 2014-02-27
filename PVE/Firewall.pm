@@ -736,7 +736,7 @@ sub ruleset_generate_rule {
     if ($rule->{dport}) {
 	if ($rule->{proto} && $rule->{proto} eq 'icmp') {
 	    # Note: we use dport to store --icmp-type
-	    die "unknown icmp-type '$rule->{dport}'\n" if !$icmp_type_names->{$rule->{dport}};
+	    die "unknown icmp-type '$rule->{dport}'\n" if !defined($icmp_type_names->{$rule->{dport}});
 	    $cmd .= " -m icmp --icmp-type $rule->{dport}";
 	} else {
 	    if ($rule->{nbdport} && $rule->{nbdport} > 1) {
