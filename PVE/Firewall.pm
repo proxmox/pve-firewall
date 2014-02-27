@@ -816,6 +816,8 @@ sub generate_bridge_chains {
 	ruleset_create_chain($ruleset, "$bridge-IN");
 	ruleset_addrule($ruleset, "$bridge-FW", "-m physdev --physdev-is-bridged --physdev-is-out -j $bridge-IN");
 	ruleset_addrule($ruleset, "$bridge-FW", "-m mark --mark 1 -j ACCEPT");
+	# accept traffic to unmanaged bridge ports
+	ruleset_addrule($ruleset, "$bridge-FW", "-m physdev --physdev-is-bridged --physdev-is-out -j ACCEPT ");
     }
 }
 
