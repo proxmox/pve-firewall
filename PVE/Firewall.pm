@@ -712,7 +712,7 @@ sub iptables_rule_exist {
 }
 
 sub ruleset_generate_rule {
-    my ($ruleset, $chain, $rule, $goto) = @_;
+    my ($ruleset, $chain, $rule, $actions, $goto) = @_;
 
     my $cmd = '';
 
@@ -752,6 +752,7 @@ sub ruleset_generate_rule {
     $cmd .= " -m addrtype --dst-type $rule->{dsttype}" if $rule->{dsttype};
 
     if (my $action = $rule->{action}) {
+	$action = $actions->{$action} if defined($actions->{$action}); 
 	$goto = 1 if !defined($goto) && $action eq 'PVEFW-SET-ACCEPT-MARK';
 	$cmd .= $goto ? " -g $action" : " -j $action";
     };
@@ -847,7 +848,6 @@ sub generate_tap_rules_direction {
 	ruleset_addrule($ruleset, $tapchain, "-m mac ! --mac-source $macaddr -j DROP");
     }
 
-
     if ($rules) {
         foreach my $rule (@$rules) {
 	    next if $rule->{iface} && $rule->{iface} ne $netid;
@@ -862,8 +862,12 @@ sub generate_tap_rules_direction {
 		ruleset_addrule($ruleset, $tapchain, "-m mark --mark 1 -j RETURN")
 		    if $direction eq 'OUT';
 	    } else {
-		$rule->{action} = "PVEFW-SET-ACCEPT-MARK" if $rule->{action} eq 'ACCEPT' && $direction eq 'OUT';
-		ruleset_generate_rule($ruleset, $tapchain, $rule);
+		if ($direction eq 'OUT') {
+		    ruleset_generate_rule($ruleset, $tapchain, $rule, 
+					  { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" });
+		} else {
+		    ruleset_generate_rule($ruleset, $tapchain, $rule, { REJECT => "PVEFW-reject" });
+		}
 	    }
 	}
     }
@@ -927,8 +931,7 @@ sub enablehostfw {
     if ($rules->{in}) {
         foreach my $rule (@{$rules->{in}}) {
             # we use RETURN because we need to check also tap rules
-            $rule->{action} = 'RETURN' if $rule->{action} eq 'ACCEPT';
-            ruleset_generate_rule($ruleset, $chain, $rule);
+            ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => 'RETURN', REJECT => "PVEFW-reject" });
         }
     }
 
@@ -949,8 +952,7 @@ sub enablehostfw {
     if ($rules->{out}) {
         foreach my $rule (@{$rules->{out}}) {
             # we use RETURN because we need to check also tap rules
-            $rule->{action} = 'RETURN' if $rule->{action} eq 'ACCEPT';
-            ruleset_generate_rule($ruleset, $chain, $rule);
+            ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => 'RETURN', REJECT => "PVEFW-reject" });
         }
     }
 
@@ -974,7 +976,7 @@ sub generate_group_rules {
 
     if ($rules->{in}) {
         foreach my $rule (@{$rules->{in}}) {
- 	    ruleset_generate_rule($ruleset, $chain, $rule);
+ 	    ruleset_generate_rule($ruleset, $chain, $rule, { REJECT => "PVEFW-reject" });
         }
     }
 
@@ -985,11 +987,10 @@ sub generate_group_rules {
 
     if ($rules->{out}) {
         foreach my $rule (@{$rules->{out}}) {
-            # we go the PVEFW-SET-ACCEPT-MARK Instead of ACCEPT) because we need to
-	    # check also other tap rules (and group rules can be set on any bridge,
-	    # so we can't go to VMBRXX-IN)
-            $rule->{action} = 'PVEFW-SET-ACCEPT-MARK' if $rule->{action} eq 'ACCEPT';
-            ruleset_generate_rule($ruleset, $chain, $rule);
+            # we use PVEFW-SET-ACCEPT-MARK (Instead of ACCEPT) because we need to
+	    # check also other tap rules later
+            ruleset_generate_rule($ruleset, $chain, $rule, 
+				  { ACCEPT => 'PVEFW-SET-ACCEPT-MARK', REJECT => "PVEFW-reject" });
         }
     }
 }
