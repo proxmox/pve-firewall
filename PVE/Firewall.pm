@@ -714,6 +714,8 @@ sub iptables_rule_exist {
 sub ruleset_generate_rule {
     my ($ruleset, $chain, $rule, $actions, $goto) = @_;
 
+    return if $rule->{disable};
+
     my $cmd = '';
 
     $cmd .= " -m iprange --src-range" if $rule->{nbsource} && $rule->{nbsource} > 1;
@@ -1013,7 +1015,11 @@ sub parse_fw_rule {
 
     my ($action, $iface, $source, $dest, $proto, $dport, $sport);
 
-    $line =~ s/#.*$//;
+    # we can add single line comments to the end of the rule
+    my $comment = $1 if $line =~ s/#\s*(.*?)\s*$//;
+
+    # we can disable a rule when prefixed with '|'
+    my $disable = 1 if  $line =~ s/^\|//;
 
     my @data = split(/\s+/, $line);
     my $expected_elements = $need_iface ? 7 : 6;
@@ -1072,6 +1078,8 @@ sub parse_fw_rule {
     my $rules = [];
 
     my $param = {
+	disable => $disable,
+	comment => $comment,
 	action => $action,
 	iface => $iface,
 	source => $source,
