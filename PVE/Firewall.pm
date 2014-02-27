@@ -836,6 +836,10 @@ sub generate_tap_rules_direction {
 	ruleset_addrule($ruleset, $tapchain, "-m conntrack --ctstate INVALID,NEW -j PVEFW-smurfs");
     }
 
+    if (!(defined($options->{dhcp}) && $options->{dhcp} == 0)) {
+	ruleset_addrule($ruleset, $tapchain, "-p udp -m udp --dport 67:68 -j ACCEPT");
+    }
+
     if ($options->{tcpflags}) {
 	ruleset_addrule($ruleset, $tapchain, "-p tcp -j PVEFW-tcpflags");
     }
@@ -1130,7 +1134,7 @@ sub parse_fw_option {
 
     my ($opt, $value);
 
-    if ($line =~ m/^(enable|macfilter|nosmurfs|tcpflags):\s*(0|1)\s*$/i) {
+    if ($line =~ m/^(enable|dhcp|macfilter|nosmurfs|tcpflags):\s*(0|1)\s*$/i) {
 	$opt = lc($1);
 	$value = int($2);
     } elsif ($line =~ m/^(policy-(in|out)):\s*(ACCEPT|DROP|REJECT)\s*$/i) {
