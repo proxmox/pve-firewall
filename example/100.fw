@@ -1,9 +1,35 @@
 # Example VM firewall configuration
-#ACTION IFACE SOURCE DEST PROTO D-PORT S-PORT
+
+[OPTIONS] # VM specific firewall options
+
+# disable/enable the whole thing
+enable: 1 
+
+# disable/enable MAC address filter
+macfilter: 0
+
+# default policy
+policy-in: DROP
+policy-out: REJECT
+
+# filter SMURFS
+nosmurfs: 1
+
+# filter illegal combinations of TCP flags
+tcpflags: 1
+
+# enable DHCP
+dhcp: 1
+
 
 [IN]
 
-SSH(ACCEPT) net0 192.168.2.192 -
+#ACTION IFACE SOURCE DEST PROTO D-PORT S-PORT
+
+SSH(ACCEPT) net0
+SSH(ACCEPT) net0 # a comment
+SSH(ACCEPT) net0 192.168.2.192  # only allow SSH from  192.168.2.192
+|SSH(ACCEPT) net0 # disbaled rule
 
 [OUT]
 
