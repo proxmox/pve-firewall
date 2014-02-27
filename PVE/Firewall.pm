@@ -724,10 +724,14 @@ sub ruleset_generate_rule {
     $cmd .= " -d $rule->{dest}" if $rule->{dest};
     $cmd .= " -p $rule->{proto}" if $rule->{proto};
 
-    if (($rule->{nbdport} && $rule->{nbdport} > 1) ||
-	($rule->{nbsport} && $rule->{nbsport} > 1)) {
-	$cmd .= " --match multiport" 
-    }
+    my $multiport = 0;
+    $multiport++ if $rule->{nbdport} && ($rule->{nbdport} > 1);
+    $multiport++ if $rule->{nbsport} && ($rule->{nbsport} > 1);
+
+    $cmd .= " --match multiport" if $multiport;
+
+    die "multiport: option '--sports' cannot be used together with '--dports'\n" 
+	if ($multiport == 2) && ($rule->{dport} ne $rule->{sport});
 
     if ($rule->{dport}) {
 	if ($rule->{proto} && $rule->{proto} eq 'icmp') {
@@ -736,7 +740,11 @@ sub ruleset_generate_rule {
 	    $cmd .= " -m icmp --icmp-type $rule->{dport}";
 	} else {
 	    if ($rule->{nbdport} && $rule->{nbdport} > 1) {
-		$cmd .= " --dports $rule->{dport}";
+		if ($multiport == 2) {
+		    $cmd .= " --ports $rule->{dport}";
+		} else {
+		    $cmd .= " --dports $rule->{dport}";
+		}
 	    } else {
 		$cmd .= " --dport $rule->{dport}";
 	    }
@@ -745,7 +753,7 @@ sub ruleset_generate_rule {
 
     if ($rule->{sport}) {
 	if ($rule->{nbsport} && $rule->{nbsport} > 1) {
-	    $cmd .= " --sports $rule->{sport}";
+	    $cmd .= " --sports $rule->{sport}" if $multiport != 2;
 	} else {
 	    $cmd .= " --sport $rule->{sport}";
 	}
