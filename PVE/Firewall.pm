@@ -1079,18 +1079,32 @@ sub parse_fw_rule {
     if ($macro) {
 	foreach my $templ (@$macro) {
 	    my $rule = {};
+	    my $param_used = {};
 	    foreach my $k (keys %$templ) {
 		my $v = $templ->{$k};
 		if ($v eq 'PARAM') {
 		    $v = $param->{$k};
+		    $param_used->{$k} = 1;
 		} elsif ($v eq 'DEST') {
 		    $v = $param->{dest};
+		    $param_used->{dest} = 1;
 		} elsif ($v eq 'SOURCE') {
 		    $v = $param->{source};
+		    $param_used->{source} = 1;
 		}
 
 		die "missing parameter '$k' in macro '$macro_name'\n" if !defined($v);
 		$rule->{$k} = $v;
+	    }
+	    foreach my $k (keys %$param) {
+		next if !defined($param->{$k});
+		next if $param_used->{$k};
+		if (defined($rule->{$k})) {
+		    die "parameter '$k' already define in macro (value = '$rule->{$k}')\n"
+			if $rule->{$k} ne $param->{$k};
+		} else {
+		    $rule->{$k} = $param->{$k};
+		}
 	    }
 	    push @$rules, $rule;
 	}
