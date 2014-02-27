@@ -224,7 +224,7 @@ my $pve_fw_macros = {
 	{ action => 'PARAM', proto => 'tcp', dport => '1723' },
     ],
     'Ping' => [
-	{ action => 'PARAM', proto => 'icmp', dport => '8' },
+	{ action => 'PARAM', proto => 'icmp', dport => 'echo-request' },
     ],
     'PostgreSQL' => [
 	{ action => 'PARAM', proto => 'tcp', dport => '5432' },
@@ -322,7 +322,7 @@ my $pve_fw_macros = {
     ],
     'Trcrt' => [
 	{ action => 'PARAM', proto => 'udp', dport => '33434:33524' },
-	{ action => 'PARAM', proto => 'icmp', dport => '8' },
+	{ action => 'PARAM', proto => 'icmp', dport => 'echo-request' },
     ],
     'VNC' => [
 	{ action => 'PARAM', proto => 'tcp', dport => '5900:5909' },
@@ -732,7 +732,7 @@ sub ruleset_generate_rule {
     if ($rule->{dport}) {
 	if ($rule->{proto} && $rule->{proto} eq 'icmp') {
 	    # Note: we use dport to store --icmp-type
-	    die "unknown icmp-type\n" if !$icmp_type_names->{$rule->{dport}};
+	    die "unknown icmp-type '$rule->{dport}'\n" if !$icmp_type_names->{$rule->{dport}};
 	    $cmd .= " -m icmp --icmp-type $rule->{dport}";
 	} else {
 	    if ($rule->{nbdport} && $rule->{nbdport} > 1) {
