@@ -65,10 +65,61 @@ __PACKAGE__->register_method ({
     }});
 
 __PACKAGE__->register_method ({
+    name => 'status',
+    path => 'status',
+    method => 'GET',
+    description => "Get firewall status.",
+    parameters => {
+    	additionalProperties => 0,
+	properties => {},
+    },
+    returns => { 
+	type => 'object',
+	additionalProperties => 0,
+	properties => {
+	    status => {
+		type => 'string',
+		enum => ['unknown', 'stopped', 'active'],
+	    },
+	    changes => {
+		description => "Set when there are pending changes.",
+		type => 'boolean',
+		optional => 1,
+	    }
+	},
+    },
+    code => sub {
+	my ($param) = @_;
+
+	my $rpcenv = PVE::RPCEnvironment::get();
+
+	$param->{verbose} = 1 
+	    if !defined($param->{verbose}) && ($rpcenv->{type} eq 'cli');
+
+	my $code = sub {
+	    my $status = PVE::Firewall::read_pvefw_status();
+
+	    my $res = { status => $status };
+	    if ($status eq 'active') {
+		my $ruleset = PVE::Firewall::compile();
+		my $cmdlist = PVE::Firewall::get_rulset_cmdlist($ruleset);
+
+		if ($cmdlist ne "*filter\nCOMMIT\n") {
+		    $res->{changes} = 1;
+		}
+	    } 
+
+	    return $res;
+	};
+
+	return PVE::Firewall::run_locked($code);
+    }});
+
+__PACKAGE__->register_method ({
     name => 'start',
     path => 'start',
     method => 'POST',
-    description => "Start (or restart if already active) firewall.",
+    description => "Start (or simply update if already active) firewall.",
     parameters => {
     	additionalProperties => 0,
 	properties => {
@@ -85,12 +136,33 @@ __PACKAGE__->register_method ({
     code => sub {
 	my ($param) = @_;
 
-	my $code = sub {
-	    my $ruleset = PVE::Firewall::compile();
-	    PVE::Firewall::apply_ruleset($ruleset, $param->{verbose});
-	};
+	PVE::Firewall::update(1, $param->{verbose});
 
-	PVE::Firewall::run_locked($code);
+	return undef;
+    }});
+
+__PACKAGE__->register_method ({
+    name => 'update',
+    path => 'update',
+    method => 'POST',
+    description => "Check firewall rules. Then update the rules if the firewall is active.",
+    parameters => {
+    	additionalProperties => 0,
+	properties => {
+	    verbose => {
+		description => "Verbose output.",
+		type => "boolean",
+		optional => 1,
+		default => 0,
+	    },
+	},
+    },
+    returns => { type => 'null' },
+
+    code => sub {
+	my ($param) = @_;
+
+	PVE::Firewall::update(0, $param->{verbose});
 
 	return undef;
     }});
@@ -110,6 +182,7 @@ __PACKAGE__->register_method ({
 	my ($param) = @_;
 
 	my $code = sub {
+
 	    my $chash = PVE::Firewall::iptables_get_chains();
 	    my $cmdlist = "*filter\n";
 	    my $rule = "INPUT -j PVEFW-INPUT";
@@ -135,6 +208,8 @@ __PACKAGE__->register_method ({
 	    $cmdlist .= "COMMIT\n";
 
 	    PVE::Firewall::iptables_restore_cmdlist($cmdlist);
+
+	    PVE::Firewall::save_pvefw_status('stopped');
 	};
 
 	PVE::Firewall::run_locked($code);
@@ -147,6 +222,15 @@ my $nodename = PVE::INotify::nodename();
 my $cmddef = {
     compile => [ __PACKAGE__, 'compile', []],
     start => [ __PACKAGE__, 'start', []],
+    update => [ __PACKAGE__, 'update', []],
+    status => [ __PACKAGE__, 'status', [], undef, sub {
+	my $res = shift;
+	if ($res->{changes}) {
+	    print "Status: $res->{status} (pending changes)\n";
+	} else {
+	    print "Status: $res->{status}\n";
+	}
+    }],
     stop => [ __PACKAGE__, 'stop', []],
 };
 

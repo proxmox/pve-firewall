@@ -6,6 +6,7 @@ use Data::Dumper;
 use Digest::SHA;
 use PVE::Tools;
 use PVE::QemuServer;
+use File::Basename;
 use File::Path;
 use IO::File;
 use Net::IP;
@@ -14,6 +15,7 @@ use PVE::Tools qw(run_command lock_file);
 use Data::Dumper;
 
 my $pve_fw_lock_filename = "/var/lock/pvefw.lck";
+my $pve_fw_status_filename = "/var/lib/pve-firewall/pvefw.status";
 
 # imported/converted from: /usr/share/shorewall/macro.*
 my $pve_fw_macros = {
@@ -1353,6 +1355,30 @@ sub generate_std_chains {
     }
 }
 
+sub save_pvefw_status {
+    my ($status) = @_;
+
+    die "unknown status '$status' - internal error"
+	if $status !~ m/^(stopped|active)$/;
+
+    mkdir dirname($pve_fw_status_filename);
+    PVE::Tools::file_set_contents($pve_fw_status_filename, $status);
+}
+
+sub read_pvefw_status {
+
+    my $status = 'unknown';
+
+    return 'stopped' if ! -f $pve_fw_status_filename;
+
+    eval {
+	$status = PVE::Tools::file_get_contents($pve_fw_status_filename);
+    };
+    warn $@ if $@;
+
+    return $status;
+}
+
 sub compile {
     my $vmdata = read_local_vm_config();
     my $rules = read_vm_firewall_rules($vmdata);
@@ -1474,10 +1500,8 @@ sub print_sig_rule {
     return "-A $chain -m comment --comment \"PVESIG:$sig\"\n";
 }
 
-sub apply_ruleset {
+sub get_rulset_cmdlist {
     my ($ruleset, $verbose) = @_;
-
-    enable_bridge_firewall();
 
     my $cmdlist = "*filter\n"; # we pass this to iptables-restore;
 
@@ -1539,12 +1563,22 @@ sub apply_ruleset {
 
     $cmdlist .= "COMMIT\n";
 
+    return $cmdlist;
+}
+
+sub apply_ruleset {
+    my ($ruleset, $verbose) = @_;
+
+    enable_bridge_firewall();
+
+    my $cmdlist = get_rulset_cmdlist($ruleset, $verbose);
+
     print $cmdlist if $verbose;
 
     iptables_restore_cmdlist($cmdlist);
 
     # test: re-read status and check if everything is up to date
-    $statushash = get_ruleset_status($ruleset);
+    my $statushash = get_ruleset_status($ruleset);
 
     my $errors;
     foreach my $chain (sort keys %$ruleset) {
@@ -1557,5 +1591,27 @@ sub apply_ruleset {
 
     die "unable to apply firewall changes\n" if $errors;
 }
+
+sub update {
+    my ($start, $verbose) = @_;
+
+    my $code = sub {
+	my $status = read_pvefw_status();
+
+	my $ruleset = PVE::Firewall::compile();
+
+	if ($start || $status eq 'active') {
+
+	    save_pvefw_status('active')	if ($status ne 'active');
+
+	    PVE::Firewall::apply_ruleset($ruleset, $verbose);
+	} else {
+	    print "Firewall not active (status = $status)\n" if $verbose;
+	}
+    };
+
+    run_locked($code);
+}
+
 
 1;
