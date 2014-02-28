@@ -1,0 +1,9 @@
+# /etc/pve/local/host.fw
+
+[OPTIONS]
+
+enable: 0
+tcp_flags_log_level: info
+smurf_log_level: nolog
+
+# TODO

@@ -17,6 +17,19 @@ use Data::Dumper;
 my $pve_fw_lock_filename = "/var/lock/pvefw.lck";
 my $pve_fw_status_filename = "/var/lib/pve-firewall/pvefw.status";
 
+my $default_log_level = 'info';
+
+my $log_level_hash = {
+    debug => 7,
+    info => 6,
+    notice => 5,
+    warning => 4,
+    err => 3,
+    crit => 2,
+    alert => 1,
+    emerg => 0,
+};
+
 # imported/converted from: /usr/share/shorewall/macro.*
 my $pve_fw_macros = {
     'Amanda' => [
@@ -419,11 +432,6 @@ my $pve_std_chains = {
 	# Drop DNS replies
 	{ action => 'DROP', proto => 'udp', sport => 53 },
     ],
-    'PVEFW-logflags' => [
-	# same as shorewall logflags action. (fixme: enable/disable logging)
-	"-j LOG --log-prefix \"logflags-dropped:\" --log-level 4 --log-ip-options",
-	"-j DROP",
-    ],
     'PVEFW-tcpflags' => [
 	# same as shorewall tcpflags action.
 	# Packets arriving on this interface are checked for som illegal combinations of TCP flags
@@ -432,11 +440,6 @@ my $pve_std_chains = {
 	"-p tcp -m tcp --tcp-flags SYN,RST SYN,RST -g PVEFW-logflags",
 	"-p tcp -m tcp --tcp-flags FIN,SYN FIN,SYN -g PVEFW-logflags",
 	"-p tcp -m tcp --sport 0 --tcp-flags FIN,SYN,RST,ACK SYN -g PVEFW-logflags",
-    ],
-    'PVEFW-smurflog' => [
-	# same as shorewall smurflog. (fixme: enable/disable logging)
-	"-j LOG --log-prefix \"smurfs-dropped\" --log-level 4",
-	"-j DROP",
     ],
     'PVEFW-smurfs' => [
 	# same as shorewall smurfs action
@@ -1153,7 +1156,7 @@ sub parse_fw_rule {
     return $rules;
 }
 
-sub parse_fw_option {
+sub parse_vmfw_option {
     my ($line) = @_;
 
     my ($opt, $value);
@@ -1161,6 +1164,30 @@ sub parse_fw_option {
     if ($line =~ m/^(enable|dhcp|macfilter|nosmurfs|tcpflags):\s*(0|1)\s*$/i) {
 	$opt = lc($1);
 	$value = int($2);
+    } elsif ($line =~ m/^(policy-(in|out)):\s*(ACCEPT|DROP|REJECT)\s*$/i) {
+	$opt = lc($1);
+	$value = uc($3);
+    } else {
+	chomp $line;
+	die "can't parse option '$line'\n"
+    }
+
+    return ($opt, $value);
+}
+
+sub parse_hostfw_option {
+    my ($line) = @_;
+
+    my ($opt, $value);
+
+    my $loglevels = "emerg|alert|crit|err|warning|notice|info|debug|nolog";
+
+    if ($line =~ m/^(enable|dhcp|nosmurfs|tcpflags):\s*(0|1)\s*$/i) {
+	$opt = lc($1);
+	$value = int($2);
+    } elsif ($line =~ m/^(tcp_flags_log_level|smurf_log_level):\s*(($loglevels)\s*)?$/i) {
+	$opt = lc($1);
+	$value = $2 ? lc($3) : '';
     } elsif ($line =~ m/^(policy-(in|out)):\s*(ACCEPT|DROP|REJECT)\s*$/i) {
 	$opt = lc($1);
 	$value = uc($3);
@@ -1200,7 +1227,7 @@ sub parse_vm_fw_rules {
 
 	if ($section eq 'options') {
 	    eval {
-		my ($opt, $value) = parse_fw_option($line);
+		my ($opt, $value) = parse_vmfw_option($line);
 		$res->{options}->{$opt} = $value;
 	    };
 	    warn "$prefix: $@" if $@;
@@ -1223,7 +1250,7 @@ sub parse_vm_fw_rules {
 sub parse_host_fw_rules {
     my ($filename, $fh) = @_;
 
-    my $res = { in => [], out => [] };
+    my $res = { in => [], out => [], options => {}};
 
     my $section;
 
@@ -1234,12 +1261,25 @@ sub parse_host_fw_rules {
 	my $linenr = $fh->input_line_number();
 	my $prefix = "$filename (line $linenr)";
 
-	if ($line =~ m/^\[(in|out)\]\s*$/i) {
+	if ($line =~ m/^\[(\S+)\]\s*$/i) {
 	    $section = lc($1);
+	    warn "$prefix: ignore unknown section '$section'\n" if !$res->{$section};
 	    next;
 	}
 	if (!$section) {
 	    warn "$prefix: skip line - no section";
+	    next;
+	}
+
+	next if !$res->{$section}; # skip undefined section
+
+	if ($section eq 'options') {
+	    eval {
+		print "PARSE:$line\n";
+		my ($opt, $value) = parse_hostfw_option($line);
+		$res->{options}->{$opt} = $value;
+	    };
+	    warn "$prefix: $@" if $@;
 	    next;
 	}
 
@@ -1340,8 +1380,48 @@ sub read_vm_firewall_rules {
     return $rules;
 }
 
+sub get_option_log_level {
+    my ($options, $k) = @_;
+
+    my $v = $options->{$k};
+    return $v = $default_log_level if !defined($v);
+
+    return undef if $v eq '' || $v eq 'nolog';
+
+    $v = $log_level_hash->{$v} if defined($log_level_hash->{$v});
+
+    return $v if ($v >= 0) && ($v <= 7);
+
+    warn "unknown log level ($k = '$v')\n";
+
+    return undef;
+}
+
 sub generate_std_chains {
-    my ($ruleset) = @_;
+    my ($ruleset, $options) = @_;
+    
+    my $loglevel = get_option_log_level($options, 'smurf_log_level');
+
+    # same as shorewall smurflog.
+    if (defined($loglevel)) {
+	$pve_std_chains-> {'PVEFW-smurflog'} = [
+	    "-j LOG --log-prefix \"smurfs-dropped\" --log-level $loglevel",
+	    "-j DROP",
+	    ];
+    } else {
+	$pve_std_chains-> {'PVEFW-smurflog'} = [ "-j DROP" ];
+    }
+
+    # same as shorewall logflags action.
+    $loglevel = get_option_log_level($options, 'tcp_flags_log_level');
+    if (defined($loglevel)) {
+	$pve_std_chains-> {'PVEFW-logflags'} = [
+	    "-j LOG --log-prefix \"logflags-dropped:\" --log-level $loglevel --log-ip-options",
+	    "-j DROP",
+	    ];
+    } else {
+	$pve_std_chains-> {'PVEFW-logflags'} = [ "-j DROP" ];
+    }
 
     foreach my $chain (keys %$pve_std_chains) {
 	ruleset_create_chain($ruleset, $chain);
@@ -1397,17 +1477,20 @@ sub compile {
     ruleset_create_chain($ruleset, "PVEFW-OUTPUT");
     ruleset_create_chain($ruleset, "PVEFW-FORWARD");
 
-    generate_std_chains($ruleset);
+    my $host_options = {};
+    my $host_rules;
 
-    my $enable_hostfw = 0;
     $filename = "/etc/pve/local/host.fw";
     if (my $fh = IO::File->new($filename, O_RDONLY)) {
-	my $host_rules = parse_host_fw_rules($filename, $fh);
-
-	$enable_hostfw = 1;
-
-	enablehostfw($ruleset, $host_rules, $group_rules);
+	$host_rules = parse_host_fw_rules($filename, $fh);
+	$host_options = $host_rules->{options};
     }
+
+    generate_std_chains($ruleset, $host_options);
+
+    my $hotsfw_enable = $host_rules && !(defined($host_options->{enable}) && ($host_options->{enable} == 0));
+
+    enablehostfw($ruleset, $host_rules, $group_rules) if $hotsfw_enable;
 
     # generate firewall rules for QEMU VMs
     foreach my $vmid (keys %{$vmdata->{qemu}}) {
@@ -1436,7 +1519,7 @@ sub compile {
 	}
     }
 
-    if ($enable_hostfw) {
+    if ($hotsfw_enable) {
 	# allow traffic from lo (ourself)
 	ruleset_addrule($ruleset, "PVEFW-INPUT", "-i lo -j ACCEPT");
     }
