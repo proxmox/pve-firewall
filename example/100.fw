@@ -12,6 +12,12 @@ macfilter: 0
 policy-in: DROP
 policy-out: REJECT
 
+# log dropped incoming connection
+log_level_in: info
+
+# disable log for outgoing connections
+log_level_out: nolog
+
 # filter SMURFS
 nosmurfs: 1
 

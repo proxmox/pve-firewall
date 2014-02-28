@@ -5,5 +5,7 @@
 enable: 0
 tcp_flags_log_level: info
 smurf_log_level: nolog
+log_level_in: info
+log_level_out: info
 
 # TODO

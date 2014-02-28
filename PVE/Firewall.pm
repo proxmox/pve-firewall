@@ -846,8 +846,11 @@ sub generate_bridge_chains {
 sub generate_tap_rules_direction {
     my ($ruleset, $group_rules, $iface, $netid, $macaddr, $vmfw_conf, $bridge, $direction) = @_;
 
-    my $rules = $vmfw_conf->{lc($direction)};
+    my $lc_direction = lc($direction);
+    my $rules = $vmfw_conf->{$lc_direction};
+
     my $options = $vmfw_conf->{options};
+    my $loglevel = get_option_log_level($options, "log_level_${lc_direction}");
 
     my $tapchain = "$iface-$direction";
 
@@ -913,12 +916,19 @@ sub generate_tap_rules_direction {
 	    ruleset_addrule($ruleset, $tapchain, "-j ACCEPT");
 	}
     } elsif ($policy eq 'DROP') {
+
 	ruleset_addrule($ruleset, $tapchain, "-j PVEFW-Drop");
-	ruleset_addrule($ruleset, $tapchain, "-j LOG --log-prefix \"$tapchain-dropped: \" --log-level 4");
+
+	ruleset_addrule($ruleset, $tapchain, "-j LOG --log-prefix \"$tapchain-dropped: \" --log-level $loglevel")
+	    if defined($loglevel);
+
 	ruleset_addrule($ruleset, $tapchain, "-j DROP");
     } elsif ($policy eq 'REJECT') {
 	ruleset_addrule($ruleset, $tapchain, "-j PVEFW-Reject");
-	ruleset_addrule($ruleset, $tapchain, "-j LOG --log-prefix \"$tapchain-reject: \" --log-level 4");
+
+	ruleset_addrule($ruleset, $tapchain, "-j LOG --log-prefix \"$tapchain-reject: \" --log-level $loglevel")
+	    if defined($loglevel);
+
 	ruleset_addrule($ruleset, $tapchain, "-g PVEFW-reject");
     } else {
 	# should not happen
@@ -942,9 +952,13 @@ sub enablehostfw {
 
     # fixme: allow security groups
 
+    my $options = $rules->{options};
+
     # host inbound firewall
     my $chain = "PVEFW-HOST-IN";
     ruleset_create_chain($ruleset, $chain);
+
+    my $loglevel = get_option_log_level($options, "log_level_in");
 
     ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate INVALID -j DROP");
     ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
@@ -960,12 +974,16 @@ sub enablehostfw {
         }
     }
 
-    ruleset_addrule($ruleset, $chain, "-j LOG --log-prefix \"kvmhost-IN dropped: \" --log-level 4");
+    ruleset_addrule($ruleset, $chain, "-j LOG --log-prefix \"kvmhost-IN dropped: \" --log-level $loglevel")
+	if defined($loglevel);
+
     ruleset_addrule($ruleset, $chain, "-j DROP");
 
     # host outbound firewall
     $chain = "PVEFW-HOST-OUT";
     ruleset_create_chain($ruleset, $chain);
+
+    $loglevel = get_option_log_level($options, "log_level_out");
 
     ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate INVALID -j DROP");
     ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
@@ -981,7 +999,9 @@ sub enablehostfw {
         }
     }
 
-    ruleset_addrule($ruleset, $chain, "-j LOG --log-prefix \"kvmhost-OUT dropped: \" --log-level 4");
+    ruleset_addrule($ruleset, $chain, "-j LOG --log-prefix \"kvmhost-OUT dropped: \" --log-level $loglevel")
+	if defined($loglevel);
+
     ruleset_addrule($ruleset, $chain, "-j DROP");
 
     ruleset_addrule($ruleset, "PVEFW-OUTPUT", "-j PVEFW-HOST-OUT");
@@ -1161,9 +1181,14 @@ sub parse_vmfw_option {
 
     my ($opt, $value);
 
+    my $loglevels = "emerg|alert|crit|err|warning|notice|info|debug|nolog";
+
     if ($line =~ m/^(enable|dhcp|macfilter|nosmurfs|tcpflags):\s*(0|1)\s*$/i) {
 	$opt = lc($1);
 	$value = int($2);
+    } elsif ($line =~ m/^(log_level_in|log_level_out):\s*(($loglevels)\s*)?$/i) {
+	$opt = lc($1);
+	$value = $2 ? lc($3) : '';
     } elsif ($line =~ m/^(policy-(in|out)):\s*(ACCEPT|DROP|REJECT)\s*$/i) {
 	$opt = lc($1);
 	$value = uc($3);
@@ -1185,7 +1210,7 @@ sub parse_hostfw_option {
     if ($line =~ m/^(enable|dhcp|nosmurfs|tcpflags):\s*(0|1)\s*$/i) {
 	$opt = lc($1);
 	$value = int($2);
-    } elsif ($line =~ m/^(tcp_flags_log_level|smurf_log_level):\s*(($loglevels)\s*)?$/i) {
+    } elsif ($line =~ m/^(log_level_in|log_level_out|tcp_flags_log_level|smurf_log_level):\s*(($loglevels)\s*)?$/i) {
 	$opt = lc($1);
 	$value = $2 ? lc($3) : '';
     } elsif ($line =~ m/^(policy-(in|out)):\s*(ACCEPT|DROP|REJECT)\s*$/i) {
@@ -1384,7 +1409,7 @@ sub get_option_log_level {
     my ($options, $k) = @_;
 
     my $v = $options->{$k};
-    return $v = $default_log_level if !defined($v);
+    $v = $default_log_level if !defined($v);
 
     return undef if $v eq '' || $v eq 'nolog';
 
