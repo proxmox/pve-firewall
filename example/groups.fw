@@ -1,0 +1,12 @@
+[group group1]
+
+IN  ACCEPT - - tcp 22 -
+OUT ACCEPT - - tcp 80 -
+OUT ACCEPT - - icmp - -
+
+[group group3]
+
+IN  ACCEPT 10.0.0.1 
+IN  ACCEPT 10.0.0.2
+IN  ACCEPT 10.0.0.2 
+

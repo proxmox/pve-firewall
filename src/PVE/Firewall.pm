@@ -844,10 +844,11 @@ sub generate_bridge_chains {
 }
 
 sub generate_tap_rules_direction {
-    my ($ruleset, $group_rules, $iface, $netid, $macaddr, $vmfw_conf, $bridge, $direction) = @_;
+    my ($ruleset, $groups_conf, $iface, $netid, $macaddr, $vmfw_conf, $bridge, $direction) = @_;
 
     my $lc_direction = lc($direction);
-    my $rules = $vmfw_conf->{$lc_direction};
+
+    my $rules = $vmfw_conf->{rules};
 
     my $options = $vmfw_conf->{options};
     my $loglevel = get_option_log_level($options, "log_level_${lc_direction}");
@@ -876,26 +877,24 @@ sub generate_tap_rules_direction {
 	ruleset_addrule($ruleset, $tapchain, "-m mac ! --mac-source $macaddr -j DROP");
     }
 
-    if ($rules) {
-        foreach my $rule (@$rules) {
-	    next if $rule->{iface} && $rule->{iface} ne $netid;
-	    # we go to $bridge-IN if accept in out rules
-	    if($rule->{action}  =~ m/^(GROUP-(\S+))$/){
-		$rule->{action} .= "-$direction";
-		# generate empty group rule if don't exist
-		if(!ruleset_chain_exist($ruleset, $rule->{action})){
-		    generate_group_rules($ruleset, $group_rules, $2);
-		}
-		ruleset_generate_rule($ruleset, $tapchain, $rule);
-		ruleset_addrule($ruleset, $tapchain, "-m mark --mark 1 -j RETURN")
-		    if $direction eq 'OUT';
+    foreach my $rule (@$rules) {
+	next if $rule->{iface} && $rule->{iface} ne $netid;
+	next if $rule->{disable};
+	if ($rule->{type} eq 'group') {
+	    my $group_chain = "GROUP-$rule->{action}-$direction"; 
+	    if(!ruleset_chain_exist($ruleset, $group_chain)){
+		generate_group_rules($ruleset, $groups_conf, $rule->{action});
+	    }
+	    ruleset_addrule($ruleset, $tapchain, "-j $group_chain");
+	    ruleset_addrule($ruleset, $tapchain, "-m mark --mark 1 -j RETURN")
+		if $direction eq 'OUT';
+	} else {
+	    next if $rule->{type} ne $lc_direction;
+	    if ($direction eq 'OUT') {
+		ruleset_generate_rule($ruleset, $tapchain, $rule, 
+				      { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" });
 	    } else {
-		if ($direction eq 'OUT') {
-		    ruleset_generate_rule($ruleset, $tapchain, $rule, 
-					  { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" });
-		} else {
-		    ruleset_generate_rule($ruleset, $tapchain, $rule, { REJECT => "PVEFW-reject" });
-		}
+		ruleset_generate_rule($ruleset, $tapchain, $rule, { REJECT => "PVEFW-reject" });
 	    }
 	}
     }
@@ -948,11 +947,12 @@ sub generate_tap_rules_direction {
 }
 
 sub enablehostfw {
-    my ($ruleset, $rules, $group_rules) = @_;
+    my ($ruleset, $hostfw_conf, $groups_conf) = @_;
 
     # fixme: allow security groups
 
-    my $options = $rules->{options};
+    my $options = $hostfw_conf->{options};
+    my $rules = $hostfw_conf->{rules};
 
     # host inbound firewall
     my $chain = "PVEFW-HOST-IN";
@@ -967,11 +967,10 @@ sub enablehostfw {
     ruleset_addrule($ruleset, $chain, "-p udp -m conntrack --ctstate NEW -m multiport --dports 5404,5405 -j ACCEPT");
     ruleset_addrule($ruleset, $chain, "-p udp -m udp --dport 9000 -j ACCEPT");  #corosync
 
-    if ($rules->{in}) {
-        foreach my $rule (@{$rules->{in}}) {
-            # we use RETURN because we need to check also tap rules
-            ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => 'RETURN', REJECT => "PVEFW-reject" });
-        }
+    foreach my $rule (@$rules) {
+	next if $rule->{type} ne 'in';
+	# we use RETURN because we need to check also tap rules
+	ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => 'RETURN', REJECT => "PVEFW-reject" });
     }
 
     ruleset_addrule($ruleset, $chain, "-j LOG --log-prefix \"kvmhost-IN dropped: \" --log-level $loglevel")
@@ -992,11 +991,10 @@ sub enablehostfw {
     ruleset_addrule($ruleset, $chain, "-p udp -m conntrack --ctstate NEW -m multiport --dports 5404,5405 -j ACCEPT");
     ruleset_addrule($ruleset, $chain, "-p udp -m udp --dport 9000 -j ACCEPT"); #corosync
 
-    if ($rules->{out}) {
-        foreach my $rule (@{$rules->{out}}) {
-            # we use RETURN because we need to check also tap rules
-            ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => 'RETURN', REJECT => "PVEFW-reject" });
-        }
+    foreach my $rule (@$rules) {
+	next if $rule->{type} ne 'out';
+	# we use RETURN because we need to check also tap rules
+	ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => 'RETURN', REJECT => "PVEFW-reject" });
     }
 
     ruleset_addrule($ruleset, $chain, "-j LOG --log-prefix \"kvmhost-OUT dropped: \" --log-level $loglevel")
@@ -1009,20 +1007,19 @@ sub enablehostfw {
 }
 
 sub generate_group_rules {
-    my ($ruleset, $group_rules, $group) = @_;
+    my ($ruleset, $groups_conf, $group) = @_;
 
-    my $rules = $group_rules->{$group};
+    die "no such security group '$group'\n" if !$groups_conf->{$group};
 
-    die "no such security group '$group'\n" if !$rules;
+    my $rules = $groups_conf->{$group}->{rules};
 
     my $chain = "GROUP-${group}-IN";
 
     ruleset_create_chain($ruleset, $chain);
 
-    if ($rules->{in}) {
-        foreach my $rule (@{$rules->{in}}) {
- 	    ruleset_generate_rule($ruleset, $chain, $rule, { REJECT => "PVEFW-reject" });
-        }
+    foreach my $rule (@$rules) {
+	next if $rule->{type} ne 'in';
+	ruleset_generate_rule($ruleset, $chain, $rule, { REJECT => "PVEFW-reject" });
     }
 
     $chain = "GROUP-${group}-OUT";
@@ -1030,13 +1027,12 @@ sub generate_group_rules {
     ruleset_create_chain($ruleset, $chain);
     ruleset_addrule($ruleset, $chain, "-j MARK --set-mark 0"); # clear mark
 
-    if ($rules->{out}) {
-        foreach my $rule (@{$rules->{out}}) {
-            # we use PVEFW-SET-ACCEPT-MARK (Instead of ACCEPT) because we need to
-	    # check also other tap rules later
-            ruleset_generate_rule($ruleset, $chain, $rule, 
-				  { ACCEPT => 'PVEFW-SET-ACCEPT-MARK', REJECT => "PVEFW-reject" });
-        }
+    foreach my $rule (@$rules) {
+	next if $rule->{type} ne 'out';
+	# we use PVEFW-SET-ACCEPT-MARK (Instead of ACCEPT) because we need to
+	# check also other tap rules later
+	ruleset_generate_rule($ruleset, $chain, $rule, 
+			      { ACCEPT => 'PVEFW-SET-ACCEPT-MARK', REJECT => "PVEFW-reject" });
     }
 }
 
@@ -1052,7 +1048,7 @@ sub parse_fw_rule {
     my $macros = get_firewall_macros();
     my $protocols = get_etc_protocols();
 
-    my ($action, $iface, $source, $dest, $proto, $dport, $sport);
+    my ($type, $action, $iface, $source, $dest, $proto, $dport, $sport);
 
     # we can add single line comments to the end of the rule
     my $comment = $1 if $line =~ s/#\s*(.*?)\s*$//;
@@ -1061,34 +1057,43 @@ sub parse_fw_rule {
     my $disable = 1 if  $line =~ s/^\|//;
 
     my @data = split(/\s+/, $line);
-    my $expected_elements = $need_iface ? 7 : 6;
+    my $expected_elements = $need_iface ? 8 : 7;
 
     die "wrong number of rule elements\n" if scalar(@data) > $expected_elements;
 
     if ($need_iface) {
-	($action, $iface, $source, $dest, $proto, $dport, $sport) = @data
+	($type, $action, $iface, $source, $dest, $proto, $dport, $sport) = @data
     } else {
-	($action, $source, $dest, $proto, $dport, $sport) =  @data;
+	($type, $action, $source, $dest, $proto, $dport, $sport) =  @data;
     }
 
-    die "incomplete rule\n" if !$action;
+    die "incomplete rule\n" if ! ($type && $action);
 
     my $macro;
     my $macro_name;
 
-    if ($action =~ m/^(ACCEPT|DROP|REJECT)$/) {
-	# OK
-    } elsif ($allow_groups && $action =~ m/^GROUP-(:?\S+)$/) {
-	# OK
-    } elsif ($action =~ m/^(\S+)\((ACCEPT|DROP|REJECT)\)$/) {
-	($macro_name, $action) = ($1, $2);
-	my $lc_macro_name = lc($macro_name);
-	my $preferred_name = $pve_fw_preferred_macro_names->{$lc_macro_name};
-	$macro_name = $preferred_name if $preferred_name;
-	$macro = $macros->{$lc_macro_name};
-	die "unknown macro '$macro_name'\n" if !$macro;
+    $type = lc($type);
+
+    if ($type eq  'in' || $type eq 'out') {
+	if ($action =~ m/^(ACCEPT|DROP|REJECT)$/) {
+	    # OK
+	} elsif ($action =~ m/^(\S+)\((ACCEPT|DROP|REJECT)\)$/) {
+	    ($macro_name, $action) = ($1, $2);
+	    my $lc_macro_name = lc($macro_name);
+	    my $preferred_name = $pve_fw_preferred_macro_names->{$lc_macro_name};
+	    $macro_name = $preferred_name if $preferred_name;
+	    $macro = $macros->{$lc_macro_name};
+	    die "unknown macro '$macro_name'\n" if !$macro;
+	} else {
+	    die "unknown action '$action'\n";
+	}
+    } elsif ($type eq 'group') {
+	die "wrong number of rule elements\n" if scalar(@data) != 3;
+	die "groups disabled\n" if !$allow_groups;
+
+	die "invalid characters in group name\n" if $action !~ m/^[A-Za-z0-9_\-]+$/;	
     } else {
-	die "unknown action '$action'\n";
+	die "unknown rule type '$type'\n";
     }
 
     if ($need_iface) {
@@ -1117,6 +1122,7 @@ sub parse_fw_rule {
     my $rules = [];
 
     my $param = {
+	type => $type,
 	disable => $disable,
 	comment => $comment,
 	action => $action,
@@ -1227,7 +1233,7 @@ sub parse_hostfw_option {
 sub parse_vm_fw_rules {
     my ($filename, $fh) = @_;
 
-    my $res = { in => [], out => [], options => {}};
+    my $res = { rules => [], options => {}};
 
     my $section;
 
@@ -1275,7 +1281,7 @@ sub parse_vm_fw_rules {
 sub parse_host_fw_rules {
     my ($filename, $fh) = @_;
 
-    my $res = { in => [], out => [], options => {}};
+    my $res = { rules => [], options => {}};
 
     my $section;
 
@@ -1300,7 +1306,6 @@ sub parse_host_fw_rules {
 
 	if ($section eq 'options') {
 	    eval {
-		print "PARSE:$line\n";
 		my ($opt, $value) = parse_hostfw_option($line);
 		$res->{options}->{$opt} = $value;
 	    };
@@ -1327,7 +1332,7 @@ sub parse_group_fw_rules {
     my $section;
     my $group;
 
-    my $res = { in => [], out => [] };
+    my $res = { rules => [] };
 
     while (defined(my $line = <$fh>)) {
 	next if $line =~ m/^#/;
@@ -1336,9 +1341,9 @@ sub parse_group_fw_rules {
 	my $linenr = $fh->input_line_number();
 	my $prefix = "$filename (line $linenr)";
 
-	if ($line =~ m/^\[(in|out):(\S+)\]\s*$/i) {
-	    $section = lc($1);
-	    $group = lc($2);
+	if ($line =~ m/^\[group\s+(\S+)\]\s*$/i) {
+	    $section = 'rules';
+	    $group = lc($1);
 	    next;
 	}
 	if (!$section || !$group) {
@@ -1488,10 +1493,10 @@ sub compile {
     my $vmdata = read_local_vm_config();
     my $rules = read_vm_firewall_rules($vmdata);
 
-    my $group_rules = {};
+    my $groups_conf = {};
     my $filename = "/etc/pve/firewall/groups.fw";
     if (my $fh = IO::File->new($filename, O_RDONLY)) {
-	$group_rules = parse_group_fw_rules($filename, $fh);
+	$groups_conf = parse_group_fw_rules($filename, $fh);
     }
 
     #print Dumper($rules);
@@ -1502,20 +1507,21 @@ sub compile {
     ruleset_create_chain($ruleset, "PVEFW-OUTPUT");
     ruleset_create_chain($ruleset, "PVEFW-FORWARD");
 
-    my $host_options = {};
-    my $host_rules;
+    my $hostfw_options = {};
+    my $hostfw_conf;
 
     $filename = "/etc/pve/local/host.fw";
     if (my $fh = IO::File->new($filename, O_RDONLY)) {
-	$host_rules = parse_host_fw_rules($filename, $fh);
-	$host_options = $host_rules->{options};
+	$hostfw_conf = parse_host_fw_rules($filename, $fh);
+	$hostfw_options = $hostfw_conf->{options};
     }
 
-    generate_std_chains($ruleset, $host_options);
+    generate_std_chains($ruleset, $hostfw_options);
 
-    my $hotsfw_enable = $host_rules && !(defined($host_options->{enable}) && ($host_options->{enable} == 0));
+    my $hostfw_enable = $hostfw_conf && 
+	!(defined($hostfw_options->{enable}) && ($hostfw_options->{enable} == 0));
 
-    enablehostfw($ruleset, $host_rules, $group_rules) if $hotsfw_enable;
+    enablehostfw($ruleset, $hostfw_conf, $groups_conf) if $hostfw_enable;
 
     # generate firewall rules for QEMU VMs
     foreach my $vmid (keys %{$vmdata->{qemu}}) {
@@ -1535,16 +1541,15 @@ sub compile {
 
 	    $bridge .= "v$net->{tag}" if $net->{tag};
 
-
 	    generate_bridge_chains($ruleset, $bridge);
 
 	    my $macaddr = $net->{macaddr};
-	    generate_tap_rules_direction($ruleset, $group_rules, $iface, $netid, $macaddr, $vmfw_conf, $bridge, 'IN');
-	    generate_tap_rules_direction($ruleset, $group_rules, $iface, $netid, $macaddr, $vmfw_conf, $bridge, 'OUT');
+	    generate_tap_rules_direction($ruleset, $groups_conf, $iface, $netid, $macaddr, $vmfw_conf, $bridge, 'IN');
+	    generate_tap_rules_direction($ruleset, $groups_conf, $iface, $netid, $macaddr, $vmfw_conf, $bridge, 'OUT');
 	}
     }
 
-    if ($hotsfw_enable) {
+    if ($hostfw_enable) {
 	# allow traffic from lo (ourself)
 	ruleset_addrule($ruleset, "PVEFW-INPUT", "-i lo -j ACCEPT");
     }

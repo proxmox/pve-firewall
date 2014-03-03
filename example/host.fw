@@ -8,4 +8,8 @@ smurf_log_level: nolog
 log_level_in: info
 log_level_out: info
 
-# TODO
+
+[RULES]
+
+IN  SSH(ACCEPT) net0
+OUT SSH(ACCEPT) net0

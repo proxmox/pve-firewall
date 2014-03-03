@@ -28,21 +28,21 @@ tcpflags: 1
 dhcp: 1
 
 
-[IN]
+[RULES]
 
-#ACTION IFACE SOURCE DEST PROTO D-PORT S-PORT
+#TYPE ACTION IFACE SOURCE DEST PROTO D-PORT S-PORT
 
-SSH(ACCEPT) net0
-SSH(ACCEPT) net0 # a comment
-SSH(ACCEPT) net0 192.168.2.192  # only allow SSH from  192.168.2.192
-|SSH(ACCEPT) net0 # disbaled rule
+IN SSH(ACCEPT) net0
+IN SSH(ACCEPT) net0 # a comment
+IN SSH(ACCEPT) net0 192.168.2.192  # only allow SSH from  192.168.2.192
+|IN SSH(ACCEPT) net0 # disabled rule
 
-[OUT]
+# add a security group
+GROUP group1 net0
 
-
-DNS(ACCEPT) net0
-Ping(ACCEPT) net0
-SSH(ACCEPT)
+OUT DNS(ACCEPT) net0
+OUT Ping(ACCEPT) net0
+OUT SSH(ACCEPT)
 
 
 
