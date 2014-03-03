@@ -1,0 +1,12 @@
+Source: pve-firewall
+Section: admin
+Priority: extra
+Maintainer: Proxmox Support Team <support@proxmox.com>
+Build-Depends: debhelper (>= 7.0.50~)
+Standards-Version: 3.8.4
+
+Package: pve-firewall
+Architecture: all
+Depends: ${perl:Depends}, ${misc:Depends}, libpve-common-perl, qemu-server
+Description: Proxmox VE Firewall
+ This package contains the Proxmox VE Firewall.

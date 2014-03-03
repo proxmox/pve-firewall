@@ -1,0 +1,6 @@
+pve-firewall (1.0-1) unstable; urgency=low
+
+  * initial package
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 03 Mar 2014 08:37:06 +0100
+
