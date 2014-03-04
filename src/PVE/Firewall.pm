@@ -980,16 +980,17 @@ sub enable_host_firewall {
     ruleset_addrule($ruleset, $chain, "-p udp -m conntrack --ctstate NEW -m multiport --dports 5404,5405 -j ACCEPT");
     ruleset_addrule($ruleset, $chain, "-p udp -m udp --dport 9000 -j ACCEPT");  #corosync
 
+    # we use RETURN because we need to check also tap rules
+    my $accept_action = 'RETURN';
+
     foreach my $rule (@$rules) {
 	next if $rule->{type} ne 'in';
-	# we use RETURN because we need to check also tap rules
-	ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => 'RETURN', REJECT => "PVEFW-reject" });
+	ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" });
     }
 
-    ruleset_addrule($ruleset, $chain, "-j LOG --log-prefix \"kvmhost-IN dropped: \" --log-level $loglevel")
-	if defined($loglevel);
-
-    ruleset_addrule($ruleset, $chain, "-j DROP");
+    # implement input policy
+    my $policy = $options->{'policy-in'} || 'DROP'; # allow nothing by default
+    ruleset_add_chain_policy($ruleset, $chain, $policy, $loglevel, $accept_action);
 
     # host outbound firewall
     $chain = "PVEFW-HOST-OUT";
@@ -1004,16 +1005,17 @@ sub enable_host_firewall {
     ruleset_addrule($ruleset, $chain, "-p udp -m conntrack --ctstate NEW -m multiport --dports 5404,5405 -j ACCEPT");
     ruleset_addrule($ruleset, $chain, "-p udp -m udp --dport 9000 -j ACCEPT"); #corosync
 
+    # we use RETURN because we may want to check other thigs later
+    $accept_action = 'RETURN';
+
     foreach my $rule (@$rules) {
 	next if $rule->{type} ne 'out';
-	# we use RETURN because we need to check also tap rules
-	ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => 'RETURN', REJECT => "PVEFW-reject" });
+	ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" });
     }
 
-    ruleset_addrule($ruleset, $chain, "-j LOG --log-prefix \"kvmhost-OUT dropped: \" --log-level $loglevel")
-	if defined($loglevel);
-
-    ruleset_addrule($ruleset, $chain, "-j DROP");
+    # implement output policy
+    $policy = $options->{'policy-out'} || 'ACCEPT'; # allow everything by default
+    ruleset_add_chain_policy($ruleset, $chain, $policy, $loglevel, $accept_action);
 
     ruleset_addrule($ruleset, "PVEFW-OUTPUT", "-j PVEFW-HOST-OUT");
     ruleset_addrule($ruleset, "PVEFW-INPUT", "-j PVEFW-HOST-IN");
