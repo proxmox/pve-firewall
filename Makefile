@@ -37,7 +37,7 @@ deb ${DEB}:
 
 .PHONY: clean
 clean: 	
-	rm -rf *~ debian/*~ src/*~ *.deb *.changes build ${PACKAGE}-*.tar.gz
+	rm -rf *~ */*~ *.deb *.changes build ${PACKAGE}-*.tar.gz
 
 .PHONY: distclean
 distclean: clean
