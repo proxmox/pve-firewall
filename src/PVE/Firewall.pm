@@ -850,6 +850,35 @@ sub generate_bridge_chains {
     }
 }
 
+sub ruleset_add_chain_policy {
+    my ($ruleset, $chain, $policy, $loglevel, $accept_action) = @_;
+
+    if ($policy eq 'ACCEPT') {
+
+	ruleset_generate_rule($ruleset, $chain, { action => 'ACCEPT' },
+			      { ACCEPT =>  $accept_action});
+
+    } elsif ($policy eq 'DROP') {
+
+	ruleset_addrule($ruleset, $chain, "-j PVEFW-Drop");
+
+	ruleset_addrule($ruleset, $chain, "-j LOG --log-prefix \"$chain-dropped: \" --log-level $loglevel")
+	    if defined($loglevel);
+
+	ruleset_addrule($ruleset, $chain, "-j DROP");
+    } elsif ($policy eq 'REJECT') {
+	ruleset_addrule($ruleset, $chain, "-j PVEFW-Reject");
+
+	ruleset_addrule($ruleset, $chain, "-j LOG --log-prefix \"$chain-reject: \" --log-level $loglevel")
+	    if defined($loglevel);
+
+	ruleset_addrule($ruleset, $chain, "-g PVEFW-reject");
+    } else {
+	# should not happen
+	die "internal error: unknown policy '$policy'";
+    }
+}
+
 sub generate_tap_rules_direction {
     my ($ruleset, $groups_conf, $iface, $netid, $macaddr, $vmfw_conf, $bridge, $direction) = @_;
 
@@ -915,31 +944,8 @@ sub generate_tap_rules_direction {
 	$policy = $options->{'policy-in'} || 'DROP'; # allow nothing by default
     }
 
-    if ($policy eq 'ACCEPT') {
-	if ($direction eq 'OUT') {
-	    ruleset_addrule($ruleset, $tapchain, "-g PVEFW-SET-ACCEPT-MARK");
-	} else {
-	    ruleset_addrule($ruleset, $tapchain, "-j ACCEPT");
-	}
-    } elsif ($policy eq 'DROP') {
-
-	ruleset_addrule($ruleset, $tapchain, "-j PVEFW-Drop");
-
-	ruleset_addrule($ruleset, $tapchain, "-j LOG --log-prefix \"$tapchain-dropped: \" --log-level $loglevel")
-	    if defined($loglevel);
-
-	ruleset_addrule($ruleset, $tapchain, "-j DROP");
-    } elsif ($policy eq 'REJECT') {
-	ruleset_addrule($ruleset, $tapchain, "-j PVEFW-Reject");
-
-	ruleset_addrule($ruleset, $tapchain, "-j LOG --log-prefix \"$tapchain-reject: \" --log-level $loglevel")
-	    if defined($loglevel);
-
-	ruleset_addrule($ruleset, $tapchain, "-g PVEFW-reject");
-    } else {
-	# should not happen
-	die "internal error: unknown policy '$policy'";
-    }
+    my $accept_action = $direction eq 'OUT' ? "PVEFW-SET-ACCEPT-MARK" : "ACCEPT";
+    ruleset_add_chain_policy($ruleset, $tapchain, $policy, $loglevel, $accept_action);
 
     # plug the tap chain to bridge chain
     my $physdevdirection = $direction eq 'IN' ? "out" : "in";
