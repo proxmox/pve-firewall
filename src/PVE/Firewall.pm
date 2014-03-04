@@ -912,7 +912,7 @@ sub generate_tap_rules_direction {
     if ($direction eq 'OUT') {
 	$policy = $options->{'policy-out'} || 'ACCEPT'; # allow everything by default
     } else {
-	$policy = $options->{'policy-in'} || 'DROP'; # allow everything by default
+	$policy = $options->{'policy-in'} || 'DROP'; # allow nothing by default
     }
 
     if ($policy eq 'ACCEPT') {
