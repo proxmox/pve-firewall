@@ -823,11 +823,6 @@ sub ruleset_insertrule {
 sub generate_bridge_chains {
     my ($ruleset, $bridge) = @_;
 
-    if (!ruleset_chain_exist($ruleset, "PVEFW-FORWARD")){
-	ruleset_create_chain($ruleset, "PVEFW-FORWARD");
-	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
-    }
-
     if (!ruleset_chain_exist($ruleset, "$bridge-FW")) {
 	ruleset_create_chain($ruleset, "$bridge-FW");
 	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o $bridge -m physdev --physdev-is-bridged -j $bridge-FW");
@@ -1517,7 +1512,9 @@ sub compile {
 
     ruleset_create_chain($ruleset, "PVEFW-INPUT");
     ruleset_create_chain($ruleset, "PVEFW-OUTPUT");
+
     ruleset_create_chain($ruleset, "PVEFW-FORWARD");
+    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
 
     my $hostfw_options = {};
     my $hostfw_conf;
