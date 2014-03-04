@@ -821,14 +821,24 @@ sub ruleset_insertrule {
 }
 
 sub generate_bridge_chains {
-    my ($ruleset, $bridge) = @_;
+    my ($ruleset, $hostfw_conf, $bridge) = @_;
+
+    my $options = $hostfw_conf->{options};
+    
+    # fixme: what log level should we use here?
+    my $loglevel = get_option_log_level($options, "log_level_out");
 
     if (!ruleset_chain_exist($ruleset, "$bridge-FW")) {
 	ruleset_create_chain($ruleset, "$bridge-FW");
 	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o $bridge -m physdev --physdev-is-bridged -j $bridge-FW");
 	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i $bridge -m physdev --physdev-is-bridged -j $bridge-FW");
-	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o $bridge -j DROP");  # disable interbridge routing
-	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i $bridge -j DROP"); # disable interbridge routing
+	# disable interbridge routing
+	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o $bridge -j PVEFW-Drop"); 
+	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i $bridge -j PVEFW-Drop");
+ 	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o $bridge -j LOG --log-prefix \"PVEFW-FORWARD-dropped \" --log-level $loglevel");  
+	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i $bridge -j LOG --log-prefix \"PVEFW-FORWARD-dropped \" --log-level $loglevel");  
+	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o $bridge -j DROP");  
+	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i $bridge -j DROP");
     }
 
     if (!ruleset_chain_exist($ruleset, "$bridge-OUT")) {
@@ -1442,7 +1452,7 @@ sub generate_std_chains {
     # same as shorewall smurflog.
     if (defined($loglevel)) {
 	$pve_std_chains-> {'PVEFW-smurflog'} = [
-	    "-j LOG --log-prefix \"smurfs-dropped\" --log-level $loglevel",
+	    "-j LOG --log-prefix \"smurfs-dropped: \" --log-level $loglevel",
 	    "-j DROP",
 	    ];
     } else {
@@ -1453,7 +1463,7 @@ sub generate_std_chains {
     $loglevel = get_option_log_level($options, 'tcp_flags_log_level');
     if (defined($loglevel)) {
 	$pve_std_chains-> {'PVEFW-logflags'} = [
-	    "-j LOG --log-prefix \"logflags-dropped:\" --log-level $loglevel --log-ip-options",
+	    "-j LOG --log-prefix \"logflags-dropped: \" --log-level $loglevel --log-ip-options",
 	    "-j DROP",
 	    ];
     } else {
@@ -1550,7 +1560,7 @@ sub compile {
 
 	    $bridge .= "v$net->{tag}" if $net->{tag};
 
-	    generate_bridge_chains($ruleset, $bridge);
+	    generate_bridge_chains($ruleset, $hostfw_conf, $bridge);
 
 	    my $macaddr = $net->{macaddr};
 	    generate_tap_rules_direction($ruleset, $groups_conf, $iface, $netid, $macaddr, $vmfw_conf, $bridge, 'IN');
