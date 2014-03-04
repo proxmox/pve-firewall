@@ -4,6 +4,7 @@ use warnings;
 use strict;
 use Data::Dumper;
 use Digest::SHA;
+use PVE::ProcFSTools;
 use PVE::Tools;
 use PVE::QemuServer;
 use File::Basename;
@@ -623,8 +624,8 @@ sub enable_bridge_firewall {
 
     return if $bridge_firewall_enabled; # only once
 
-    system("echo 1 > /proc/sys/net/bridge/bridge-nf-call-iptables");
-    system("echo 1 > /proc/sys/net/bridge/bridge-nf-call-ip6tables");
+    PVE::ProcFSTools::write_proc_entry("/proc/sys/net/bridge/bridge-nf-call-iptables", "1");
+    PVE::ProcFSTools::write_proc_entry("/proc/sys/net/bridge/bridge-nf-call-ip6tables", "1");
 
     $bridge_firewall_enabled = 1;
 }
