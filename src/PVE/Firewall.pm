@@ -721,21 +721,21 @@ sub ruleset_generate_rule {
 
     return if $rule->{disable};
 
-    my $cmd = '';
+    my @cmd = ();
 
-    $cmd .= " -m iprange --src-range" if $rule->{nbsource} && $rule->{nbsource} > 1;
-    $cmd .= " -s $rule->{source}" if $rule->{source};
-    $cmd .= " -m iprange --dst-range" if $rule->{nbdest} && $rule->{nbdest} > 1;
-    $cmd .= " -d $rule->{dest}" if $rule->{dest};
+    push @cmd, "-m iprange --src-range" if $rule->{nbsource} && $rule->{nbsource} > 1;
+    push @cmd, "-s $rule->{source}" if $rule->{source};
+    push @cmd, "-m iprange --dst-range" if $rule->{nbdest} && $rule->{nbdest} > 1;
+    push @cmd, "-d $rule->{dest}" if $rule->{dest};
 
     if ($rule->{proto}) {
-	$cmd .= " -p $rule->{proto}";
+	push @cmd, "-p $rule->{proto}";
 
 	my $multiport = 0;
 	$multiport++ if $rule->{nbdport} && ($rule->{nbdport} > 1);
 	$multiport++ if $rule->{nbsport} && ($rule->{nbsport} > 1);
 
-	$cmd .= " --match multiport" if $multiport;
+	push @cmd, "--match multiport" if $multiport;
 
 	die "multiport: option '--sports' cannot be used together with '--dports'\n" 
 	    if ($multiport == 2) && ($rule->{dport} ne $rule->{sport});
@@ -744,25 +744,25 @@ sub ruleset_generate_rule {
 	    if ($rule->{proto} && $rule->{proto} eq 'icmp') {
 		# Note: we use dport to store --icmp-type
 		die "unknown icmp-type '$rule->{dport}'\n" if !defined($icmp_type_names->{$rule->{dport}});
-		$cmd .= " -m icmp --icmp-type $rule->{dport}";
+		push @cmd, "-m icmp --icmp-type $rule->{dport}";
 	    } else {
 		if ($rule->{nbdport} && $rule->{nbdport} > 1) {
 		    if ($multiport == 2) {
-			$cmd .= " --ports $rule->{dport}";
+			push @cmd,  "--ports $rule->{dport}";
 		    } else {
-			$cmd .= " --dports $rule->{dport}";
+			push @cmd, "--dports $rule->{dport}";
 		    }
 		} else {
-		    $cmd .= " --dport $rule->{dport}";
+		    push @cmd, "--dport $rule->{dport}";
 		}
 	    }
 	}
 
 	if ($rule->{sport}) {
 	    if ($rule->{nbsport} && $rule->{nbsport} > 1) {
-		$cmd .= " --sports $rule->{sport}" if $multiport != 2;
+		push @cmd, "--sports $rule->{sport}" if $multiport != 2;
 	    } else {
-		$cmd .= " --sport $rule->{sport}";
+		push @cmd, "--sport $rule->{sport}";
 	    }
 	}
     } elsif ($rule->{dport} || $rule->{sport}) {
@@ -770,15 +770,18 @@ sub ruleset_generate_rule {
 	warn "ignoring source port '$rule->{sport}' - no protocol specified\n" if $rule->{sport};
     }
 
-    $cmd .= " -m addrtype --dst-type $rule->{dsttype}" if $rule->{dsttype};
+    push @cmd, "-m addrtype --dst-type $rule->{dsttype}" if $rule->{dsttype};
 
     if (my $action = $rule->{action}) {
 	$action = $actions->{$action} if defined($actions->{$action}); 
 	$goto = 1 if !defined($goto) && $action eq 'PVEFW-SET-ACCEPT-MARK';
-	$cmd .= $goto ? " -g $action" : " -j $action";
+	push @cmd, $goto ? "-g $action" : "-j $action";
     }
 
-    ruleset_addrule($ruleset, $chain, $cmd) if $cmd;
+    if (scalar(@cmd)) {
+	my $cmdstr = join(' ', @cmd);
+	ruleset_addrule($ruleset, $chain, $cmdstr);
+    }
 }
 
 sub ruleset_create_chain {
