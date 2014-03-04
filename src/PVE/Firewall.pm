@@ -839,6 +839,7 @@ sub generate_bridge_chains {
     if (!ruleset_chain_exist($ruleset, "$bridge-OUT")) {
 	ruleset_create_chain($ruleset, "$bridge-OUT");
 	ruleset_addrule($ruleset, "$bridge-FW", "-m physdev --physdev-is-bridged --physdev-is-in -j $bridge-OUT");
+	ruleset_addrule($ruleset, "PVEFW-INPUT", "-i $bridge -m physdev --physdev-is-bridged --physdev-is-in -j $bridge-OUT");
     }
 
     if (!ruleset_chain_exist($ruleset, "$bridge-IN")) {
@@ -953,12 +954,6 @@ sub generate_tap_rules_direction {
     my $physdevdirection = $direction eq 'IN' ? "out" : "in";
     my $rule = "-m physdev --physdev-$physdevdirection $iface --physdev-is-bridged -j $tapchain";
     ruleset_insertrule($ruleset, "$bridge-$direction", $rule);
-
-    if ($direction eq 'OUT'){
-	# add tap->host rules
-	my $rule = "-m physdev --physdev-$physdevdirection $iface -j $tapchain";
-	ruleset_addrule($ruleset, "PVEFW-INPUT", $rule);
-    }
 }
 
 sub enable_host_firewall {
