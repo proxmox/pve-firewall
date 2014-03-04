@@ -908,9 +908,11 @@ sub generate_tap_rules_direction {
     ruleset_addrule($ruleset, $tapchain, "-m conntrack --ctstate INVALID -j DROP");
     ruleset_addrule($ruleset, $tapchain, "-m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
 
-    if ($direction eq 'OUT' && defined($macaddr) && 
-	!(defined($options->{macfilter}) && $options->{macfilter} == 0)) {
-	ruleset_addrule($ruleset, $tapchain, "-m mac ! --mac-source $macaddr -j DROP");
+    if ($direction eq 'OUT') {
+	if (defined($macaddr) && !(defined($options->{macfilter}) && $options->{macfilter} == 0)) {
+	    ruleset_addrule($ruleset, $tapchain, "-m mac ! --mac-source $macaddr -j DROP");
+	}
+	ruleset_addrule($ruleset, $tapchain, "-j MARK --set-mark 0"); # clear mark
     }
 
     foreach my $rule (@$rules) {
