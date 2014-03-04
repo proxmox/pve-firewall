@@ -953,7 +953,7 @@ sub generate_tap_rules_direction {
     }
 }
 
-sub enablehostfw {
+sub enable_host_firewall {
     my ($ruleset, $hostfw_conf, $groups_conf) = @_;
 
     # fixme: allow security groups
@@ -1528,7 +1528,7 @@ sub compile {
     my $hostfw_enable = $hostfw_conf && 
 	!(defined($hostfw_options->{enable}) && ($hostfw_options->{enable} == 0));
 
-    enablehostfw($ruleset, $hostfw_conf, $groups_conf) if $hostfw_enable;
+    enable_host_firewall($ruleset, $hostfw_conf, $groups_conf) if $hostfw_enable;
 
     # generate firewall rules for QEMU VMs
     foreach my $vmid (keys %{$vmdata->{qemu}}) {
