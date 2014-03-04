@@ -1556,11 +1556,6 @@ sub compile {
 	}
     }
 
-    if ($hostfw_enable) {
-	# allow traffic from lo (ourself)
-	ruleset_addrule($ruleset, "PVEFW-INPUT", "-i lo -j ACCEPT");
-    }
-
     return $ruleset;
 }
 
