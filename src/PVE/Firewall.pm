@@ -666,6 +666,8 @@ sub iptables_get_chains {
 
 	return 1 if $name =~ m/^veth\d+.\d+-(:?IN|OUT)$/; # fixme: dev name is configurable
 
+	return 1 if $name =~ m/^venet0-\d+-(:?IN|OUT)$/;
+
 	return 1 if $name =~ m/^vmbr\d+-(:?FW|IN|OUT)$/;
 	return 1 if $name =~ m/^GROUP-(:?[^\s\-]+)-(:?IN|OUT)$/;
 
@@ -893,6 +895,95 @@ sub ruleset_add_chain_policy {
     }
 }
 
+sub ruleset_create_vm_chain {
+    my ($ruleset, $chain, $options, $macaddr, $direction) = @_;
+
+    ruleset_create_chain($ruleset, $chain);
+
+    if (!(defined($options->{nosmurfs}) && $options->{nosmurfs} == 0)) {
+	ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate INVALID,NEW -j PVEFW-smurfs");
+    }
+
+    if (!(defined($options->{dhcp}) && $options->{dhcp} == 0)) {
+	ruleset_addrule($ruleset, $chain, "-p udp -m udp --dport 67:68 -j ACCEPT");
+    }
+
+    if ($options->{tcpflags}) {
+	ruleset_addrule($ruleset, $chain, "-p tcp -j PVEFW-tcpflags");
+    }
+
+    ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate INVALID -j DROP");
+    ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
+
+    if ($direction eq 'OUT') {
+	if (defined($macaddr) && !(defined($options->{macfilter}) && $options->{macfilter} == 0)) {
+	    ruleset_addrule($ruleset, $chain, "-m mac ! --mac-source $macaddr -j DROP");
+	}
+	ruleset_addrule($ruleset, $chain, "-j MARK --set-mark 0"); # clear mark
+    }
+}
+
+sub ruleset_generate_vm_rules {
+    my ($ruleset, $rules, $groups_conf, $chain, $netid, $direction) = @_;
+
+    my $lc_direction = lc($direction);
+
+    foreach my $rule (@$rules) {
+	next if $rule->{iface} && $rule->{iface} ne $netid;
+	next if $rule->{disable};
+	if ($rule->{type} eq 'group') {
+	    my $group_chain = "GROUP-$rule->{action}-$direction"; 
+	    if(!ruleset_chain_exist($ruleset, $group_chain)){
+		generate_group_rules($ruleset, $groups_conf, $rule->{action});
+	    }
+	    ruleset_addrule($ruleset, $chain, "-j $group_chain");
+	    ruleset_addrule($ruleset, $chain, "-m mark --mark 1 -j RETURN")
+		if $direction eq 'OUT';
+	} else {
+	    next if $rule->{type} ne $lc_direction;
+	    if ($direction eq 'OUT') {
+		ruleset_generate_rule($ruleset, $chain, $rule, 
+				      { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" });
+	    } else {
+		ruleset_generate_rule($ruleset, $chain, $rule, { REJECT => "PVEFW-reject" });
+	    }
+	}
+    }
+}
+
+sub generate_venet_rules_direction {
+    my ($ruleset, $groups_conf, $vmfw_conf, $vmid, $ip, $direction) = @_;
+
+    # fixme: $ip is a list of CIDRs?
+
+    my $lc_direction = lc($direction);
+
+    my $rules = $vmfw_conf->{rules};
+
+    my $options = $vmfw_conf->{options};
+    my $loglevel = get_option_log_level($options, "log_level_${lc_direction}");
+
+    my $chain = "venet0-$vmid-$direction";
+
+    ruleset_create_vm_chain($ruleset, $chain, $options, undef, $direction);
+
+    ruleset_generate_vm_rules($ruleset, $rules, $groups_conf, $chain, 'venet', $direction);
+
+    # implement policy
+    my $policy;
+
+    if ($direction eq 'OUT') {
+	$policy = $options->{policy_out} || 'ACCEPT'; # allow everything by default
+    } else {
+	$policy = $options->{policy_in} || 'DROP'; # allow nothing by default
+    }
+
+    my $accept_action = $direction eq 'OUT' ? "PVEFW-SET-ACCEPT-MARK" : "ACCEPT";
+    ruleset_add_chain_policy($ruleset, $chain, $policy, $loglevel, $accept_action);
+
+
+}
+
 sub generate_tap_rules_direction {
     my ($ruleset, $groups_conf, $iface, $netid, $macaddr, $vmfw_conf, $bridge, $direction) = @_;
 
@@ -905,51 +996,9 @@ sub generate_tap_rules_direction {
 
     my $tapchain = "$iface-$direction";
 
-    ruleset_create_chain($ruleset, $tapchain);
+    ruleset_create_vm_chain($ruleset, $tapchain, $options, $macaddr, $direction);
 
-    if (!(defined($options->{nosmurfs}) && $options->{nosmurfs} == 0)) {
-	ruleset_addrule($ruleset, $tapchain, "-m conntrack --ctstate INVALID,NEW -j PVEFW-smurfs");
-    }
-
-    if (!(defined($options->{dhcp}) && $options->{dhcp} == 0)) {
-	ruleset_addrule($ruleset, $tapchain, "-p udp -m udp --dport 67:68 -j ACCEPT");
-    }
-
-    if ($options->{tcpflags}) {
-	ruleset_addrule($ruleset, $tapchain, "-p tcp -j PVEFW-tcpflags");
-    }
-
-    ruleset_addrule($ruleset, $tapchain, "-m conntrack --ctstate INVALID -j DROP");
-    ruleset_addrule($ruleset, $tapchain, "-m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
-
-    if ($direction eq 'OUT') {
-	if (defined($macaddr) && !(defined($options->{macfilter}) && $options->{macfilter} == 0)) {
-	    ruleset_addrule($ruleset, $tapchain, "-m mac ! --mac-source $macaddr -j DROP");
-	}
-	ruleset_addrule($ruleset, $tapchain, "-j MARK --set-mark 0"); # clear mark
-    }
-
-    foreach my $rule (@$rules) {
-	next if $rule->{iface} && $rule->{iface} ne $netid;
-	next if $rule->{disable};
-	if ($rule->{type} eq 'group') {
-	    my $group_chain = "GROUP-$rule->{action}-$direction"; 
-	    if(!ruleset_chain_exist($ruleset, $group_chain)){
-		generate_group_rules($ruleset, $groups_conf, $rule->{action});
-	    }
-	    ruleset_addrule($ruleset, $tapchain, "-j $group_chain");
-	    ruleset_addrule($ruleset, $tapchain, "-m mark --mark 1 -j RETURN")
-		if $direction eq 'OUT';
-	} else {
-	    next if $rule->{type} ne $lc_direction;
-	    if ($direction eq 'OUT') {
-		ruleset_generate_rule($ruleset, $tapchain, $rule, 
-				      { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" });
-	    } else {
-		ruleset_generate_rule($ruleset, $tapchain, $rule, { REJECT => "PVEFW-reject" });
-	    }
-	}
-    }
+    ruleset_generate_vm_rules($ruleset, $rules, $groups_conf, $tapchain, $netid, $direction);
 
     # implement policy
     my $policy;
@@ -1123,8 +1172,6 @@ sub parse_fw_rule {
 
     if ($need_iface) {
 	$iface = undef if $iface && $iface eq '-';
-	die "unknown interface '$iface'\n"
-	    if defined($iface) && !$valid_netdev_names->{$iface};
     }
 
     $proto = undef if $proto && $proto eq '-';
@@ -1599,12 +1646,12 @@ sub compile {
 
 	if ($conf->{ip_address} && $conf->{ip_address}->{value}) {
 	    my $ip = $conf->{ip_address}->{value};
-	    die "implement me";
+	    generate_venet_rules_direction($ruleset, $groups_conf, $vmfw_conf, $vmid, $ip, 'IN');
+	    generate_venet_rules_direction($ruleset, $groups_conf, $vmfw_conf, $vmid, $ip, 'OUT');
 	}
 
 	if ($conf->{netif} && $conf->{netif}->{value}) {
 	    my $netif = PVE::OpenVZ::parse_netif($conf->{netif}->{value});
-	    print Dumper($netif);
 	    foreach my $netid (keys %$netif) {
 		my $d = $netif->{$netid};
 		my $bridge = $d->{bridge};
