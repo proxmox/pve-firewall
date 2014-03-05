@@ -823,7 +823,7 @@ sub ruleset_insertrule {
 sub generate_bridge_chains {
     my ($ruleset, $hostfw_conf, $bridge) = @_;
 
-    my $options = $hostfw_conf->{options};
+    my $options = $hostfw_conf->{options} || {};
     
     # fixme: what log level should we use here?
     my $loglevel = get_option_log_level($options, "log_level_out");
@@ -1527,7 +1527,7 @@ sub compile {
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
 
     my $hostfw_options = {};
-    my $hostfw_conf;
+    my $hostfw_conf = {};
 
     $filename = "/etc/pve/local/host.fw";
     if (my $fh = IO::File->new($filename, O_RDONLY)) {
@@ -1537,8 +1537,7 @@ sub compile {
 
     generate_std_chains($ruleset, $hostfw_options);
 
-    my $hostfw_enable = $hostfw_conf && 
-	!(defined($hostfw_options->{enable}) && ($hostfw_options->{enable} == 0));
+    my $hostfw_enable = !(defined($hostfw_options->{enable}) && ($hostfw_options->{enable} == 0));
 
     enable_host_firewall($ruleset, $hostfw_conf, $groups_conf) if $hostfw_enable;
 
