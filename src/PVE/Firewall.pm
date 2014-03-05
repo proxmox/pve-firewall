@@ -1239,6 +1239,9 @@ sub parse_hostfw_option {
     } elsif ($line =~ m/^(policy-(in|out)):\s*(ACCEPT|DROP|REJECT)\s*$/i) {
 	$opt = lc($1);
 	$value = uc($3);
+    } elsif ($line =~ m/^(nf_conntrack_max):\s*(\d+)\s*$/i) {
+	$opt = lc($1);
+	$value = int($2);
     } else {
 	chomp $line;
 	die "can't parse option '$line'\n"
@@ -1567,7 +1570,7 @@ sub compile {
 	}
     }
 
-    return $ruleset;
+    return wantarray ? ($ruleset, $hostfw_conf) : $ruleset;
 }
 
 sub get_ruleset_status {
@@ -1718,13 +1721,39 @@ sub apply_ruleset {
     die "unable to apply firewall changes\n" if $errors;
 }
 
+sub update_nf_conntrack_max {
+    my ($hostfw_conf) = @_;
+
+    my $max = 65536; # reasonable default
+
+    my $options = $hostfw_conf->{options} || {};
+
+    if (defined($options->{nf_conntrack_max}) && ($options->{nf_conntrack_max} > $max)) {
+	$max = $options->{nf_conntrack_max};
+	$max = int(($max+ 8191)/8192)*8192; # round to multiples of 8192
+    }
+
+    my $filename_nf_conntrack_max = "/proc/sys/net/nf_conntrack_max";
+    my $filename_hashsize = "/sys/module/nf_conntrack/parameters/hashsize";
+
+    my $current = int(PVE::Tools::file_read_firstline($filename_nf_conntrack_max) || $max);
+
+    if ($current != $max) {
+	my $hashsize = int($max/4);
+	PVE::ProcFSTools::write_proc_entry($filename_hashsize, $hashsize);
+	PVE::ProcFSTools::write_proc_entry($filename_nf_conntrack_max, $max);
+    }
+}
+
 sub update {
     my ($start, $verbose) = @_;
 
     my $code = sub {
 	my $status = read_pvefw_status();
 
-	my $ruleset = PVE::Firewall::compile();
+	my ($ruleset, $hostfw_conf) = PVE::Firewall::compile();
+
+	update_nf_conntrack_max($hostfw_conf);
 
 	if ($start || $status eq 'active') {
 
