@@ -1413,18 +1413,18 @@ sub read_local_vm_config {
     return $vmdata;
 };
 
-sub read_vm_firewall_rules {
+sub read_vm_firewall_configs {
     my ($vmdata) = @_;
-    my $rules = {};
+    my $vmfw_configs = {};
     foreach my $vmid (keys %{$vmdata->{qemu}}, keys %{$vmdata->{openvz}}) {
 	my $filename = "/etc/pve/firewall/$vmid.fw";
 	my $fh = IO::File->new($filename, O_RDONLY);
 	next if !$fh;
 
-	$rules->{$vmid} = parse_vm_fw_rules($filename, $fh);
+	$vmfw_configs->{$vmid} = parse_vm_fw_rules($filename, $fh);
     }
 
-    return $rules;
+    return $vmfw_configs;
 }
 
 sub get_option_log_level {
@@ -1508,7 +1508,7 @@ sub read_pvefw_status {
 
 sub compile {
     my $vmdata = read_local_vm_config();
-    my $rules = read_vm_firewall_rules($vmdata);
+    my $vmfw_configs = read_vm_firewall_configs($vmdata);
 
     my $groups_conf = {};
     my $filename = "/etc/pve/firewall/groups.fw";
@@ -1545,7 +1545,7 @@ sub compile {
     # generate firewall rules for QEMU VMs
     foreach my $vmid (keys %{$vmdata->{qemu}}) {
 	my $conf = $vmdata->{qemu}->{$vmid};
-	my $vmfw_conf = $rules->{$vmid};
+	my $vmfw_conf = $vmfw_configs->{$vmid};
 	next if !$vmfw_conf;
 	next if defined($vmfw_conf->{options}->{enable}) && ($vmfw_conf->{options}->{enable} == 0);
 
