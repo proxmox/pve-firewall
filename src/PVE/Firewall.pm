@@ -954,7 +954,7 @@ sub ruleset_generate_vm_rules {
 sub generate_venet_rules_direction {
     my ($ruleset, $groups_conf, $vmfw_conf, $vmid, $ip, $direction) = @_;
 
-    # fixme: $ip is a list of CIDRs?
+    parse_address_list($ip); # make sure we have a valid $ip list
 
     my $lc_direction = lc($direction);
 
