@@ -730,12 +730,15 @@ sub iptables_rule_exist {
     return 1;
 }
 
-sub ruleset_generate_rule {
+sub ruleset_generate_cmdstr {
     my ($ruleset, $chain, $rule, $actions, $goto) = @_;
 
     return if $rule->{disable};
 
     my @cmd = ();
+
+    push @cmd, "-i $rule->{iface_in}" if $rule->{iface_in};
+    push @cmd, "-o $rule->{iface_out}" if $rule->{iface_out};
 
     push @cmd, "-m iprange --src-range" if $rule->{nbsource} && $rule->{nbsource} > 1;
     push @cmd, "-s $rule->{source}" if $rule->{source};
@@ -792,9 +795,21 @@ sub ruleset_generate_rule {
 	push @cmd, $goto ? "-g $action" : "-j $action";
     }
 
-    if (scalar(@cmd)) {
-	my $cmdstr = join(' ', @cmd);
+    return scalar(@cmd) ? join(' ', @cmd) : undef;
+}
+
+sub ruleset_generate_rule {
+    my ($ruleset, $chain, $rule, $actions, $goto) = @_;
+
+    if (my $cmdstr = ruleset_generate_cmdstr($ruleset, $chain, $rule, $actions, $goto)) {
 	ruleset_addrule($ruleset, $chain, $cmdstr);
+    }
+}
+sub ruleset_generate_rule_insert {
+    my ($ruleset, $chain, $rule, $actions, $goto) = @_;
+
+    if (my $cmdstr = ruleset_generate_cmdstr($ruleset, $chain, $rule, $actions, $goto)) {
+	ruleset_insertrule($ruleset, $chain, $cmdstr);
     }
 }
 
@@ -833,22 +848,10 @@ sub ruleset_insertrule {
 sub generate_bridge_chains {
     my ($ruleset, $hostfw_conf, $bridge) = @_;
 
-    my $options = $hostfw_conf->{options} || {};
-    
-    # fixme: what log level should we use here?
-    my $loglevel = get_option_log_level($options, "log_level_out");
-
     if (!ruleset_chain_exist($ruleset, "$bridge-FW")) {
 	ruleset_create_chain($ruleset, "$bridge-FW");
 	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o $bridge -m physdev --physdev-is-bridged -j $bridge-FW");
 	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i $bridge -m physdev --physdev-is-bridged -j $bridge-FW");
-	# disable interbridge routing
-	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o $bridge -j PVEFW-Drop"); 
-	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i $bridge -j PVEFW-Drop");
- 	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o $bridge -j LOG --log-prefix \"PVEFW-FORWARD-dropped \" --log-level $loglevel");  
-	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i $bridge -j LOG --log-prefix \"PVEFW-FORWARD-dropped \" --log-level $loglevel");  
-	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o $bridge -j DROP");  
-	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i $bridge -j DROP");
     }
 
     if (!ruleset_chain_exist($ruleset, "$bridge-OUT")) {
@@ -981,7 +984,18 @@ sub generate_venet_rules_direction {
     my $accept_action = $direction eq 'OUT' ? "PVEFW-SET-ACCEPT-MARK" : "ACCEPT";
     ruleset_add_chain_policy($ruleset, $chain, $policy, $loglevel, $accept_action);
 
-
+    # plug into FORWARD chain
+    if ($direction eq 'OUT') {
+	ruleset_generate_rule_insert($ruleset, "PVEFW-FORWARD", {
+	    action => $chain,
+	    source => $ip,
+	    iface_in => 'venet0'});
+    } else {
+	ruleset_generate_rule($ruleset, "PVEFW-FORWARD", {
+	    action => $chain,
+	    dest => $ip,
+	    iface_out => 'venet0'});
+    }
 }
 
 sub generate_tap_rules_direction {
@@ -1668,6 +1682,18 @@ sub compile {
 
     # fixme: this is an optimization? if so, we should also drop INVALID packages?
     ruleset_insertrule($ruleset, "PVEFW-FORWARD", "-m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
+
+    # fixme: what log level should we use here?
+    my $loglevel = get_option_log_level($hostfw_options, "log_level_out");
+
+    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i venet0 -j ACCEPT");
+    # disable interbridge routing
+    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o vmbr+ -j PVEFW-Drop"); 
+    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i vmbr+ -j PVEFW-Drop");
+    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o vmbr+ -j LOG --log-prefix \"PVEFW-FORWARD-dropped \" --log-level $loglevel");  
+    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i vmbr+ -j LOG --log-prefix \"PVEFW-FORWARD-dropped \" --log-level $loglevel");  
+    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o vmbr+ -j DROP");  
+    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i vmbr+ -j DROP");
 
     return wantarray ? ($ruleset, $hostfw_conf) : $ruleset;
 }
