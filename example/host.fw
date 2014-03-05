@@ -7,6 +7,7 @@ tcp_flags_log_level: info
 smurf_log_level: nolog
 log_level_in: info
 log_level_out: info
+nf_conntrack_max: 196608
 
 
 [RULES]
