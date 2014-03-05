@@ -1593,7 +1593,6 @@ sub compile {
     ruleset_create_chain($ruleset, "PVEFW-OUTPUT");
 
     ruleset_create_chain($ruleset, "PVEFW-FORWARD");
-    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
 
     my $hostfw_options = {};
     my $hostfw_conf = {};
@@ -1666,6 +1665,9 @@ sub compile {
 	    }
 	}
     }
+
+    # fixme: this is an optimization? if so, we should also drop INVALID packages?
+    ruleset_insertrule($ruleset, "PVEFW-FORWARD", "-m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
 
     return wantarray ? ($ruleset, $hostfw_conf) : $ruleset;
 }
