@@ -7,6 +7,11 @@ tcp_flags_log_level: info
 smurf_log_level: nolog
 log_level_in: info
 log_level_out: info
+
+# default policy
+policy_in: DROP
+policy_out: ACCEPT
+
 nf_conntrack_max: 196608
 
 

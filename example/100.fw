@@ -9,8 +9,8 @@ enable: 1
 macfilter: 0
 
 # default policy
-policy-in: DROP
-policy-out: REJECT
+policy_in: DROP
+policy_out: REJECT
 
 # log dropped incoming connection
 log_level_in: info

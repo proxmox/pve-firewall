@@ -947,9 +947,9 @@ sub generate_tap_rules_direction {
     my $policy;
 
     if ($direction eq 'OUT') {
-	$policy = $options->{'policy-out'} || 'ACCEPT'; # allow everything by default
+	$policy = $options->{policy_out} || 'ACCEPT'; # allow everything by default
     } else {
-	$policy = $options->{'policy-in'} || 'DROP'; # allow nothing by default
+	$policy = $options->{policy_in} || 'DROP'; # allow nothing by default
     }
 
     my $accept_action = $direction eq 'OUT' ? "PVEFW-SET-ACCEPT-MARK" : "ACCEPT";
@@ -991,7 +991,7 @@ sub enable_host_firewall {
     }
 
     # implement input policy
-    my $policy = $options->{'policy-in'} || 'DROP'; # allow nothing by default
+    my $policy = $options->{policy_in} || 'DROP'; # allow nothing by default
     ruleset_add_chain_policy($ruleset, $chain, $policy, $loglevel, $accept_action);
 
     # host outbound firewall
@@ -1016,7 +1016,7 @@ sub enable_host_firewall {
     }
 
     # implement output policy
-    $policy = $options->{'policy-out'} || 'ACCEPT'; # allow everything by default
+    $policy = $options->{policy_out} || 'ACCEPT'; # allow everything by default
     ruleset_add_chain_policy($ruleset, $chain, $policy, $loglevel, $accept_action);
 
     ruleset_addrule($ruleset, "PVEFW-OUTPUT", "-j PVEFW-HOST-OUT");
@@ -1212,7 +1212,7 @@ sub parse_vmfw_option {
     } elsif ($line =~ m/^(log_level_in|log_level_out):\s*(($loglevels)\s*)?$/i) {
 	$opt = lc($1);
 	$value = $2 ? lc($3) : '';
-    } elsif ($line =~ m/^(policy-(in|out)):\s*(ACCEPT|DROP|REJECT)\s*$/i) {
+    } elsif ($line =~ m/^(policy_(in|out)):\s*(ACCEPT|DROP|REJECT)\s*$/i) {
 	$opt = lc($1);
 	$value = uc($3);
     } else {
@@ -1236,7 +1236,7 @@ sub parse_hostfw_option {
     } elsif ($line =~ m/^(log_level_in|log_level_out|tcp_flags_log_level|smurf_log_level):\s*(($loglevels)\s*)?$/i) {
 	$opt = lc($1);
 	$value = $2 ? lc($3) : '';
-    } elsif ($line =~ m/^(policy-(in|out)):\s*(ACCEPT|DROP|REJECT)\s*$/i) {
+    } elsif ($line =~ m/^(policy_(in|out)):\s*(ACCEPT|DROP|REJECT)\s*$/i) {
 	$opt = lc($1);
 	$value = uc($3);
     } elsif ($line =~ m/^(nf_conntrack_max):\s*(\d+)\s*$/i) {
