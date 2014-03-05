@@ -857,7 +857,7 @@ sub generate_bridge_chains {
     if (!ruleset_chain_exist($ruleset, "$bridge-OUT")) {
 	ruleset_create_chain($ruleset, "$bridge-OUT");
 	ruleset_addrule($ruleset, "$bridge-FW", "-m physdev --physdev-is-bridged --physdev-is-in -j $bridge-OUT");
-	ruleset_addrule($ruleset, "PVEFW-INPUT", "-i $bridge -m physdev --physdev-is-bridged --physdev-is-in -j $bridge-OUT");
+	ruleset_insertrule($ruleset, "PVEFW-INPUT", "-i $bridge -m physdev --physdev-is-bridged --physdev-is-in -j $bridge-OUT");
     }
 
     if (!ruleset_chain_exist($ruleset, "$bridge-IN")) {
@@ -984,14 +984,24 @@ sub generate_venet_rules_direction {
     my $accept_action = $direction eq 'OUT' ? "PVEFW-SET-ACCEPT-MARK" : "ACCEPT";
     ruleset_add_chain_policy($ruleset, $chain, $policy, $loglevel, $accept_action);
 
-    # plug into FORWARD chain
+    # plug into FORWARD, INPUT and OUTPUT chain
     if ($direction eq 'OUT') {
 	ruleset_generate_rule_insert($ruleset, "PVEFW-FORWARD", {
 	    action => $chain,
 	    source => $ip,
 	    iface_in => 'venet0'});
+
+	ruleset_generate_rule_insert($ruleset, "PVEFW-INPUT", {
+	    action => $chain,
+	    source => $ip,
+	    iface_in => 'venet0'});
     } else {
 	ruleset_generate_rule($ruleset, "PVEFW-FORWARD", {
+	    action => $chain,
+	    dest => $ip,
+	    iface_out => 'venet0'});
+
+	ruleset_generate_rule($ruleset, "PVEFW-OUTPUT", {
 	    action => $chain,
 	    dest => $ip,
 	    iface_out => 'venet0'});
