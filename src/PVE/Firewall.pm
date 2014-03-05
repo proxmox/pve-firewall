@@ -663,6 +663,9 @@ sub iptables_get_chains {
 	return 1 if $name =~ m/^PVEFW-\S+$/;
 
 	return 1 if $name =~ m/^tap\d+i\d+-(:?IN|OUT)$/;
+
+	return 1 if $name =~ m/^veth\d+.\d+-(:?IN|OUT)$/; # fixme: dev name is configurable
+
 	return 1 if $name =~ m/^vmbr\d+-(:?FW|IN|OUT)$/;
 	return 1 if $name =~ m/^GROUP-(:?[^\s\-]+)-(:?IN|OUT)$/;
 
