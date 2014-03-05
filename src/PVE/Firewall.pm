@@ -4,9 +4,12 @@ use warnings;
 use strict;
 use Data::Dumper;
 use Digest::SHA;
+use PVE::INotify;
+use PVE::Cluster;
 use PVE::ProcFSTools;
 use PVE::Tools;
 use PVE::QemuServer;
+use PVE::OpenVZ; # dependeny problem?!
 use File::Basename;
 use File::Path;
 use IO::File;
@@ -14,6 +17,8 @@ use Net::IP;
 use PVE::Tools qw(run_command lock_file);
 
 use Data::Dumper;
+
+my $nodename = PVE::INotify::nodename();
 
 my $pve_fw_lock_filename = "/var/lock/pvefw.lck";
 my $pve_fw_status_filename = "/var/lib/pve-firewall/pvefw.status";
@@ -1399,26 +1404,39 @@ sub run_locked {
 sub read_local_vm_config {
 
     my $openvz = {};
-
     my $qemu = {};
-
-    my $list = PVE::QemuServer::config_list();
-
-    foreach my $vmid (keys %$list) {
-	my $cfspath = PVE::QemuServer::cfs_config_path($vmid);
-	if (my $conf = PVE::Cluster::cfs_read_file($cfspath)) {
-	    $qemu->{$vmid} = $conf;
-	}
-    }
 
     my $vmdata = { openvz => $openvz, qemu => $qemu };
 
+    my $vmlist = PVE::Cluster::get_vmlist();
+    return $vmdata if !$vmlist || !$vmlist->{ids};
+    my $ids = $vmlist->{ids};
+
+    foreach my $vmid (keys %$ids) {
+	next if !$vmid; # skip VE0
+	my $d = $ids->{$vmid};
+	next if !$d->{node} || $d->{node} ne $nodename;
+	next if !$d->{type};
+	if ($d->{type} eq 'openvz') {
+	    my $cfspath = PVE::OpenVZ::cfs_config_path($vmid);
+	    if (my $conf = PVE::Cluster::cfs_read_file($cfspath)) {
+		$openvz->{$vmid} = $conf;
+	    }
+	} elsif ($d->{type} eq 'qemu') {
+	    my $cfspath = PVE::QemuServer::cfs_config_path($vmid);
+	    if (my $conf = PVE::Cluster::cfs_read_file($cfspath)) {
+		$qemu->{$vmid} = $conf;
+	    }
+	}
+    }
+ 
     return $vmdata;
 };
 
 sub read_vm_firewall_configs {
     my ($vmdata) = @_;
     my $vmfw_configs = {};
+
     foreach my $vmid (keys %{$vmdata->{qemu}}, keys %{$vmdata->{openvz}}) {
 	my $filename = "/etc/pve/firewall/$vmid.fw";
 	my $fh = IO::File->new($filename, O_RDONLY);
@@ -1519,8 +1537,6 @@ sub compile {
 	$groups_conf = parse_group_fw_rules($filename, $fh);
     }
 
-    #print Dumper($rules);
-
     my $ruleset = {};
 
     ruleset_create_chain($ruleset, "PVEFW-INPUT");
@@ -1567,6 +1583,37 @@ sub compile {
 	    my $macaddr = $net->{macaddr};
 	    generate_tap_rules_direction($ruleset, $groups_conf, $iface, $netid, $macaddr, $vmfw_conf, $bridge, 'IN');
 	    generate_tap_rules_direction($ruleset, $groups_conf, $iface, $netid, $macaddr, $vmfw_conf, $bridge, 'OUT');
+	}
+    }
+
+    # generate firewall rules for OpenVZ containers
+    foreach my $vmid (keys %{$vmdata->{openvz}}) {
+	my $conf = $vmdata->{openvz}->{$vmid};
+
+	my $vmfw_conf = $vmfw_configs->{$vmid};
+	next if !$vmfw_conf;
+	next if defined($vmfw_conf->{options}->{enable}) && ($vmfw_conf->{options}->{enable} == 0);
+
+	if ($conf->{ip_address} && $conf->{ip_address}->{value}) {
+	    my $ip = $conf->{ip_address}->{value};
+	    die "implement me";
+	}
+
+	if ($conf->{netif} && $conf->{netif}->{value}) {
+	    my $netif = PVE::OpenVZ::parse_netif($conf->{netif}->{value});
+	    print Dumper($netif);
+	    foreach my $netid (keys %$netif) {
+		my $d = $netif->{$netid};
+		my $bridge = $d->{bridge};
+		if (!$bridge) {
+		    warn "no bridge device for CT $vmid iface '$netid'\n";
+		    next; # fixme?
+		}
+		my $macaddr = $d->{host_mac};
+		my $iface = $d->{host_ifname};
+		generate_tap_rules_direction($ruleset, $groups_conf, $iface, $netid, $macaddr, $vmfw_conf, $bridge, 'IN');
+		generate_tap_rules_direction($ruleset, $groups_conf, $iface, $netid, $macaddr, $vmfw_conf, $bridge, 'OUT');
+	    }
 	}
     }
 
