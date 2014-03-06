@@ -12,7 +12,7 @@ then
 fi
 
 if [ "${MODE}" = "start" ]; then
-    ifconfig "${IF_VETH_BRIDGETO}" up || exit 1
+    test -d "/sys/class/net/${IF_VETH_BRIDGETO}" || ifup "${IF_VETH_BRIDGETO}" || exit 1
     ip link add name "${IFACE}" type veth peer name "${IFACE}peer" || exit 1
     ip link set "${IFACE}peer" up || exit 1
     brctl addif "${IF_VETH_BRIDGETO}" "${IFACE}peer" || exit 1
