@@ -93,23 +93,21 @@ use a veth device which is plugged into the bridge:
 
 ...
 
-auto pvemgmt0
-iface pvemgmt0 inet static
+auto vmbr0
+iface vmbr0 inet manual
+	bridge_ports bond0
+	bridge_stp off
+	bridge_fd 0
+
+# this create the veth device and plug it into vmbr0
+auto pm0
+iface pm0 inet static
 	address  192.168.10.10
 	netmask  255.255.255.0
 	gateway  192.168.10.1
-	pre-up ip link add name pvemgmt0 type veth peer name pvemgmt0peer
- 	pre-up ip link set pvemgmt0peer up
- 	pre-down ip link set pvemgmt0peer down
-	post-down ip link del pvemgmt0
-
-auto vmbr0
-iface vmbr0 inet manual
-	bridge_ports pvemgmt0peer eth0
-	bridge_stp off
-	bridge_fd 0
-	pre-up ifup pvemgmt0
+	VETH_BRIDGETO vmbr0
 
 ...
 
 --------------------------------
+

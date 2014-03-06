@@ -1,0 +1,2 @@
+usr/share/pve-firewall/scripts/ifupdown.sh etc/network/if-pre-up.d/pve-firewall
+usr/share/pve-firewall/scripts/ifupdown.sh etc/network/if-post-down.d/pve-firewall
