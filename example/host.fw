@@ -12,8 +12,13 @@ log_level_out: info
 policy_in: DROP
 policy_out: ACCEPT
 
+# allow more connections (default is 65536)
 nf_conntrack_max: 196608
 
+# Enable firewall when bridges contains IP address.
+# The firewall is not fully functional in that case, so
+# you need to enable that explicitly
+allow_bridge_route: 1
 
 [RULES]
 
