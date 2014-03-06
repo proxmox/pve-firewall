@@ -1831,9 +1831,11 @@ sub get_rulset_cmdlist {
 }
 
 sub apply_ruleset {
-    my ($ruleset, $verbose) = @_;
+    my ($ruleset, $hostfw_conf, $verbose) = @_;
 
     enable_bridge_firewall();
+
+    update_nf_conntrack_max($hostfw_conf);
 
     my $cmdlist = get_rulset_cmdlist($ruleset, $verbose);
 
@@ -1888,13 +1890,11 @@ sub update {
 
 	my ($ruleset, $hostfw_conf) = PVE::Firewall::compile();
 
-	update_nf_conntrack_max($hostfw_conf);
-
 	if ($start || $status eq 'active') {
 
 	    save_pvefw_status('active')	if ($status ne 'active');
 
-	    PVE::Firewall::apply_ruleset($ruleset, $verbose);
+	    apply_ruleset($ruleset, $hostfw_conf, $verbose);
 	} else {
 	    print "Firewall not active (status = $status)\n" if $verbose;
 	}
