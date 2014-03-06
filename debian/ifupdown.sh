@@ -12,14 +12,14 @@ then
 fi
 
 if [ "${MODE}" = "start" ]; then
-    ifconfig "${IF_VETH_BRIDGETO}" up
-    ip link add name "${IFACE}" type veth peer name "${IFACE}peer"
-    ip link set "${IFACE}peer" up
-    brctl addif "${IF_VETH_BRIDGETO}" "${IFACE}peer"
+    ifconfig "${IF_VETH_BRIDGETO}" up || exit 1
+    ip link add name "${IFACE}" type veth peer name "${IFACE}peer" || exit 1
+    ip link set "${IFACE}peer" up || exit 1
+    brctl addif "${IF_VETH_BRIDGETO}" "${IFACE}peer" || exit 1
 elif [ "${MODE}" = "stop" ]; then
     brctl delif "${IF_VETH_BRIDGETO}" "${IFACE}peer"
-    ip link set "${IFACE}peer" down
-    ip link del "${IFACE}"
+    ip link set "${IFACE}peer" down || exit 1
+    ip link del "${IFACE}" || exit 1
 fi
 
 exit 0
