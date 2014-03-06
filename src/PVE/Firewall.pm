@@ -1696,7 +1696,11 @@ sub compile {
     # fixme: what log level should we use here?
     my $loglevel = get_option_log_level($hostfw_options, "log_level_out");
 
-    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i venet0 -j ACCEPT");
+    # fixme: should we really block inter-bridge traffic?
+
+    # always allow traffic from containers?
+    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i venet0 -j RETURN");
+
     # disable interbridge routing
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o vmbr+ -j PVEFW-Drop"); 
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i vmbr+ -j PVEFW-Drop");
