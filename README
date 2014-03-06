@@ -1,61 +1,61 @@
 Experimental software, only used for testing!
 =============================================
 
-Note: you need to change values in /etc/sysctl.d/pve.conf to:
-
-net.bridge.bridge-nf-call-ip6tables = 1
-net.bridge.bridge-nf-call-iptables = 1
-net.bridge.bridge-nf-call-arptables = 1
-net.bridge.bridge-nf-filter-vlan-tagged = 1
-
-and reboot after that change.
 
 Quick Intro
 ===========
 
 VM firewall rules are read from /etc/pve/firewall/<VMID>.fw
 
+Security group rules are read from /etc/pve/firewall/groups.fw
+
+Host firewall rules are read from /etc/pve/local/host.fw
+
 You can find examples in the example/ dir
 
-Note: All commands overwrites /etc/shorewall/, so don't use if you have
-and existing shorewall config you want to keep.
 
-Use the following command to generate shorewall configuration:
+Use the following command to mange the firewall:
+
+To test the firewall configuration:
 
 ./pvefw compile
 
-To compile and start the firewall:
+To start or update the firewall:
 
 ./pvefw start
 
-To compile and restart the firewall:
+To update the firewall rules (the firewall is not started if it
+is not already running):
 
-./pvefw restart
+./pvefw update
 
 To stop the firewall:
 
 ./pvefw stop
 
-To clear all iptable rules:
-
-./pvefw clear
-
 
 Implementation details
 ======================
 
-We do not write iptables rules directly. Instead we use shorewall to
-do that low level stuff. 
+We write iptables rules directly, an generate the following chains 
+as entry points in the 'forward' table:
+
+PVEFW-INPUT
+PVEFW-OUTPUT
+PVEFW-FORWARD
+
+We do not touch other (user defined) chains.
 
 Each VM can have its own firewall definition file in 
 
 /etc/pve/firewall/<VMID>.fw
 
-That file has two sections for inbound [IN] and outbound [OUT] traffic.
+That file has a section [RULES] to define firewall rules.
 
-Format is: ACTION IFACE SOURCE DEST PROTO D-PORT S-PORT
+Format is: TYPE ACTION IFACE SOURCE DEST PROTO D-PORT S-PORT
 
-* ACTION: shorewall action
+* TYPE: IN|OUT|GROUP 
+* ACTION: action or macro
 * IFACE: vm network interface (net0 - net5), or '-' for all interfaces
 * SOURCE: source IP address, or '-' for any source
 * DEST: dest IP address, or '-' for any destination address
@@ -63,85 +63,53 @@ Format is: ACTION IFACE SOURCE DEST PROTO D-PORT S-PORT
 * D-PORT: destination port
 * S-PORT: source port
 
-We translate those rules into an appropriate shorewall configuration.
+A rule for inbound traffic looks like this:
 
-There are a number of restrictions when using iptables to filter
-bridged traffic. Shorewall reflects that by applying the following
-restrictions:
-
-* BP zones may only be associated with bridge ports.
-
-* All ports associated with a given BP zone must be on the same bridge.
-
-* Policies from a non-BP zone to a BP are disallowed.
-
-* Rules where the SOURCE is a non-BP zone and the DEST is a BP zone are disallowed.
-
-See: http://www.shorewall.net/bridge-Shorewall-perl.html
-
-We simply define one zone for each bridge/vm pair.
-
-Shorewall zones names are limited to 5 characters, so we need to
-translate our names into shorter ones. The mapping is store in
-/etc/shorewall/params, so we can use shell variables with long names
-to refer to those zones.
-
-Example: One bridge vmbr0 and one VM with id 100
-
-Content of /etc/shorewall/params
- # PVE zones
- FW=fw
- ZVMBR0=z0
- ZVMBR0EXT=z1
- ZVMBR0VM100=z2
-
-Content of /etc/shorewall/zones 
- #ZONE                          TYPE       OPTIONS        
- $FW                            firewall                  
- $ZVMBR0                        ipv4                      
- $ZVMBR0EXT:$ZVMBR0             bport                     
- $ZVMBR0VM100:$ZVMBR0           bport                     
- #LAST LINE - ADD YOUR ENTRIES ABOVE THIS ONE - DO NOT REMOVE
-
-Content of /etc/shorewall/interfaces
- #ZONE                     INTERFACE            BROADCAST  OPTIONS        
- $ZVMBR0                   vmbr0                detect     bridge,optional
- $ZVMBR0EXT                vmbr0:eth0           -                         
- $ZVMBR0VM100              vmbr0:tap100i0       -          maclist        
- #LAST LINE - ADD YOUR ENTRIES ABOVE THIS ONE - DO NOT REMOVE
-
-Zone $ZVMBR0VM100 contains all network interfaces from VM100.
-
-Zone $ZVMBR0EXT contains all physical network interfaces. We consider this zone to be the external world.
-
-A shorewall rule for inbound traffic looks like this:
-
- SSH(ACCEPT)     all       $ZVMBR0VM100:tap100i0 
+IN SSH(ACCEPT) net0
 
 Outbound rules looks like:
 
- SSH(ACCEPT)     $ZVMBR0VM100:tap100i0          all
-
+OUT SSH(ACCEPT)
 
 Problems
 ===================
 
-Inbound rules with source IP does not work, because shorewall
-does not allow rules like:
+There are a number of restrictions when using iptables to filter
+bridged traffic. The physdev match feature does not work correctly
+when traffic is routed from host to bridge:
 
- SSH(ACCEPT)     all:IP_ADDRESS       $ZVMBR0VM100:tap100i0
+  * when a packet being sent through a bridge entered the firewall on another interface 
+    and was being forwarded to the bridge.
 
-As workaroud, we create one rule for each BP zone on the same
-bridge:
+  * when a packet originating on the firewall itself is being sent through a bridge.
 
- SSH(ACCEPT)     $ZVMBR0:IP_ADDRESS       $ZVMBR0VM100:tap100i0
- SSH(ACCEPT)     $ZVMBR0VM777:IP_ADDRESS  $ZVMBR0VM100:tap100i0
- SSH(ACCEPT)     $ZVMBR0EXT:IP_ADDRESS    $ZVMBR0VM100:tap100i0
+So we disable the firewall if we detect such case (bridge with assigned IP address).
+You can enable it again (if you do not care) by setting "allow_bridge_route: 1" in "host.fw".
 
+The correct workaround is to remove the IP address from the bridge device, and
+use a veth device which is plugged into the bridge:
 
+---/etc/network/interfaces----
 
+...
 
+auto pvemgmt0
+iface pvemgmt0 inet static
+	address  192.168.10.10
+	netmask  255.255.255.0
+	gateway  192.168.10.1
+	pre-up ip link add name pvemgmt0 type veth peer name pvemgmt0peer
+ 	pre-up ip link set pvemgmt0peer up
+ 	pre-down ip link set pvemgmt0peer down
+	post-down ip link del pvemgmt0
 
+auto vmbr0
+iface vmbr0 inet manual
+	bridge_ports pvemgmt0peer eth0
+	bridge_stp off
+	bridge_fd 0
+	pre-up ifup pvemgmt0
 
+...
 
-
+--------------------------------
