@@ -107,6 +107,24 @@ iface pm0 inet static
 	gateway  192.168.10.1
 	VETH_BRIDGETO vmbr0
 
+auto vmbr1
+iface vmbr1 inet manual
+      bridge_ports none
+      bridge_stp off
+      bridge_fd 0
+
+# setup masqueraded bridge port vmbr1/pm1
+auto pm1
+iface pm1 inet static
+       address 10.10.10.1
+       netmask 255.255.255.0
+       VETH_BRIDGETO vmbr1
+       post-up   iptables -t raw -A PREROUTING -s '10.10.10.0/24' -i vmbr1 -j CT --zone 1
+       post-up   iptables -t raw -A PREROUTING -d '10.10.10.0/24' -i vmbr1 -j CT --zone 1
+       post-up   iptables -t nat -A POSTROUTING -s '10.10.10.0/24' -o pm0 -j MASQUERADE
+       post-down iptables -t nat -F POSTROUTING
+       post-down iptables -t raw -F PREROUTING
+
 ...
 
 --------------------------------
