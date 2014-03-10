@@ -18,6 +18,8 @@ use PVE::Tools qw(run_command lock_file);
 
 use Data::Dumper;
 
+# fixme: use ULOG instead of LOG?
+
 my $nodename = PVE::INotify::nodename();
 
 my $pve_fw_lock_filename = "/var/lock/pvefw.lck";
