@@ -1722,7 +1722,7 @@ sub compile {
 		
 		generate_bridge_chains($ruleset, $hostfw_conf, $bridge, $routing_table);
 
-		my $macaddr = $d->{host_mac};
+		my $macaddr = $d->{mac};
 		my $iface = $d->{host_ifname};
 		generate_tap_rules_direction($ruleset, $groups_conf, $iface, $netid, $macaddr, $vmfw_conf, $bridge, 'IN');
 		generate_tap_rules_direction($ruleset, $groups_conf, $iface, $netid, $macaddr, $vmfw_conf, $bridge, 'OUT');
