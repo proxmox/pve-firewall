@@ -857,22 +857,22 @@ sub generate_bridge_chains {
 
     if (!ruleset_chain_exist($ruleset, "$bridge-FW")) {
 	ruleset_create_chain($ruleset, "$bridge-FW");
-	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o $bridge -m physdev --physdev-is-bridged -j $bridge-FW");
-	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i $bridge -m physdev --physdev-is-bridged -j $bridge-FW");
+	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o $bridge -m physdev --physdev-is-out -j $bridge-FW");
+	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i $bridge -m physdev --physdev-is-in -j $bridge-FW");
     }
 
     if (!ruleset_chain_exist($ruleset, "$bridge-OUT")) {
 	ruleset_create_chain($ruleset, "$bridge-OUT");
-	ruleset_addrule($ruleset, "$bridge-FW", "-m physdev --physdev-is-bridged --physdev-is-in -j $bridge-OUT");
-	ruleset_insertrule($ruleset, "PVEFW-INPUT", "-i $bridge -m physdev --physdev-is-bridged --physdev-is-in -j $bridge-OUT");
+	ruleset_addrule($ruleset, "$bridge-FW", "-m physdev --physdev-is-in -j $bridge-OUT");
+	ruleset_insertrule($ruleset, "PVEFW-INPUT", "-i $bridge -m physdev --physdev-is-in -j $bridge-OUT");
     }
 
     if (!ruleset_chain_exist($ruleset, "$bridge-IN")) {
 	ruleset_create_chain($ruleset, "$bridge-IN");
-	ruleset_addrule($ruleset, "$bridge-FW", "-m physdev --physdev-is-bridged --physdev-is-out -j $bridge-IN");
+	ruleset_addrule($ruleset, "$bridge-FW", "-m physdev --physdev-is-out -j $bridge-IN");
 	ruleset_addrule($ruleset, "$bridge-FW", "-m mark --mark 1 -j ACCEPT");
 	# accept traffic to unmanaged bridge ports
-	ruleset_addrule($ruleset, "$bridge-FW", "-m physdev --physdev-is-bridged --physdev-is-out -j ACCEPT ");
+	ruleset_addrule($ruleset, "$bridge-FW", "-m physdev --physdev-is-out -j ACCEPT ");
     }
 }
 
@@ -1044,9 +1044,13 @@ sub generate_tap_rules_direction {
     ruleset_add_chain_policy($ruleset, $tapchain, $policy, $loglevel, $accept_action);
 
     # plug the tap chain to bridge chain
-    my $physdevdirection = $direction eq 'IN' ? "out" : "in";
-    my $rule = "-m physdev --physdev-$physdevdirection $iface --physdev-is-bridged -j $tapchain";
-    ruleset_insertrule($ruleset, "$bridge-$direction", $rule);
+    if ($direction eq 'IN') {
+	ruleset_insertrule($ruleset, "$bridge-IN",
+			   "-m physdev --physdev-is-bridged --physdev-out $iface -j $tapchain");
+    } else {
+	ruleset_insertrule($ruleset, "$bridge-OUT",
+			   "-m physdev --physdev-in $iface -j $tapchain");
+    }
 }
 
 sub enable_host_firewall {
