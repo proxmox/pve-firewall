@@ -1,6 +1,7 @@
 # Example VM firewall configuration
 
-[OPTIONS] # VM specific firewall options
+# VM specific firewall options
+[OPTIONS]
 
 # disable/enable the whole thing
 enable: 1 
