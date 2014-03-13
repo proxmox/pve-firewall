@@ -1,0 +1,13 @@
+/var/log/pve-firewall.log {
+    rotate 7
+    daily
+    missingok
+    notifempty	
+    delaycompress
+    compress
+    sharedscripts
+    create 640 root adm
+    postrotate
+	invoke-rc.d pvefw-logger restart 2>/dev/null >/dev/null || true
+    endscript
+}

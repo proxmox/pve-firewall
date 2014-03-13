@@ -18,7 +18,7 @@ use PVE::Tools qw(run_command lock_file);
 
 use Data::Dumper;
 
-# fixme: use ULOG instead of LOG?
+# fixme: remove loglevel settings? NFLOG does not have --loglevel
 
 my $nodename = PVE::INotify::nodename();
 
@@ -888,14 +888,14 @@ sub ruleset_add_chain_policy {
 
 	ruleset_addrule($ruleset, $chain, "-j PVEFW-Drop");
 
-	ruleset_addrule($ruleset, $chain, "-j LOG --log-prefix \"$chain-dropped: \" --log-level $loglevel")
+	ruleset_addrule($ruleset, $chain, "-j NFLOG --nflog-prefix \"$chain-dropped: \"")
 	    if defined($loglevel);
 
 	ruleset_addrule($ruleset, $chain, "-j DROP");
     } elsif ($policy eq 'REJECT') {
 	ruleset_addrule($ruleset, $chain, "-j PVEFW-Reject");
 
-	ruleset_addrule($ruleset, $chain, "-j LOG --log-prefix \"$chain-reject: \" --log-level $loglevel")
+	ruleset_addrule($ruleset, $chain, "-j NFLOG --nflog-prefix \"$chain-reject: \"")
 	    if defined($loglevel);
 
 	ruleset_addrule($ruleset, $chain, "-g PVEFW-reject");
@@ -1558,7 +1558,7 @@ sub generate_std_chains {
     # same as shorewall smurflog.
     if (defined($loglevel)) {
 	$pve_std_chains-> {'PVEFW-smurflog'} = [
-	    "-j LOG --log-prefix \"smurfs-dropped: \" --log-level $loglevel",
+	    "-j NFLOG --nflog-prefix \"smurfs-dropped: \"",
 	    "-j DROP",
 	    ];
     } else {
@@ -1569,7 +1569,8 @@ sub generate_std_chains {
     $loglevel = get_option_log_level($options, 'tcp_flags_log_level');
     if (defined($loglevel)) {
 	$pve_std_chains-> {'PVEFW-logflags'} = [
-	    "-j LOG --log-prefix \"logflags-dropped: \" --log-level $loglevel --log-ip-options",
+	    # fixme: is this correctly logged by pvewf-logger? (ther is no --log-ip-options for NFLOG)
+	    "-j NFLOG --nflog-prefix \"logflags-dropped: \"",
 	    "-j DROP",
 	    ];
     } else {
@@ -1748,8 +1749,8 @@ sub compile {
     # disable interbridge routing
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o vmbr+ -j PVEFW-Drop"); 
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i vmbr+ -j PVEFW-Drop");
-    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o vmbr+ -j LOG --log-prefix \"PVEFW-FORWARD-dropped \" --log-level $loglevel");  
-    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i vmbr+ -j LOG --log-prefix \"PVEFW-FORWARD-dropped \" --log-level $loglevel");  
+    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o vmbr+ -j NFLOG --nflog-prefix \"PVEFW-FORWARD-dropped \"");  
+    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i vmbr+ -j NFLOG --nflog-prefix \"PVEFW-FORWARD-dropped \"");  
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o vmbr+ -j DROP");  
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i vmbr+ -j DROP");
 

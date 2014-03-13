@@ -1,3 +1,9 @@
+pve-firewall (1.0-2) unstable; urgency=low
+
+  * add experimental nflog logging daemon
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 13 Mar 2014 08:27:01 +0100
+
 pve-firewall (1.0-1) unstable; urgency=low
 
   * initial package

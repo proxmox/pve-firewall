@@ -1,7 +1,7 @@
 RELEASE=3.3
 
 VERSION=1.0
-PKGREL=1
+PKGREL=2
 
 PACKAGE=pve-firewall
 
@@ -13,7 +13,7 @@ DOCDIR=${PREFIX}/share/doc
 MAN1DIR=${MANDIR}/man1/
 PERLDIR=${PREFIX}/share/perl5
 
-ARCH=all
+ARCH=amd64
 GITVERSION:=$(shell cat .git/refs/heads/master)
 
 DEB=${PACKAGE}_${VERSION}-${PKGREL}_${ARCH}.deb
@@ -26,7 +26,7 @@ dinstall: deb
 
 
 .PHONY: deb
-deb ${DEB}: 
+deb ${DEB}:
 	rm -rf build
 	rsync -a src/ build
 	rsync -a debian/ build/debian
@@ -52,4 +52,3 @@ upload: ${DEB}
 	cp ${DEB} /pve/${RELEASE}/extra
 	cd /pve/${RELEASE}/extra; dpkg-scanpackages . /dev/null > Packages; gzip -9c Packages > Packages.gz
 	umount /pve/${RELEASE}; mount /pve/${RELEASE} -o ro
-
