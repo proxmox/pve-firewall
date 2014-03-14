@@ -51,6 +51,20 @@
 static struct nflog_handle *logh = NULL;
 static struct nlif_handle *nlifh = NULL;
 
+/*
+  
+LOG FORMAT:
+
+Special care was taken to allow fast parsing (and filer messages for a singl VM).
+
+<VMID> <LOGLEVEL> <CHAIN> <TIME> <TIMEZONE> <MSG> 
+
+Example:
+
+117 6 tap117i0-IN 14/Mar/2014:12:47:07 +0100 policy REJECT: IN=vmbr1 ...
+  
+*/
+
 #define LOGFILE "/var/log/pve-firewall.log"
 
 #define LOCKFILE "/var/lock/pvefw-logger.lck"
@@ -58,6 +72,8 @@ static struct nlif_handle *nlifh = NULL;
 
 #define LQ_LEN 512
 #define LE_MAX (512 - 16) // try to fit into 512 bytes
+
+#define MAX_CHAIN_LEN 28
 
 struct log_entry { 
     guint32 len; // max LE_MAX chars
@@ -104,7 +120,8 @@ log_writer_thread(gpointer data)
             }
             continue;
         }
- 
+       
+        printf("%s", le->buf);
         int res = safe_write(outfd, le->buf, le->len);
 
         g_free(le);
@@ -119,7 +136,7 @@ log_writer_thread(gpointer data)
 
 static int skipped_logs = 0;
 
-static void log_status_message(const char *fmt, ...);
+static void log_status_message(guint loglevel, const char *fmt, ...);
  
 static void
 queue_log_entry(struct log_entry *le)
@@ -132,7 +149,7 @@ queue_log_entry(struct log_entry *le)
         } else {
             int skip_tmp = skipped_logs; 
             skipped_logs = 0; // clear before calling log_status_message()
-            log_status_message("skipped %d log entries (queue full)", skip_tmp);
+            log_status_message(3, "skipped %d log entries (queue full)", skip_tmp);
             g_async_queue_push(queue, le);
         }
     } else {
@@ -149,12 +166,16 @@ queue_log_entry(struct log_entry *le)
 #define LEPRINTTIME(sec) { time_t tmp_sec = sec; if (le->len < (LE_MAX - 30)) le->len += strftime(le->buf + le->len, LE_MAX - le->len, "%d/%b/%Y:%H:%M:%S %z ", localtime(&tmp_sec)); }
 
 static void 
-log_status_message(const char *fmt, ...) 
+log_status_message(guint loglevel, const char *fmt, ...) 
 {
     va_list ap;
     va_start(ap, fmt);
     
+    if (loglevel > 7 ) loglevel = 7; // syslog defines level 0-7
+
     struct log_entry *le = g_new0(struct log_entry, 1);
+
+    LEPRINTF("0 %d - ", loglevel);
 
     LEPRINTTIME(time(NULL));
 
@@ -401,12 +422,53 @@ static int print_pkt(struct log_entry *le, struct nflog_data *ldata, u_int8_t fa
     char *payload;
     char devname[256];
     
+    guint32 vmid = 0;
+
+    guint8 log_level = 6; // info
+
+    char *chain_name = "-";
+
+    if (prefix != NULL) {
+        // Note: parse ":$vmid:$loglevel:$chain: $msg"
+        if (prefix[0] == ':') {
+            char *p = prefix + 1;
+            guint32 tmpid = 0;
+            while(*p  >= '0' && *p <= '9') { tmpid *= 10; tmpid += *p - '0'; p++; }
+
+            if ((*p == ':') &&
+                (p[1] >= '0' && p[1] <= '7') &&
+                (p[2] == ':')) {
+
+                guint8 tmp_level = p[1] - '0'; // store for later use
+                char *chain_start = p + 3; // store for later use
+                p = chain_start;
+                while (*p && *p != ':' && *p != ' ') p++;
+                int len = p - chain_start;
+
+                if (*p == ':' && p[1] == ' ' && len && (len <= MAX_CHAIN_LEN)) {
+                    // parsing successful
+
+                    *p = 0; // terminate string
+
+                    vmid = tmpid;
+                    log_level = tmp_level;
+                    chain_name = chain_start;
+                    prefix = p + 2; // the rest
+                } 
+            }
+        }
+    }
+
+    LEPRINTF("%d ", vmid);
+
+    LEPRINTF("%d ", log_level);
+
+    LEPRINTF("%s ", chain_name);
+
     struct timeval ts;
     nflog_get_timestamp(ldata, &ts);
 
     LEPRINTTIME(ts.tv_sec);
-
-    //le->len += strftime(le->buf + le->len, LE_MAX - le->len, "%d/%b/%Y:%H:%M:%S %z ", localtime(&ts.tv_sec));
 
     if (prefix != NULL) {
         LEPRINTF("%s", prefix);
@@ -528,7 +590,7 @@ terminate_request(gpointer data)
 {
     terminate_threads = TRUE;
 
-    log_status_message("received terminate request (signal)");
+    log_status_message(5, "received terminate request (signal)");
 
     g_main_loop_quit(main_loop);
     
@@ -640,7 +702,7 @@ main(int argc, char *argv[])
 
     queue = g_async_queue_new_full(g_free);
 
-    log_status_message("starting pvefw logger");
+    log_status_message(5, "starting pvefw logger");
 
     nlif_query(nlifh);
 
@@ -662,7 +724,7 @@ main(int argc, char *argv[])
     
     g_main_loop_run(main_loop);
 
-    log_status_message("stopping pvefw logger");
+    log_status_message(5, "stopping pvefw logger");
 
     g_thread_join(wthread);
 

@@ -819,6 +819,7 @@ sub ruleset_create_chain {
     my ($ruleset, $chain) = @_;
 
     die "Invalid chain name '$chain' (28 char max)\n" if length($chain) > 28;
+    die "chain name may not contain collons\n" if $chain =~ m/:/; # because of log format
 
     die "chain '$chain' already exists\n" if $ruleset->{$chain};
 
@@ -845,6 +846,31 @@ sub ruleset_insertrule {
    die "no such chain '$chain'\n" if !$ruleset->{$chain};
 
    unshift @{$ruleset->{$chain}}, "-A $chain $rule";
+}
+
+sub get_log_rule_base {
+    my ($chain, $vmid, $msg, $loglevel) = @_;
+    
+    die "internal error - no log level" if !defined($loglevel);
+
+    $vmid = 0 if !defined($vmid);
+
+    # Note: we use special format for prefix to pass further 
+    # info to log daemon (VMID, LOGVELEL and CHAIN)
+
+    return "-j NFLOG --nflog-prefix \":$vmid:$loglevel:$chain: $msg\"";
+}
+
+sub ruleset_addlog {
+    my ($ruleset, $chain, $vmid, $msg, $loglevel, $rule) = @_;
+
+    return if !defined($loglevel);
+
+    my $logrule = get_log_rule_base($chain, $vmid, $msg, $loglevel);
+
+    $logrule = "$rule $logrule" if defined($rule);
+
+    ruleset_addrule($ruleset, $chain, $logrule)
 }
 
 sub generate_bridge_chains {
@@ -877,7 +903,7 @@ sub generate_bridge_chains {
 }
 
 sub ruleset_add_chain_policy {
-    my ($ruleset, $chain, $policy, $loglevel, $accept_action) = @_;
+    my ($ruleset, $chain, $vmid, $policy, $loglevel, $accept_action) = @_;
 
     if ($policy eq 'ACCEPT') {
 
@@ -888,15 +914,13 @@ sub ruleset_add_chain_policy {
 
 	ruleset_addrule($ruleset, $chain, "-j PVEFW-Drop");
 
-	ruleset_addrule($ruleset, $chain, "-j NFLOG --nflog-prefix \"$chain-dropped: \"")
-	    if defined($loglevel);
+	ruleset_addlog($ruleset, $chain, $vmid, "policy $policy: ", $loglevel);
 
 	ruleset_addrule($ruleset, $chain, "-j DROP");
     } elsif ($policy eq 'REJECT') {
 	ruleset_addrule($ruleset, $chain, "-j PVEFW-Reject");
 
-	ruleset_addrule($ruleset, $chain, "-j NFLOG --nflog-prefix \"$chain-reject: \"")
-	    if defined($loglevel);
+	ruleset_addlog($ruleset, $chain, $vmid, "policy $policy: ", $loglevel);
 
 	ruleset_addrule($ruleset, $chain, "-g PVEFW-reject");
     } else {
@@ -989,7 +1013,7 @@ sub generate_venet_rules_direction {
     }
 
     my $accept_action = $direction eq 'OUT' ? "PVEFW-SET-ACCEPT-MARK" : "ACCEPT";
-    ruleset_add_chain_policy($ruleset, $chain, $policy, $loglevel, $accept_action);
+    ruleset_add_chain_policy($ruleset, $chain, $vmid, $policy, $loglevel, $accept_action);
 
     # plug into FORWARD, INPUT and OUTPUT chain
     if ($direction eq 'OUT') {
@@ -1016,7 +1040,7 @@ sub generate_venet_rules_direction {
 }
 
 sub generate_tap_rules_direction {
-    my ($ruleset, $groups_conf, $iface, $netid, $macaddr, $vmfw_conf, $bridge, $direction) = @_;
+    my ($ruleset, $groups_conf, $iface, $netid, $macaddr, $vmfw_conf, $vmid, $bridge, $direction) = @_;
 
     my $lc_direction = lc($direction);
 
@@ -1041,7 +1065,7 @@ sub generate_tap_rules_direction {
     }
 
     my $accept_action = $direction eq 'OUT' ? "PVEFW-SET-ACCEPT-MARK" : "ACCEPT";
-    ruleset_add_chain_policy($ruleset, $tapchain, $policy, $loglevel, $accept_action);
+    ruleset_add_chain_policy($ruleset, $tapchain, $vmid, $policy, $loglevel, $accept_action);
 
     # plug the tap chain to bridge chain
     if ($direction eq 'IN') {
@@ -1084,7 +1108,7 @@ sub enable_host_firewall {
 
     # implement input policy
     my $policy = $options->{policy_in} || 'DROP'; # allow nothing by default
-    ruleset_add_chain_policy($ruleset, $chain, $policy, $loglevel, $accept_action);
+    ruleset_add_chain_policy($ruleset, $chain, 0, $policy, $loglevel, $accept_action);
 
     # host outbound firewall
     $chain = "PVEFW-HOST-OUT";
@@ -1109,7 +1133,7 @@ sub enable_host_firewall {
 
     # implement output policy
     $policy = $options->{policy_out} || 'ACCEPT'; # allow everything by default
-    ruleset_add_chain_policy($ruleset, $chain, $policy, $loglevel, $accept_action);
+    ruleset_add_chain_policy($ruleset, $chain, 0, $policy, $loglevel, $accept_action);
 
     ruleset_addrule($ruleset, "PVEFW-OUTPUT", "-j PVEFW-HOST-OUT");
     ruleset_addrule($ruleset, "PVEFW-INPUT", "-j PVEFW-HOST-IN");
@@ -1556,26 +1580,17 @@ sub generate_std_chains {
     my $loglevel = get_option_log_level($options, 'smurf_log_level');
 
     # same as shorewall smurflog.
-    if (defined($loglevel)) {
-	$pve_std_chains-> {'PVEFW-smurflog'} = [
-	    "-j NFLOG --nflog-prefix \"smurfs-dropped: \"",
-	    "-j DROP",
-	    ];
-    } else {
-	$pve_std_chains-> {'PVEFW-smurflog'} = [ "-j DROP" ];
-    }
+    my $chain = 'PVEFW-smurflog';
+
+    push @{$pve_std_chains->{$chain}}, get_log_rule_base($chain, 0, "DROP: ", $loglevel) if $loglevel;
+    push @{$pve_std_chains->{$chain}}, "-j DROP";
 
     # same as shorewall logflags action.
     $loglevel = get_option_log_level($options, 'tcp_flags_log_level');
-    if (defined($loglevel)) {
-	$pve_std_chains-> {'PVEFW-logflags'} = [
-	    # fixme: is this correctly logged by pvewf-logger? (ther is no --log-ip-options for NFLOG)
-	    "-j NFLOG --nflog-prefix \"logflags-dropped: \"",
-	    "-j DROP",
-	    ];
-    } else {
-	$pve_std_chains-> {'PVEFW-logflags'} = [ "-j DROP" ];
-    }
+    $chain = 'PVEFW-logflags';
+    # fixme: is this correctly logged by pvewf-logger? (ther is no --log-ip-options for NFLOG)
+    push @{$pve_std_chains->{$chain}}, get_log_rule_base($chain, 0, "DROP: ", $loglevel) if $loglevel;
+    push @{$pve_std_chains->{$chain}}, "-j DROP";
 
     foreach my $chain (keys %$pve_std_chains) {
 	ruleset_create_chain($ruleset, $chain);
@@ -1696,8 +1711,10 @@ sub compile {
 	    generate_bridge_chains($ruleset, $hostfw_conf, $bridge, $routing_table);
 
 	    my $macaddr = $net->{macaddr};
-	    generate_tap_rules_direction($ruleset, $groups_conf, $iface, $netid, $macaddr, $vmfw_conf, $bridge, 'IN');
-	    generate_tap_rules_direction($ruleset, $groups_conf, $iface, $netid, $macaddr, $vmfw_conf, $bridge, 'OUT');
+	    generate_tap_rules_direction($ruleset, $groups_conf, $iface, $netid, $macaddr, 
+					 $vmfw_conf, $vmid, $bridge, 'IN');
+	    generate_tap_rules_direction($ruleset, $groups_conf, $iface, $netid, $macaddr, 
+					 $vmfw_conf, $vmid, $bridge, 'OUT');
 	}
     }
 
@@ -1729,8 +1746,10 @@ sub compile {
 
 		my $macaddr = $d->{mac};
 		my $iface = $d->{host_ifname};
-		generate_tap_rules_direction($ruleset, $groups_conf, $iface, $netid, $macaddr, $vmfw_conf, $bridge, 'IN');
-		generate_tap_rules_direction($ruleset, $groups_conf, $iface, $netid, $macaddr, $vmfw_conf, $bridge, 'OUT');
+		generate_tap_rules_direction($ruleset, $groups_conf, $iface, $netid, $macaddr, 
+					     $vmfw_conf, $vmid, $bridge, 'IN');
+		generate_tap_rules_direction($ruleset, $groups_conf, $iface, $netid, $macaddr, 
+					     $vmfw_conf, $vmid, $bridge, 'OUT');
 	    }
 	}
     }
@@ -1749,8 +1768,8 @@ sub compile {
     # disable interbridge routing
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o vmbr+ -j PVEFW-Drop"); 
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i vmbr+ -j PVEFW-Drop");
-    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o vmbr+ -j NFLOG --nflog-prefix \"PVEFW-FORWARD-dropped \"");  
-    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i vmbr+ -j NFLOG --nflog-prefix \"PVEFW-FORWARD-dropped \"");  
+    ruleset_addlog($ruleset, "PVEFW-FORWARD", 0, "DROP: ", $loglevel, "-o vmbr+");  
+    ruleset_addlog($ruleset, "PVEFW-FORWARD", 0, "DROP: ", $loglevel, "-i vmbr+");  
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o vmbr+ -j DROP");  
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i vmbr+ -j DROP");
 
