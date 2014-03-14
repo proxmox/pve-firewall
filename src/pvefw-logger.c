@@ -474,20 +474,36 @@ static int print_pkt(struct log_entry *le, struct nflog_data *ldata, u_int8_t fa
         LEPRINTF("%s", prefix);
     }
     
-    if ((indev > 0) && (nlif_index2name(nlifh, indev, devname) != -1)) {
-        LEPRINTF("IN=%s ", devname); 
+    if (indev > 0) { 
+        if (nlif_index2name(nlifh, indev, devname) != -1) {
+            LEPRINTF("IN=%s ", devname); 
+        } else {
+            LEPRINTF("IN=%u ", indev); 
+        }
     }
 
-    if ((outdev > 0) && (nlif_index2name(nlifh, outdev, devname) != -1)) {
-        LEPRINTF("OUT=%s ", devname);
+    if (outdev > 0) {
+        if (nlif_index2name(nlifh, outdev, devname) != -1) {
+            LEPRINTF("OUT=%s ", devname);
+        } else {
+            LEPRINTF("OUT=%u ", outdev);
+        }
     }
 
-    if ((physindev > 0) && (nlif_index2name(nlifh, physindev, devname) != -1)) {
-        LEPRINTF("PHYSIN=%s ", devname);
+    if (physindev > 0) { 
+        if (nlif_index2name(nlifh, physindev, devname) != -1) {
+            LEPRINTF("PHYSIN=%s ", devname);
+        } else {
+            LEPRINTF("PHYSIN=%u ", physindev);
+        }
     }
          
-    if ((physoutdev > 0) &&  (nlif_index2name(nlifh, physoutdev, devname) != -1)) {
-        LEPRINTF("PHYSOUT=%s ", devname);
+    if (physoutdev > 0) {
+        if (nlif_index2name(nlifh, physoutdev, devname) != -1) {
+            LEPRINTF("PHYSOUT=%s ", devname);
+        } else {
+            LEPRINTF("PHYSOUT=%u ", physoutdev);
+        }
     }
 
     int payload_len = nflog_get_payload(ldata, &payload);
