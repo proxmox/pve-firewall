@@ -29,7 +29,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <signal.h>
-#include <sys/types.h> 
+#include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -51,19 +51,20 @@
 
 static struct nflog_handle *logh = NULL;
 static struct nlif_handle *nlifh = NULL;
+GMainLoop *main_loop;
 
 /*
-  
+
 LOG FORMAT:
 
 Special care was taken to allow fast parsing (and filer messages for a singl VM).
 
-<VMID> <LOGLEVEL> <CHAIN> <TIME> <TIMEZONE> <MSG> 
+<VMID> <LOGLEVEL> <CHAIN> <TIME> <TIMEZONE> <MSG>
 
 Example:
 
 117 6 tap117i0-IN 14/Mar/2014:12:47:07 +0100 policy REJECT: IN=vmbr1 ...
-  
+
 */
 
 #define LOGFILE "/var/log/pve-firewall.log"
@@ -76,7 +77,7 @@ Example:
 
 #define MAX_CHAIN_LEN 28
 
-struct log_entry { 
+struct log_entry {
     guint32 len; // max LE_MAX chars
     char buf[LE_MAX];
 };
@@ -98,7 +99,7 @@ static gboolean write_pidfile(pid_t pid)
 
 static GAsyncQueue *queue;
 
-ssize_t 
+ssize_t
 safe_write(int fd, char *buf, size_t count)
 {
   ssize_t n;
@@ -111,7 +112,7 @@ safe_write(int fd, char *buf, size_t count)
 }
 
 static gpointer
-log_writer_thread(gpointer data) 
+log_writer_thread(gpointer data)
 {
     while (1) {
         struct log_entry *le = (struct log_entry *)g_async_queue_timeout_pop(queue, 250000);
@@ -121,13 +122,14 @@ log_writer_thread(gpointer data)
             }
             continue;
         }
-       
+
         int res = safe_write(outfd, le->buf, le->len);
- 
+
         g_free(le);
 
         if (res < 0) {
             syslog(3, "writing log failed, stopping daemon - %s", strerror (errno));
+            g_main_loop_quit(main_loop);
             return NULL;
         }
     }
@@ -138,7 +140,7 @@ log_writer_thread(gpointer data)
 static int skipped_logs = 0;
 
 static void log_status_message(guint loglevel, const char *fmt, ...);
- 
+
 static void
 queue_log_entry(struct log_entry *le)
 {
@@ -148,7 +150,7 @@ queue_log_entry(struct log_entry *le)
         if (len >= (LQ_LEN - 1)) {
             skipped_logs++;
         } else {
-            int skip_tmp = skipped_logs; 
+            int skip_tmp = skipped_logs;
             skipped_logs = 0; // clear before calling log_status_message()
             log_status_message(3, "skipped %d log entries (queue full)", skip_tmp);
             g_async_queue_push(queue, le);
@@ -166,12 +168,12 @@ queue_log_entry(struct log_entry *le)
 #define LEPRINTF(format, ...) { if (le->len < LE_MAX) le->len += snprintf(le->buf + le->len, LE_MAX - le->len, format, ##__VA_ARGS__); }
 #define LEPRINTTIME(sec) { time_t tmp_sec = sec; if (le->len < (LE_MAX - 30)) le->len += strftime(le->buf + le->len, LE_MAX - le->len, "%d/%b/%Y:%H:%M:%S %z ", localtime(&tmp_sec)); }
 
-static void 
-log_status_message(guint loglevel, const char *fmt, ...) 
+static void
+log_status_message(guint loglevel, const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    
+
     if (loglevel > 7 ) loglevel = 7; // syslog defines level 0-7
 
     struct log_entry *le = g_new0(struct log_entry, 1);
@@ -191,7 +193,7 @@ log_status_message(guint loglevel, const char *fmt, ...)
     vsyslog(loglevel, fmt, ap);
 }
 
-static int 
+static int
 print_tcp(struct log_entry *le, struct tcphdr *h, int payload_len)
 {
     LEPRINTF("PROTO=TCP ");
@@ -218,7 +220,7 @@ print_tcp(struct log_entry *le, struct tcphdr *h, int payload_len)
     return 0;
 }
 
-static int 
+static int
 print_udp(struct log_entry *le, struct udphdr *h, int payload_len)
 {
     LEPRINTF("PROTO=UDP ");
@@ -234,7 +236,7 @@ print_udp(struct log_entry *le, struct udphdr *h, int payload_len)
     return 0;
 }
 
-static int 
+static int
 print_icmp(struct log_entry *le, struct icmphdr *h, int payload_len)
 {
     char tmp[INET_ADDRSTRLEN];
@@ -260,7 +262,7 @@ print_icmp(struct log_entry *le, struct icmphdr *h, int payload_len)
         break;
     case ICMP_REDIRECT:
         gateway = ntohl(h->un.gateway);
-        inet_ntop(AF_INET, &gateway, tmp, sizeof(tmp));                
+        inet_ntop(AF_INET, &gateway, tmp, sizeof(tmp));
         LEPRINTF("GATEWAY=%s ", tmp);
         break;
     case ICMP_DEST_UNREACH:
@@ -281,7 +283,7 @@ typedef struct sctphdr {
 	__be32 checksum;
 } __attribute__((packed)) sctp_sctphdr_t;
 
-static int 
+static int
 print_sctp(struct log_entry *le, struct sctphdr *h, int payload_len)
 {
     LEPRINTF("PROTO=SCTP ");
@@ -297,7 +299,7 @@ print_sctp(struct log_entry *le, struct sctphdr *h, int payload_len)
     return 0;
 }
 
-static int 
+static int
 print_iphdr(struct log_entry *le, char * payload, int payload_len)
 {
     if (payload_len < sizeof(struct iphdr)) {
@@ -307,25 +309,25 @@ print_iphdr(struct log_entry *le, char * payload, int payload_len)
     }
 
     struct iphdr *h = (struct iphdr *)payload;
- 
+
     if (payload_len <= (u_int32_t)(h->ihl * 4)) {
         LEPRINTF("INVALID=IHL ");
         return -1;
     }
 
     char tmp[INET_ADDRSTRLEN];
-   
-    inet_ntop(AF_INET, &h->saddr, tmp, sizeof(tmp));                
+
+    inet_ntop(AF_INET, &h->saddr, tmp, sizeof(tmp));
     LEPRINTF("SRC=%s ", tmp);
-    inet_ntop(AF_INET, &h->daddr, tmp, sizeof(tmp));                
+    inet_ntop(AF_INET, &h->daddr, tmp, sizeof(tmp));
     LEPRINTF("DST=%s ", tmp);
 
     LEPRINTF("LEN=%u TOS=0x%02X PREC=0x%02X TTL=%u ID=%u ",
              ntohs(h->tot_len),  h->tos & IPTOS_TOS_MASK,
              h->tos & IPTOS_PREC_MASK, h->ttl, ntohs(h->id));
-                
+
     short ip_off = ntohs(h->frag_off);
-    if (ip_off & IP_OFFMASK) 
+    if (ip_off & IP_OFFMASK)
         LEPRINTF("FRAG=%u ", ip_off & IP_OFFMASK);
 
     if (ip_off & IP_DF) LEPRINTF("DF ");
@@ -363,7 +365,7 @@ print_iphdr(struct log_entry *le, char * payload, int payload_len)
     return 0;
 }
 
-static int 
+static int
 print_ip6hdr(struct log_entry *le, char * payload, int payload_len)
 {
     LEPRINTF("IPV6 logging not implemented ");
@@ -372,7 +374,7 @@ print_ip6hdr(struct log_entry *le, char * payload, int payload_len)
 }
 
 // ebtables -I FORWARD --nflog --nflog-group 0
-static int 
+static int
 print_arp(struct log_entry *le, struct ether_arp *h, int payload_len)
 {
     if (payload_len < sizeof(struct ether_arp)) {
@@ -395,8 +397,8 @@ print_arp(struct log_entry *le, struct ether_arp *h, int payload_len)
         LEPRINTF("REQUEST ");
         break;
     case ARPOP_REPLY:
-        LEPRINTF("REPLY MAC=%02x:%02x:%02x:%02x:%02x:%02x ", 
-                 h->arp_sha[0], h->arp_sha[1], h->arp_sha[2], 
+        LEPRINTF("REPLY MAC=%02x:%02x:%02x:%02x:%02x:%02x ",
+                 h->arp_sha[0], h->arp_sha[1], h->arp_sha[2],
                  h->arp_sha[3], h->arp_sha[4], h->arp_sha[5]);
         break;
     case ARPOP_NAK:
@@ -426,7 +428,7 @@ static int print_pkt(struct log_entry *le, struct nflog_data *ldata, u_int8_t fa
     char *prefix = nflog_get_prefix(ldata);
     char *payload;
     char devname[256];
-    
+
     guint32 vmid = 0;
 
     guint8 log_level = 6; // info
@@ -459,7 +461,7 @@ static int print_pkt(struct log_entry *le, struct nflog_data *ldata, u_int8_t fa
                     log_level = tmp_level;
                     chain_name = chain_start;
                     prefix = p + 2; // the rest
-                } 
+                }
             }
         }
     }
@@ -478,12 +480,12 @@ static int print_pkt(struct log_entry *le, struct nflog_data *ldata, u_int8_t fa
     if (prefix != NULL) {
         LEPRINTF("%s", prefix);
     }
-    
-    if (indev > 0) { 
+
+    if (indev > 0) {
         if (nlif_index2name(nlifh, indev, devname) != -1) {
-            LEPRINTF("IN=%s ", devname); 
+            LEPRINTF("IN=%s ", devname);
         } else {
-            LEPRINTF("IN=%u ", indev); 
+            LEPRINTF("IN=%u ", indev);
         }
     }
 
@@ -495,14 +497,14 @@ static int print_pkt(struct log_entry *le, struct nflog_data *ldata, u_int8_t fa
         }
     }
 
-    if (physindev > 0) { 
+    if (physindev > 0) {
         if (nlif_index2name(nlifh, physindev, devname) != -1) {
             LEPRINTF("PHYSIN=%s ", devname);
         } else {
             LEPRINTF("PHYSIN=%u ", physindev);
         }
     }
-         
+
     if (physoutdev > 0) {
         if (nlif_index2name(nlifh, physoutdev, devname) != -1) {
             LEPRINTF("PHYSOUT=%s ", devname);
@@ -531,7 +533,7 @@ static int print_pkt(struct log_entry *le, struct nflog_data *ldata, u_int8_t fa
     struct nfulnl_msg_packet_hdr *ph = NULL;
 
     switch (family) {
-    case AF_INET: 
+    case AF_INET:
         print_iphdr(le, payload, payload_len);
         break;
     case AF_INET6:
@@ -562,12 +564,12 @@ static int print_pkt(struct log_entry *le, struct nflog_data *ldata, u_int8_t fa
 
 }
 
-static int 
+static int
 nflog_cb(struct nflog_g_handle *gh, struct nfgenmsg *nfmsg,
                struct nflog_data *nfa, void *data)
 {
     struct log_entry *le = g_new0(struct log_entry, 1);
- 
+
     print_pkt(le, nfa, nfmsg->nfgen_family);
 
     LEPRINTF("\n"); // add newline
@@ -586,7 +588,7 @@ nflog_read_cb(GIOChannel *source,
     gchar buf[8192];
 
     int fd =  g_io_channel_unix_get_fd(source);
-   
+
     if ((rv = recv(fd, buf, sizeof(buf), 0)) && rv >= 0) {
          nflog_handle_packet(logh, buf, rv);
     }
@@ -611,23 +613,21 @@ nlif_read_cb(GIOChannel *source,
         last_res = 0;
     }
 
-    return TRUE; 
+    return TRUE;
 }
 
-GMainLoop *main_loop;
-
 static gboolean
-terminate_request(gpointer data) 
+terminate_request(gpointer data)
 {
     terminate_threads = TRUE;
 
     log_status_message(5, "received terminate request (signal)");
 
     g_main_loop_quit(main_loop);
-    
+
     return TRUE;
 }
-                
+
 
 int
 main(int argc, char *argv[])
@@ -653,7 +653,7 @@ main(int argc, char *argv[])
             }
             if (i == 10)
                 fprintf(stderr, "unable to aquire lock '%s' - trying again.\n", LOCKFILE);
-            
+
             sleep(1);
         }
     }
@@ -679,7 +679,7 @@ main(int argc, char *argv[])
         exit(-1);
     }
 #endif
-    
+
     if (!nflog_bind_pf(logh, AF_BRIDGE) <= 0) {
         fprintf(stderr, "nflog_bind_pf AF_BRIDGE failed\n");
         exit(-1);
@@ -690,7 +690,7 @@ main(int argc, char *argv[])
         fprintf(stderr, "no handle for group 1\n");
         exit(-1);
     }
- 
+
     if (nflog_set_mode(qh, NFULNL_COPY_PACKET, 0xffff) < 0) {
         fprintf(stderr, "can't set packet copy mode\n");
         exit(-1);
@@ -749,12 +749,12 @@ main(int argc, char *argv[])
     g_io_add_watch(nflog_ch, G_IO_IN, nflog_read_cb, NULL);
 
     GThread *wthread = g_thread_new("log_writer_thread", log_writer_thread, NULL);
-    
+
     main_loop = g_main_loop_new(NULL, TRUE);
-    
+
     g_unix_signal_add(SIGINT, terminate_request, NULL);
     g_unix_signal_add(SIGTERM, terminate_request, NULL);
-    
+
     g_main_loop_run(main_loop);
 
     log_status_message(5, "stopping pvefw logger");
