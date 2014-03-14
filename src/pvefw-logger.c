@@ -44,6 +44,7 @@
 #include <netinet/udp.h>
 #include <netinet/tcp.h>
 #include <netinet/if_ether.h>
+#include <syslog.h>
 
 #include <glib.h>
 #include <glib-unix.h>
@@ -121,13 +122,13 @@ log_writer_thread(gpointer data)
             continue;
         }
        
-        printf("%s", le->buf);
         int res = safe_write(outfd, le->buf, le->len);
-
+ 
         g_free(le);
 
         if (res < 0) {
-            // printf("write failed\n"); // fixme??
+            syslog(3, "writing log failed, stopping daemon - %s", strerror (errno));
+            return NULL;
         }
     }
 
@@ -184,6 +185,10 @@ log_status_message(guint loglevel, const char *fmt, ...)
     LEPRINTF("\n");
 
     queue_log_entry(le);
+
+    // also log to syslog
+
+    vsyslog(loglevel, fmt, ap);
 }
 
 static int 
@@ -594,8 +599,18 @@ nlif_read_cb(GIOChannel *source,
              GIOCondition condition,
              gpointer data)
 {
-    nlif_catch(nlifh);
-    // fixme: report  errors
+    static int last_res = 0;
+    int res;
+
+    if ((res = nlif_catch(nlifh)) < 0) {
+        if (last_res == 0) { // only report once
+            log_status_message(3, "nlif_catch failed (res = %d)", res);
+        }
+        last_res = res;
+    } else {
+        last_res = 0;
+    }
+
     return TRUE; 
 }
 
@@ -623,8 +638,10 @@ main(int argc, char *argv[])
 
     g_thread_init(NULL);
 
+    openlog("pvepw-logger", LOG_CONS|LOG_PID, LOG_DAEMON);
+
     if ((lockfd = open(LOCKFILE, O_RDWR|O_CREAT|O_APPEND, 0644)) == -1) {
-        fprintf(stderr, "unable to create lock '%s': %s", LOCKFILE, strerror (errno));
+        fprintf(stderr, "unable to create lock '%s': %s", LOCKFILE, strerror (errno) );
         exit(-1);
     }
 
