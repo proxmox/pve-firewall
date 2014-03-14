@@ -32,7 +32,7 @@ install: pvefw pvefw-logger
 
 .PHONY: clean
 clean: 	
-	rm -rf *~
+	rm -rf *~ pvefw-logger
 
 .PHONY: distclean
 distclean: clean
