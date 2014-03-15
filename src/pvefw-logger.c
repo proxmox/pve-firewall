@@ -73,7 +73,7 @@ Example:
 #define PIDFILE "/var/run/pvefw-logger.pid"
 
 #define LQ_LEN 512
-#define LE_MAX (512 - 16) // try to fit into 512 bytes
+#define LE_MAX (512 - 4) // try to fit into 512 bytes
 
 #define MAX_CHAIN_LEN 28
 
@@ -81,6 +81,11 @@ struct log_entry {
     guint32 len; // max LE_MAX chars
     char buf[LE_MAX];
 };
+
+#define STATIC_ASSERT(cond) \
+    extern void pve_static_assert(int test[(cond) ? 1 : -1])
+
+STATIC_ASSERT(sizeof(struct log_entry) == 512);
 
 int outfd = -1;
 
