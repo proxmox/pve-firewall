@@ -30,8 +30,6 @@ eval {
 
 use Data::Dumper;
 
-# fixme: remove loglevel settings? NFLOG does not have --loglevel
-
 my $nodename = PVE::INotify::nodename();
 
 my $pve_fw_lock_filename = "/var/lock/pvefw.lck";
