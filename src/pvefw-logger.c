@@ -53,6 +53,9 @@ static struct nflog_handle *logh = NULL;
 static struct nlif_handle *nlifh = NULL;
 GMainLoop *main_loop;
 
+gboolean foreground = FALSE;
+gboolean debug = FALSE;
+
 /*
 
 LOG FORMAT:
@@ -127,6 +130,8 @@ log_writer_thread(gpointer data)
             }
             continue;
         }
+
+        if (debug) fputs(le->buf, stdout);
 
         int res = safe_write(outfd, le->buf, le->len);
 
@@ -633,27 +638,54 @@ terminate_request(gpointer data)
     return TRUE;
 }
 
-
 int
 main(int argc, char *argv[])
 {
     int lockfd = -1;
-    gboolean foreground = FALSE;
     gboolean wrote_pidfile = FALSE;
 
     g_thread_init(NULL);
 
     openlog("pvepw-logger", LOG_CONS|LOG_PID, LOG_DAEMON);
 
+    GOptionContext *context;
+
+    GOptionEntry entries[] = {
+        { "debug", 'd', 0, G_OPTION_ARG_NONE, &debug, "Turn on debug messages", NULL },
+        { "foreground", 'f', 0, G_OPTION_ARG_NONE, &foreground, "Do not daemonize server", NULL },
+        { NULL },
+    };
+
+    context = g_option_context_new("");
+    g_option_context_add_main_entries (context, entries, NULL);
+
+    GError *err = NULL;
+    if (!g_option_context_parse (context, &argc, &argv, &err)) {
+        fprintf(stderr, "error: %s\n", err->message);
+        fprintf(stderr, "%s", g_option_context_get_help(context, FALSE, NULL));
+        g_error_free (err);
+        exit(-1);
+    }
+
+    if (optind < argc) {
+        fprintf(stderr, "error: too many arguments\n");
+        fprintf(stderr, "%s", g_option_context_get_help(context, FALSE, NULL));
+        exit(-1);
+    }
+
+    g_option_context_free(context);
+
+    if (debug) foreground = TRUE;
+
     if ((lockfd = open(LOCKFILE, O_RDWR|O_CREAT|O_APPEND, 0644)) == -1) {
-        fprintf(stderr, "unable to create lock '%s': %s", LOCKFILE, strerror (errno) );
+        fprintf(stderr, "unable to create lock '%s': %s\n", LOCKFILE, strerror (errno) );
         exit(-1);
     }
 
     for (int i = 10; i >= 0; i--) {
         if (flock(lockfd, LOCK_EX|LOCK_NB) != 0) {
             if (!i) {
-                fprintf(stderr, "unable to aquire lock '%s': %s", LOCKFILE, strerror (errno));
+                fprintf(stderr, "unable to aquire lock '%s': %s\n", LOCKFILE, strerror (errno));
                 exit(-1);
             }
             if (i == 10)
@@ -664,7 +696,7 @@ main(int argc, char *argv[])
     }
 
     if ((outfd = open(LOGFILE, O_WRONLY|O_CREAT|O_APPEND, 0644)) == -1) {
-        fprintf(stderr, "unable to open file '%s': %s", LOGFILE, strerror (errno));
+        fprintf(stderr, "unable to open file '%s': %s\n", LOGFILE, strerror (errno));
         exit(-1);
     }
 
@@ -692,7 +724,7 @@ main(int argc, char *argv[])
 
     struct nflog_g_handle *qh = nflog_bind_group(logh, 0);
     if (!qh) {
-        fprintf(stderr, "no handle for group 1\n");
+        fprintf(stderr, "no nflog handle for group 0\n");
         exit(-1);
     }
 
