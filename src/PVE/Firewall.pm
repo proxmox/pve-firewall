@@ -8,13 +8,25 @@ use PVE::INotify;
 use PVE::Cluster;
 use PVE::ProcFSTools;
 use PVE::Tools;
-use PVE::QemuServer;
-use PVE::OpenVZ; # dependeny problem?!
 use File::Basename;
 use File::Path;
 use IO::File;
 use Net::IP;
 use PVE::Tools qw(run_command lock_file);
+
+# dynamically include PVE::QemuServer and PVE::OpenVZ 
+# to avoid dependency problems
+my $have_qemu_server;
+eval {
+    require PVE::QemuServer;
+    $have_qemu_server = 1;
+};
+
+my $have_pve_manager;
+eval {
+    require PVE::OpenVZ;
+    $have_pve_manager = 1;
+};
 
 use Data::Dumper;
 
@@ -1527,18 +1539,22 @@ sub read_local_vm_config {
 	next if !$d->{node} || $d->{node} ne $nodename;
 	next if !$d->{type};
 	if ($d->{type} eq 'openvz') {
-	    my $cfspath = PVE::OpenVZ::cfs_config_path($vmid);
-	    if (my $conf = PVE::Cluster::cfs_read_file($cfspath)) {
-		$openvz->{$vmid} = $conf;
+	    if ($have_pve_manager) {
+		my $cfspath = PVE::OpenVZ::cfs_config_path($vmid);
+		if (my $conf = PVE::Cluster::cfs_read_file($cfspath)) {
+		    $openvz->{$vmid} = $conf;
+		}
 	    }
 	} elsif ($d->{type} eq 'qemu') {
-	    my $cfspath = PVE::QemuServer::cfs_config_path($vmid);
-	    if (my $conf = PVE::Cluster::cfs_read_file($cfspath)) {
-		$qemu->{$vmid} = $conf;
+	    if ($have_qemu_server) {
+		my $cfspath = PVE::QemuServer::cfs_config_path($vmid);
+		if (my $conf = PVE::Cluster::cfs_read_file($cfspath)) {
+		    $qemu->{$vmid} = $conf;
+		}
 	    }
 	}
     }
- 
+
     return $vmdata;
 };
 
