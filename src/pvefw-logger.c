@@ -29,6 +29,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <signal.h>
+#include <sys/signalfd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -47,7 +48,6 @@
 #include <syslog.h>
 
 #include <glib.h>
-#include <glib-unix.h>
 
 static struct nflog_handle *logh = NULL;
 static struct nlif_handle *nlifh = NULL;
@@ -627,13 +627,20 @@ nlif_read_cb(GIOChannel *source,
 }
 
 static gboolean
-terminate_request(gpointer data)
+signal_read_cb(GIOChannel *source,
+               GIOCondition condition,
+               gpointer data)
 {
-    terminate_threads = TRUE;
+    int rv = 0;
+    struct signalfd_siginfo si;
 
-    log_status_message(5, "received terminate request (signal)");
+    int fd =  g_io_channel_unix_get_fd(source);
 
-    g_main_loop_quit(main_loop);
+    if ((rv = read(fd, &si, sizeof(si))) && rv >= 0) {
+        terminate_threads = TRUE;
+        log_status_message(5, "received terminate request (signal)");
+        g_main_loop_quit(main_loop);
+    }
 
     return TRUE;
 }
@@ -642,6 +649,8 @@ int
 main(int argc, char *argv[])
 {
     int lockfd = -1;
+    int sigfd = -1;
+
     gboolean wrote_pidfile = FALSE;
 
     g_thread_init(NULL);
@@ -738,6 +747,18 @@ main(int argc, char *argv[])
         exit(-1);
     }
 
+    sigset_t mask;
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGINT);
+    sigaddset(&mask, SIGTERM);
+    
+    sigprocmask(SIG_BLOCK, &mask, NULL);
+
+    if ((sigfd = signalfd(-1, &mask, SFD_NONBLOCK)) < 0) {
+        fprintf(stderr, "unable to open signalfd: %s\n", strerror (errno));
+        exit(-1);
+    }
+
     if (!foreground) {
         pid_t cpid = fork();
 
@@ -785,12 +806,15 @@ main(int argc, char *argv[])
 
     g_io_add_watch(nflog_ch, G_IO_IN, nflog_read_cb, NULL);
 
+    GIOChannel *sig_ch = g_io_channel_unix_new(sigfd);
+    printf("TEST0: %p %d\n", sig_ch, sigfd);
+    if (!g_io_add_watch(sig_ch, G_IO_IN, signal_read_cb, NULL)) {
+        printf("TEST1\n"); exit(-1);
+    }
+
     GThread *wthread = g_thread_new("log_writer_thread", log_writer_thread, NULL);
 
     main_loop = g_main_loop_new(NULL, TRUE);
-
-    g_unix_signal_add(SIGINT, terminate_request, NULL);
-    g_unix_signal_add(SIGTERM, terminate_request, NULL);
 
     g_main_loop_run(main_loop);
 
