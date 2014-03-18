@@ -1448,7 +1448,11 @@ sub parse_host_fw_rules {
 
     my $section;
 
+    my $digest = Digest::SHA->new('sha1');
+
     while (defined(my $line = <$fh>)) {
+	$digest->add($line);
+
 	next if $line =~ m/^#/;
 	next if $line =~ m/^\s*$/;
 
@@ -1485,6 +1489,8 @@ sub parse_host_fw_rules {
 
 	push @{$res->{$section}}, @$rules;
     }
+
+    $res->{digest} = $digest->b64digest;
 
     return $res;
 }
@@ -1706,6 +1712,16 @@ sub load_security_groups {
     return $groups_conf;
 }
 
+sub load_hostfw_conf {
+
+    my $hostfw_conf = {};
+    my $filename = "/etc/pve/local/host.fw";
+    if (my $fh = IO::File->new($filename, O_RDONLY)) {
+	$hostfw_conf = parse_host_fw_rules($filename, $fh);
+    }
+    return $hostfw_conf;
+}
+
 sub compile {
     my $vmdata = read_local_vm_config();
     my $vmfw_configs = read_vm_firewall_configs($vmdata);
@@ -1721,14 +1737,8 @@ sub compile {
 
     ruleset_create_chain($ruleset, "PVEFW-FORWARD");
 
-    my $hostfw_options = {};
-    my $hostfw_conf = {};
-
-    my $filename = "/etc/pve/local/host.fw";
-    if (my $fh = IO::File->new($filename, O_RDONLY)) {
-	$hostfw_conf = parse_host_fw_rules($filename, $fh);
-	$hostfw_options = $hostfw_conf->{options};
-    }
+    my $hostfw_conf = load_hostfw_conf();
+    my $hostfw_options = $hostfw_conf->{options} || {};
 
     generate_std_chains($ruleset, $hostfw_options);
 

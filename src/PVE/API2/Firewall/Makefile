@@ -1,4 +1,5 @@
 LIB_SOURCES=			\
+	Host.pm			\
 	Groups.pm
 
 all:
