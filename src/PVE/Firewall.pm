@@ -635,6 +635,25 @@ sub parse_port_name_number_or_range {
     return ($nbports);
 }
 
+# helper function for API
+sub cleanup_fw_rule {
+    my ($rule, $digest, $pos) = @_;
+
+    my $r = {};
+
+    foreach my $k (keys %$rule) {
+	next if $k eq 'nbdport';
+	next if $k eq 'nbsport';
+	my $v = $rule->{$k};
+	next if !defined($v);
+	$r->{$k} = $v;
+	$r->{digest} = $digest;
+	$r->{pos} = $pos;
+    }
+
+    return $r;
+}
+
 my $bridge_firewall_enabled = 0;
 
 sub enable_bridge_firewall {
@@ -1478,7 +1497,11 @@ sub parse_group_fw_rules {
 
     my $res = { rules => {} };
 
+    my $digest = Digest::SHA->new('sha1');
+
     while (defined(my $line = <$fh>)) {
+	$digest->add($line);
+
 	next if $line =~ m/^#/;
 	next if $line =~ m/^\s*$/;
 
@@ -1504,6 +1527,8 @@ sub parse_group_fw_rules {
 
 	push @{$res->{$section}->{$group}}, @$rules;
     }
+
+    $res->{digest} = $digest->b64digest;
 
     return $res;
 }

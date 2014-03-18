@@ -27,7 +27,12 @@ __PACKAGE__->register_method({
 	type => 'array',
 	items => {
 	    type => "object",
-	    properties => {},
+	    properties => { 
+		name => {
+		    description => "Security group name.",
+		    type => 'string',
+		},
+	    },
 	},
 	links => [ { rel => 'child', href => "{name}" } ],
     },
@@ -38,7 +43,50 @@ __PACKAGE__->register_method({
 
 	my $res = [];
 	foreach my $group (keys %{$groups_conf->{rules}}) {
-	    push @$res, { name => $group };
+	    push @$res, { name => $group, count => scalar(@{$groups_conf->{rules}->{$group}}) };
+	}
+
+	return $res;
+    }});
+
+__PACKAGE__->register_method({
+    name => 'get_rules',
+    path => '{group}',
+    method => 'GET',
+    description => "List security groups rules.",
+    proxyto => 'node',
+    parameters => {
+    	additionalProperties => 0,
+	properties => {
+	    node => get_standard_option('pve-node'),
+	    group => {
+		description => "Security group name.",
+		type => 'string',
+	    },
+	},
+    },
+    returns => {
+	type => 'array',
+	items => {
+	    type => "object",
+	    properties => {},
+	},
+    },
+    code => sub {
+	my ($param) = @_;
+
+	my $groups_conf = PVE::Firewall::load_security_groups();
+
+	my $rules = $groups_conf->{rules}->{$param->{group}};
+	die "no such security group\n" if !defined($rules);
+
+	my $digest = $groups_conf->{digest};
+
+	my $res = [];
+
+	my $ind = 0;
+	foreach my $rule (@$rules) {
+	    push @$res, PVE::Firewall::cleanup_fw_rule($rule, $digest, $ind++);
 	}
 
 	return $res;

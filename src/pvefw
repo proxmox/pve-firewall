@@ -244,6 +244,11 @@ my $cmddef = {
 			my $res = shift;
 			print Dumper($res);
 		    }],
+    grouprules => [ 'PVE::API2::Firewall::Groups', 'get_rules', ['group'], 
+		    { node => $nodename }, sub {
+			my $res = shift;
+			print Dumper($res);
+		    }],
 };
 
 my $cmd = shift;
