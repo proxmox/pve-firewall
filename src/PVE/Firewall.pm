@@ -1154,7 +1154,7 @@ sub generate_group_rules {
 
     die "no such security group '$group'\n" if !$groups_conf->{$group};
 
-    my $rules = $groups_conf->{$group}->{rules};
+    my $rules = $groups_conf->{rules}->{$group};
 
     my $chain = "GROUP-${group}-IN";
 
@@ -1476,7 +1476,7 @@ sub parse_group_fw_rules {
     my $section;
     my $group;
 
-    my $res = { rules => [] };
+    my $res = { rules => {} };
 
     while (defined(my $line = <$fh>)) {
 	next if $line =~ m/^#/;
@@ -1502,7 +1502,7 @@ sub parse_group_fw_rules {
 	    next;
 	}
 
-	push @{$res->{$group}->{$section}}, @$rules;
+	push @{$res->{$section}->{$group}}, @$rules;
     }
 
     return $res;
@@ -1699,7 +1699,7 @@ sub compile {
     my $hostfw_options = {};
     my $hostfw_conf = {};
 
-    $filename = "/etc/pve/local/host.fw";
+    my $filename = "/etc/pve/local/host.fw";
     if (my $fh = IO::File->new($filename, O_RDONLY)) {
 	$hostfw_conf = parse_host_fw_rules($filename, $fh);
 	$hostfw_options = $hostfw_conf->{options};

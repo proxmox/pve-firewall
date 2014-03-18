@@ -1,14 +1,11 @@
 
-PREFIX=/usr
-BINDIR=${PREFIX}/bin
-SBINDIR=${PREFIX}/sbin
-MANDIR=${PREFIX}/share/man
-DOCDIR=${PREFIX}/share/doc
-MAN1DIR=${MANDIR}/man1/
-PERLDIR=${PREFIX}/share/perl5
-
-LIB_SOURCES=			\
-	Firewall.pm
+export PREFIX=/usr
+export BINDIR=${PREFIX}/bin
+export SBINDIR=${PREFIX}/sbin
+export MANDIR=${PREFIX}/share/man
+export DOCDIR=${PREFIX}/share/doc
+export MAN1DIR=${MANDIR}/man1/
+export PERLDIR=${PREFIX}/share/perl5
 
 all: pvefw-logger
 
@@ -23,15 +20,14 @@ pvefw-logger: pvefw-logger.c
 
 .PHONY: install
 install: pvefw pvefw-logger
+	make -C PVE install
 	install -d -m 0755 ${DESTDIR}/${SBINDIR}
 	install -m 0755 pvefw ${DESTDIR}/${SBINDIR}
 	install -m 0755 --strip pvefw-logger ${DESTDIR}/${SBINDIR}
-	install -d -m 0755 ${DESTDIR}${PERLDIR}/PVE
-	for i in ${LIB_SOURCES}; do install -D -m 0644 PVE/$$i ${DESTDIR}${PERLDIR}/PVE/$$i; done
-
 
 .PHONY: clean
 clean: 	
+	make -C PVE clean
 	rm -rf *~ pvefw-logger
 
 .PHONY: distclean

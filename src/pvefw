@@ -14,8 +14,11 @@ use PVE::RPCEnvironment;
 use PVE::JSONSchema qw(get_standard_option);
 
 use PVE::CLIHandler;
+use PVE::API2::Firewall::Groups;
 
 use base qw(PVE::CLIHandler);
+
+use Data::Dumper;
 
 $ENV{'PATH'} = '/sbin:/bin:/usr/sbin:/usr/bin';
 
@@ -234,6 +237,13 @@ my $cmddef = {
 	}
     }],
     stop => [ __PACKAGE__, 'stop', []],
+
+    # This is for debugging 
+    listgroups => [ 'PVE::API2::Firewall::Groups', 'list', [], 
+		    { node => $nodename }, sub {
+			my $res = shift;
+			print Dumper($res);
+		    }],
 };
 
 my $cmd = shift;
