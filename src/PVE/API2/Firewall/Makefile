@@ -1,5 +1,6 @@
 LIB_SOURCES=			\
 	Host.pm			\
+	VM.pm			\
 	Groups.pm
 
 all:

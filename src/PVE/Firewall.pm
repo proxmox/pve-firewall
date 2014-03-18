@@ -1400,7 +1400,11 @@ sub parse_vm_fw_rules {
 
     my $section;
 
+    my $digest = Digest::SHA->new('sha1');
+
     while (defined(my $line = <$fh>)) {
+	$digest->add($line);
+
 	next if $line =~ m/^#/;
 	next if $line =~ m/^\s*$/;
 
@@ -1437,6 +1441,8 @@ sub parse_vm_fw_rules {
 
 	push @{$res->{$section}}, @$rules;
     }
+
+    $res->{digest} = $digest->b64digest;
 
     return $res;
 }
@@ -1587,16 +1593,27 @@ sub read_local_vm_config {
     return $vmdata;
 };
 
+sub load_vmfw_conf {
+    my ($vmid) = @_;
+
+    my $vmfw_conf = {};
+
+    my $filename = "/etc/pve/firewall/$vmid.fw";
+    if (my $fh = IO::File->new($filename, O_RDONLY)) {
+	$vmfw_conf = parse_vm_fw_rules($filename, $fh);
+    }
+
+    return $vmfw_conf;
+}
+
 sub read_vm_firewall_configs {
     my ($vmdata) = @_;
     my $vmfw_configs = {};
 
     foreach my $vmid (keys %{$vmdata->{qemu}}, keys %{$vmdata->{openvz}}) {
-	my $filename = "/etc/pve/firewall/$vmid.fw";
-	my $fh = IO::File->new($filename, O_RDONLY);
-	next if !$fh;
-
-	$vmfw_configs->{$vmid} = parse_vm_fw_rules($filename, $fh);
+	my $vmfw_conf = load_vmfw_conf($vmid);
+	next if !$vmfw_conf->{options}; # skip if file does not exists
+	$vmfw_configs->{$vmid} = $vmfw_conf;
     }
 
     return $vmfw_configs;
