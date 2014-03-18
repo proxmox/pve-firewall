@@ -1670,17 +1670,24 @@ sub read_proc_net_route {
     return $res;
 }
 
-sub compile {
-    my $vmdata = read_local_vm_config();
-    my $vmfw_configs = read_vm_firewall_configs($vmdata);
-
-    my $routing_table = read_proc_net_route();
+sub load_security_groups {
 
     my $groups_conf = {};
     my $filename = "/etc/pve/firewall/groups.fw";
     if (my $fh = IO::File->new($filename, O_RDONLY)) {
 	$groups_conf = parse_group_fw_rules($filename, $fh);
     }
+
+    return $groups_conf;
+}
+
+sub compile {
+    my $vmdata = read_local_vm_config();
+    my $vmfw_configs = read_vm_firewall_configs($vmdata);
+
+    my $routing_table = read_proc_net_route();
+
+    my $groups_conf = load_security_groups();
 
     my $ruleset = {};
 
