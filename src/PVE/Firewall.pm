@@ -1175,8 +1175,7 @@ sub enable_host_firewall {
 
 sub generate_group_rules {
     my ($ruleset, $groups_conf, $group) = @_;
-
-    die "no such security group '$group'\n" if !$groups_conf->{$group};
+    die "no such security group '$group'\n" if !$groups_conf->{rules}->{$group};
 
     my $rules = $groups_conf->{rules}->{$group};
 
