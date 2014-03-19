@@ -13,6 +13,7 @@ use File::Path;
 use IO::File;
 use Net::IP;
 use PVE::Tools qw(run_command lock_file);
+use Encode;
 
 # dynamically include PVE::QemuServer and PVE::OpenVZ 
 # to avoid dependency problems
@@ -1213,7 +1214,7 @@ sub parse_fw_rule {
     my ($type, $action, $iface, $source, $dest, $proto, $dport, $sport);
 
     # we can add single line comments to the end of the rule
-    my $comment = $1 if $line =~ s/#\s*(.*?)\s*$//;
+    my $comment = decode('utf8', $1) if $line =~ s/#\s*(.*?)\s*$//;
 
     # we can disable a rule when prefixed with '|'
     my $disable = 1 if  $line =~ s/^\|//;
