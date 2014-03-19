@@ -1827,9 +1827,6 @@ sub compile {
 	}
     }
 
-    # fixme: this is an optimization? if so, we should also drop INVALID packages?
-    ruleset_insertrule($ruleset, "PVEFW-FORWARD", "-m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
-
     # fixme: what log level should we use here?
     my $loglevel = get_option_log_level($hostfw_options, "log_level_out");
 
