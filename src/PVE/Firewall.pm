@@ -969,7 +969,11 @@ sub ruleset_create_vm_chain {
     }
 
     if (!(defined($options->{dhcp}) && $options->{dhcp} == 0)) {
-	ruleset_addrule($ruleset, $chain, "-p udp -m udp --dport 67:68 -j ACCEPT");
+	if ($direction eq 'OUT') {
+	    ruleset_addrule($ruleset, $chain, "-p udp -m udp --sport 68 --dport 67 -j PVEFW-SET-ACCEPT-MARK");
+	} else {
+	    ruleset_addrule($ruleset, $chain, "-p udp -m udp --sport 67 --dport 68 -j ACCEPT");
+	}
     }
 
     if ($options->{tcpflags}) {
