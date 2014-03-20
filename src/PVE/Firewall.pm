@@ -765,7 +765,7 @@ sub iptables_rule_exist {
 sub ruleset_generate_cmdstr {
     my ($ruleset, $chain, $rule, $actions, $goto) = @_;
 
-    return if $rule->{disable};
+    return if !$rule->{enable};
 
     my @cmd = ();
 
@@ -998,7 +998,7 @@ sub ruleset_generate_vm_rules {
 
     foreach my $rule (@$rules) {
 	next if $rule->{iface} && $rule->{iface} ne $netid;
-	next if $rule->{disable};
+	next if !$rule->{enable};
 	if ($rule->{type} eq 'group') {
 	    my $group_chain = "GROUP-$rule->{action}-$direction"; 
 	    if(!ruleset_chain_exist($ruleset, $group_chain)){
@@ -1228,7 +1228,9 @@ sub parse_fw_rule {
     my $comment = decode('utf8', $1) if $line =~ s/#\s*(.*?)\s*$//;
 
     # we can disable a rule when prefixed with '|'
-    my $disable = 1 if  $line =~ s/^\|//;
+    my $enable = 1;
+
+    $enable = 0 if $line =~ s/^\|//;
 
     my @data = split(/\s+/, $line);
     my $expected_elements = $need_iface ? 8 : 7;
@@ -1295,7 +1297,7 @@ sub parse_fw_rule {
 
     my $param = {
 	type => $type,
-	disable => $disable,
+	enable => $enable,
 	comment => $comment,
 	action => $action,
 	iface => $iface,
