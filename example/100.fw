@@ -19,8 +19,8 @@ log_level_in: info
 # disable log for outgoing connections
 log_level_out: nolog
 
-# filter SMURFS
-nosmurfs: 1
+# disable SMURFS filter
+nosmurfs: 0
 
 # filter illegal combinations of TCP flags
 tcpflags: 1

@@ -1125,6 +1125,10 @@ sub enable_host_firewall {
 
     my $loglevel = get_option_log_level($options, "log_level_in");
 
+    if (!(defined($options->{nosmurfs}) && $options->{nosmurfs} == 0)) {
+	ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate INVALID,NEW -j PVEFW-smurfs");
+    }
+
     if ($options->{tcpflags}) {
 	ruleset_addrule($ruleset, $chain, "-p tcp -j PVEFW-tcpflags");
     }

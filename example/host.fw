@@ -20,6 +20,9 @@ nf_conntrack_max: 196608
 # you need to enable that explicitly
 allow_bridge_route: 1
 
+# disable SMURFS filter
+nosmurfs: 0
+
 # filter illegal combinations of TCP flags
 tcpflags: 1
 
