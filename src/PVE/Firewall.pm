@@ -1125,6 +1125,10 @@ sub enable_host_firewall {
 
     my $loglevel = get_option_log_level($options, "log_level_in");
 
+    if ($options->{tcpflags}) {
+	ruleset_addrule($ruleset, $chain, "-p tcp -j PVEFW-tcpflags");
+    }
+
     ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate INVALID -j DROP");
     ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
     ruleset_addrule($ruleset, $chain, "-i lo -j ACCEPT");
