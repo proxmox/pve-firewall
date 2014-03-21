@@ -837,6 +837,7 @@ sub ruleset_generate_rule {
 	ruleset_addrule($ruleset, $chain, $cmdstr);
     }
 }
+
 sub ruleset_generate_rule_insert {
     my ($ruleset, $chain, $rule, $actions, $goto) = @_;
 
@@ -970,9 +971,11 @@ sub ruleset_create_vm_chain {
 
     if (!(defined($options->{dhcp}) && $options->{dhcp} == 0)) {
 	if ($direction eq 'OUT') {
-	    ruleset_addrule($ruleset, $chain, "-p udp -m udp --sport 68 --dport 67 -g PVEFW-SET-ACCEPT-MARK");
+	    ruleset_generate_rule($ruleset, $chain, { action => 'PVEFW-SET-ACCEPT-MARK', 
+						      proto => 'udp', sport => 68, dport => 67 });
 	} else {
-	    ruleset_addrule($ruleset, $chain, "-p udp -m udp --sport 67 --dport 68 -j ACCEPT");
+	    ruleset_generate_rule($ruleset, $chain, { action => 'ACCEPT', 
+						      proto => 'udp', sport => 67, dport => 68 });
 	}
     }
 
