@@ -765,7 +765,7 @@ sub iptables_rule_exist {
 sub ruleset_generate_cmdstr {
     my ($ruleset, $chain, $rule, $actions, $goto) = @_;
 
-    return if !$rule->{enable};
+    return if defined($rule->{enable}) && !$rule->{enable};
 
     my @cmd = ();
 
