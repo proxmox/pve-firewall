@@ -636,23 +636,6 @@ sub parse_port_name_number_or_range {
 }
 
 # helper function for API
-sub cleanup_fw_rule {
-    my ($rule, $digest, $pos) = @_;
-
-    my $r = {};
-
-    foreach my $k (keys %$rule) {
-	next if $k eq 'nbdport';
-	next if $k eq 'nbsport';
-	my $v = $rule->{$k};
-	next if !defined($v);
-	$r->{$k} = $v;
-	$r->{digest} = $digest;
-	$r->{pos} = $pos;
-    }
-
-    return $r;
-}
 
 my $rule_properties = {
     pos => {
@@ -707,6 +690,23 @@ my $rule_properties = {
 	optional => 1,
     },
 };
+
+sub cleanup_fw_rule {
+    my ($rule, $digest, $pos) = @_;
+
+    my $r = {};
+
+    foreach my $k (keys %$rule) {
+	next if !$rule_properties->{$k};
+	my $v = $rule->{$k};
+	next if !defined($v);
+	$r->{$k} = $v;
+	$r->{digest} = $digest;
+	$r->{pos} = $pos;
+    }
+
+    return $r;
+}
 
 sub add_rule_properties {
     my ($properties) = @_;
