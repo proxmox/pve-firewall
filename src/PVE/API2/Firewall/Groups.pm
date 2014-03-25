@@ -200,7 +200,7 @@ __PACKAGE__->register_method({
 		type => 'string',
 	    },
 	    moveto => {
-		description => "Move rule to new position <moveto>.",
+		description => "Move rule to new position <moveto>. Other arguments are ignored.",
 		type => 'integer',
 		minimum => 0,
 		optional => 1,
@@ -223,8 +223,6 @@ __PACKAGE__->register_method({
 	
 	my $rule = $rules->[$param->{pos}];
 
-	PVE::Firewall::copy_rule_data($rule, $param);
- 
 	my $moveto = $param->{moveto};
 	if (defined($moveto) && $moveto != $param->{pos}) {
 	    my $newrules = [];
@@ -238,7 +236,9 @@ __PACKAGE__->register_method({
 	    push @$newrules, $rule if $moveto >= scalar(@$rules);
 
 	    $groups_conf->{rules}->{$param->{group}} = $newrules;
-	}	    
+	} else {
+	    PVE::Firewall::copy_rule_data($rule, $param);
+	}
 
 	PVE::Firewall::save_security_groups($groups_conf);
 
