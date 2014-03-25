@@ -1430,7 +1430,7 @@ sub parse_hostfw_option {
 
     my $loglevels = "emerg|alert|crit|err|warning|notice|info|debug|nolog";
 
-    if ($line =~ m/^(enable|dhcp|nosmurfs|tcpflags|allow_bridge_route):\s*(0|1)\s*$/i) {
+    if ($line =~ m/^(enable|dhcp|nosmurfs|tcpflags|allow_bridge_route|optimize):\s*(0|1)\s*$/i) {
 	$opt = lc($1);
 	$value = int($2);
     } elsif ($line =~ m/^(log_level_in|log_level_out|tcp_flags_log_level|smurf_log_level):\s*(($loglevels)\s*)?$/i) {
@@ -1882,6 +1882,11 @@ sub compile {
 					     $vmfw_conf, $vmid, $bridge, 'OUT');
 	    }
 	}
+    }
+
+    if($hostfw_options->{optimize}){
+	ruleset_insertrule($ruleset, "PVEFW-FORWARD", "-m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
+	ruleset_insertrule($ruleset, "PVEFW-FORWARD", "-m conntrack --ctstate INVALID -j DROP");
     }
 
     # fixme: what log level should we use here?
