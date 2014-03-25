@@ -28,6 +28,13 @@ tcpflags: 1
 # enable DHCP
 dhcp: 1
 
+# enable ips
+ips: 1
+
+# specify nfqueue queues (optionnal)
+#ips_queues: 0
+ips_queues: 0:3
+
 
 [RULES]
 

@@ -964,6 +964,7 @@ sub ruleset_create_vm_chain {
     my ($ruleset, $chain, $options, $macaddr, $direction) = @_;
 
     ruleset_create_chain($ruleset, $chain);
+    my $accept = generate_nfqueue($options);
 
     if (!(defined($options->{nosmurfs}) && $options->{nosmurfs} == 0)) {
 	ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate INVALID,NEW -j PVEFW-smurfs");
@@ -984,18 +985,24 @@ sub ruleset_create_vm_chain {
     }
 
     ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate INVALID -j DROP");
-    ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
+    if($direction eq 'OUT'){
+	ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate RELATED,ESTABLISHED -g PVEFW-SET-ACCEPT-MARK");
 
+    }else{
+	ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate RELATED,ESTABLISHED -j $accept");
+    }
     if ($direction eq 'OUT') {
 	if (defined($macaddr) && !(defined($options->{macfilter}) && $options->{macfilter} == 0)) {
 	    ruleset_addrule($ruleset, $chain, "-m mac ! --mac-source $macaddr -j DROP");
 	}
 	ruleset_addrule($ruleset, $chain, "-j MARK --set-mark 0"); # clear mark
     }
+
+
 }
 
 sub ruleset_generate_vm_rules {
-    my ($ruleset, $rules, $groups_conf, $chain, $netid, $direction) = @_;
+    my ($ruleset, $rules, $groups_conf, $chain, $netid, $direction, $options) = @_;
 
     my $lc_direction = lc($direction);
 
@@ -1008,18 +1015,45 @@ sub ruleset_generate_vm_rules {
 		generate_group_rules($ruleset, $groups_conf, $rule->{action});
 	    }
 	    ruleset_addrule($ruleset, $chain, "-j $group_chain");
-	    ruleset_addrule($ruleset, $chain, "-m mark --mark 1 -j RETURN")
-		if $direction eq 'OUT';
+	    if ($direction eq 'OUT'){
+		ruleset_addrule($ruleset, $chain, "-m mark --mark 1 -j RETURN");
+	    }else{
+		my $accept = generate_nfqueue($options);
+		ruleset_addrule($ruleset, $chain, "-m mark --mark 1 -j $accept");
+	    }
+
 	} else {
 	    next if $rule->{type} ne $lc_direction;
 	    if ($direction eq 'OUT') {
 		ruleset_generate_rule($ruleset, $chain, $rule, 
 				      { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" });
 	    } else {
-		ruleset_generate_rule($ruleset, $chain, $rule, { REJECT => "PVEFW-reject" });
+		my $accept = generate_nfqueue($options);
+		ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept , REJECT => "PVEFW-reject" });
 	    }
 	}
     }
+}
+
+sub generate_nfqueue {
+    my ($options) = @_;
+
+    my $action = "";
+    if($options->{ips}){
+	$action = "NFQUEUE";
+	if($options->{ips_queues} && $options->{ips_queues} =~ m/^(\d+)(:(\d+))?$/) {
+	    if(defined($3) && defined($1)) {
+		$action .= " --queue-balance $1:$3";
+	    }elsif (defined($1)) {
+		$action .= " --queue-num $1";
+	    }
+	}
+	$action .= " --queue-bypass";
+    }else{
+	$action = "ACCEPT";
+    }
+
+    return $action;
 }
 
 sub generate_venet_rules_direction {
@@ -1049,7 +1083,8 @@ sub generate_venet_rules_direction {
 	$policy = $options->{policy_in} || 'DROP'; # allow nothing by default
     }
 
-    my $accept_action = $direction eq 'OUT' ? "PVEFW-SET-ACCEPT-MARK" : "ACCEPT";
+    my $accept = generate_nfqueue($options);
+    my $accept_action = $direction eq 'OUT' ? "PVEFW-SET-ACCEPT-MARK" : $accept;
     ruleset_add_chain_policy($ruleset, $chain, $vmid, $policy, $loglevel, $accept_action);
 
     # plug into FORWARD, INPUT and OUTPUT chain
@@ -1090,7 +1125,7 @@ sub generate_tap_rules_direction {
 
     ruleset_create_vm_chain($ruleset, $tapchain, $options, $macaddr, $direction);
 
-    ruleset_generate_vm_rules($ruleset, $rules, $groups_conf, $tapchain, $netid, $direction);
+    ruleset_generate_vm_rules($ruleset, $rules, $groups_conf, $tapchain, $netid, $direction, $options);
 
     # implement policy
     my $policy;
@@ -1101,7 +1136,8 @@ sub generate_tap_rules_direction {
 	$policy = $options->{policy_in} || 'DROP'; # allow nothing by default
     }
 
-    my $accept_action = $direction eq 'OUT' ? "PVEFW-SET-ACCEPT-MARK" : "ACCEPT";
+    my $accept = generate_nfqueue($options);
+    my $accept_action = $direction eq 'OUT' ? "PVEFW-SET-ACCEPT-MARK" : $accept;
     ruleset_add_chain_policy($ruleset, $tapchain, $vmid, $policy, $loglevel, $accept_action);
 
     # plug the tap chain to bridge chain
@@ -1193,10 +1229,11 @@ sub generate_group_rules {
     my $chain = "GROUP-${group}-IN";
 
     ruleset_create_chain($ruleset, $chain);
+    ruleset_addrule($ruleset, $chain, "-j MARK --set-mark 0"); # clear mark
 
     foreach my $rule (@$rules) {
 	next if $rule->{type} ne 'in';
-	ruleset_generate_rule($ruleset, $chain, $rule, { REJECT => "PVEFW-reject" });
+	ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" });
     }
 
     $chain = "GROUP-${group}-OUT";
@@ -1366,7 +1403,7 @@ sub parse_vmfw_option {
 
     my $loglevels = "emerg|alert|crit|err|warning|notice|info|debug|nolog";
 
-    if ($line =~ m/^(enable|dhcp|macfilter|nosmurfs|tcpflags):\s*(0|1)\s*$/i) {
+    if ($line =~ m/^(enable|dhcp|macfilter|nosmurfs|tcpflags|ips):\s*(0|1)\s*$/i) {
 	$opt = lc($1);
 	$value = int($2);
     } elsif ($line =~ m/^(log_level_in|log_level_out):\s*(($loglevels)\s*)?$/i) {
@@ -1375,6 +1412,9 @@ sub parse_vmfw_option {
     } elsif ($line =~ m/^(policy_(in|out)):\s*(ACCEPT|DROP|REJECT)\s*$/i) {
 	$opt = lc($1);
 	$value = uc($3);
+    } elsif ($line =~ m/^(ips_queues):\s*((\d+)(:(\d+))?)\s*$/i) {
+	$opt = lc($1);
+	$value = $2;
     } else {
 	chomp $line;
 	die "can't parse option '$line'\n"
