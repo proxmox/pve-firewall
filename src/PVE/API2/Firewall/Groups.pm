@@ -69,8 +69,13 @@ __PACKAGE__->register_method({
 	type => 'array',
 	items => {
 	    type => "object",
-	    properties => {},
+	    properties => {
+		pos => {
+		    type => 'integer',
+		}
+	    },
 	},
+	links => [ { rel => 'child', href => "{pos}" } ],
     },
     code => sub {
 	my ($param) = @_;
@@ -91,5 +96,196 @@ __PACKAGE__->register_method({
 
 	return $res;
     }});
+
+__PACKAGE__->register_method({
+    name => 'get_rule',
+    path => '{group}/{pos}',
+    method => 'GET',
+    description => "Get single rule data.",
+    proxyto => 'node',
+    parameters => {
+    	additionalProperties => 0,
+	properties => {
+	    node => get_standard_option('pve-node'),
+	    group => {
+		description => "Security group name.",
+		type => 'string',
+	    },
+	    pos => {
+		description => "Return rule from position <pos>.",
+		type => 'integer',
+		minimum => 0,
+	    },
+	},
+    },
+    returns => {
+	type => "object",
+	properties => {
+	    pos => {
+		type => 'integer',
+	    }
+	},
+    },
+    code => sub {
+	my ($param) = @_;
+
+	my $groups_conf = PVE::Firewall::load_security_groups();
+
+	my $rules = $groups_conf->{rules}->{$param->{group}};
+	die "no such security group\n" if !defined($rules);
+
+	my $digest = $groups_conf->{digest};
+	# fixme: check digest
+	
+	die "no rule at position $param->{pos}\n" if $param->{pos} >= scalar(@$rules);
+	
+	my $rule = $rules->[$param->{pos}];
+
+	return PVE::Firewall::cleanup_fw_rule($rule, $digest, $param->{pos});
+   }});
+
+
+__PACKAGE__->register_method({
+    name => 'create_rule',
+    path => '{group}',
+    method => 'POST',
+    description => "Create new rule.",
+    proxyto => 'node',
+    protected => 1,
+    parameters => {
+    	additionalProperties => 0,
+	properties => PVE::Firewall::add_rule_properties({
+	    node => get_standard_option('pve-node'),
+	    group => {
+		description => "Security group name.",
+		type => 'string',
+	    },
+	}),
+    },
+    returns => { type => "null" },
+    code => sub {
+	my ($param) = @_;
+
+	my $groups_conf = PVE::Firewall::load_security_groups();
+
+	my $rules = $groups_conf->{rules}->{$param->{group}};
+	die "no such security group\n" if !defined($rules);
+
+	my $digest = $groups_conf->{digest};
+		
+	my $rule = { type => 'out', action => 'ACCEPT', enable => 0};
+
+	PVE::Firewall::copy_rule_data($rule, $param);
+
+	unshift @$rules, $rule;
+
+	PVE::Firewall::save_security_groups($groups_conf);
+
+	return undef;
+   }});
+
+__PACKAGE__->register_method({
+    name => 'update_rule',
+    path => '{group}/{pos}',
+    method => 'PUT',
+    description => "Modify rule data.",
+    proxyto => 'node',
+    protected => 1,
+    parameters => {
+    	additionalProperties => 0,
+	properties => PVE::Firewall::add_rule_properties({
+	    node => get_standard_option('pve-node'),
+	    group => {
+		description => "Security group name.",
+		type => 'string',
+	    },
+	    moveto => {
+		description => "Move rule to new position <moveto>.",
+		type => 'integer',
+		minimum => 0,
+		optional => 1,
+	    },
+	}),
+    },
+    returns => { type => "null" },
+    code => sub {
+	my ($param) = @_;
+
+	my $groups_conf = PVE::Firewall::load_security_groups();
+
+	my $rules = $groups_conf->{rules}->{$param->{group}};
+	die "no such security group\n" if !defined($rules);
+
+	my $digest = $groups_conf->{digest};
+	# fixme: check digest
+	
+	die "no rule at position $param->{pos}\n" if $param->{pos} >= scalar(@$rules);
+	
+	my $rule = $rules->[$param->{pos}];
+
+	PVE::Firewall::copy_rule_data($rule, $param);
+ 
+	my $moveto = $param->{moveto};
+	if (defined($moveto) && $moveto != $param->{pos}) {
+	    my $newrules = [];
+	    for (my $i = 0; $i < scalar(@$rules); $i++) {
+		next if $i == $param->{pos};
+		if ($i == $moveto) {
+		    push @$newrules, $rule;
+		}
+		push @$newrules, $rules->[$i];
+	    }
+	    push @$newrules, $rule if $moveto >= scalar(@$rules);
+
+	    $groups_conf->{rules}->{$param->{group}} = $newrules;
+	}	    
+
+	PVE::Firewall::save_security_groups($groups_conf);
+
+	return undef;
+   }});
+
+__PACKAGE__->register_method({
+    name => 'delete_rule',
+    path => '{group}/{pos}',
+    method => 'DELETE',
+    description => "Delete rule.",
+    proxyto => 'node',
+    protected => 1,
+    parameters => {
+    	additionalProperties => 0,
+	properties => {
+	    node => get_standard_option('pve-node'),
+	    group => {
+		description => "Security group name.",
+		type => 'string',
+	    },
+	    pos => {
+		description => "Delete rule at position <pos>.",
+		type => 'integer',
+		minimum => 0,
+	    },
+	},
+    },
+    returns => { type => "null" },
+    code => sub {
+	my ($param) = @_;
+
+	my $groups_conf = PVE::Firewall::load_security_groups();
+
+	my $rules = $groups_conf->{rules}->{$param->{group}};
+	die "no such security group\n" if !defined($rules);
+
+	my $digest = $groups_conf->{digest};
+	# fixme: check digest
+	
+	die "no rule at position $param->{pos}\n" if $param->{pos} >= scalar(@$rules);
+	
+	splice(@$rules, $param->{pos}, 1);
+
+	PVE::Firewall::save_security_groups($groups_conf);
+
+	return undef;
+   }});
 
 1;

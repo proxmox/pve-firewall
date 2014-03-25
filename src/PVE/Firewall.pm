@@ -655,6 +655,84 @@ sub cleanup_fw_rule {
     return $r;
 }
 
+my $rule_properties = {
+    pos => {
+	description => "Update rule at position <pos>.",
+	type => 'integer',
+	minimum => 0,
+	optional => 1,
+    },
+    digest => {
+	type => 'string',
+	optional => 1,
+    },
+    type => {
+	type => 'string',
+	optional => 1,
+	enum => ['in', 'out', 'group'],
+    },
+    action => {
+	type => 'string',
+	optional => 1,
+    },
+    source => {
+	type => 'string',
+	optional => 1,
+    },
+    dest => {
+	type => 'string',
+	optional => 1,
+    },
+    proto => {
+	type => 'string',
+	optional => 1,
+    },
+    enable => {
+	type => 'boolean',
+	optional => 1,
+    },
+    sport => {
+	type => 'string',
+	optional => 1,
+    },
+    dport => {
+	type => 'string',
+	optional => 1,
+    },
+    comment => {
+	type => 'string',
+	optional => 1,
+    },
+};
+
+sub add_rule_properties {
+    my ($properties) = @_;
+
+    foreach my $k (keys %$rule_properties) {
+	$properties->{$k} = $rule_properties->{$k};
+    }
+    
+    return $properties;
+}
+
+sub copy_rule_data {
+    my ($rule, $param) = @_;
+
+    foreach my $k (keys %$rule_properties) {
+	if (defined(my $v = $param->{$k})) {
+	    if ($v eq '' || $v eq '-') {
+		delete $rule->{$k};
+	    } else {
+		$rule->{$k} = $v;
+	    }
+	} else {
+	    delete $rule->{$k};
+	}
+    }
+    return $rule;
+}
+
+# core functions
 my $bridge_firewall_enabled = 0;
 
 sub enable_bridge_firewall {
@@ -1805,6 +1883,40 @@ sub load_security_groups {
     }
 
     return $groups_conf;
+}
+
+sub save_security_groups {
+    my ($groups_conf) = @_;
+
+    my $raw = '';
+    my $filename = "/etc/pve/firewall/groups.fw";
+
+    foreach my $group (sort keys %{$groups_conf->{rules}}) {
+	my $rules = $groups_conf->{rules}->{$group};
+	$raw .= "[group $group]\n\n";
+
+	foreach my $rule (@$rules) {
+	    if ($rule->{type} eq  'in' || $rule->{type} eq 'out') {
+		$raw .= '|' if defined($rule->{enable}) && !$rule->{enable};
+		$raw .= uc($rule->{type});
+		$raw .= " " . $rule->{action};
+		$raw .= " " . ($rule->{source} || '-');
+		$raw .= " " . ($rule->{dest} || '-');
+		$raw .= " " . ($rule->{proto} || '-');
+		$raw .= " " . ($rule->{dport} || '-');
+		$raw .= " " . ($rule->{sport} || '-');
+		$raw .= " # " . encode('utf8', $rule->{comment}) 
+		    if $rule->{comment} && $rule->{comment} !~ m/^\s*$/;
+		$raw .= "\n";
+	    } else {
+		die "implement me '$rule->{type}'";
+	    }
+	}
+
+	$raw .= "\n";
+    }
+
+    PVE::Tools::file_set_contents($filename, $raw);
 }
 
 sub load_hostfw_conf {
