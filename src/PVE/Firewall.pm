@@ -700,7 +700,7 @@ sub iptables_get_chains {
 
 	return 1 if $name =~ m/^venet0-\d+-(:?IN|OUT)$/;
 
-	return 1 if $name =~ m/^vmbr\d+-(:?FW|IN|OUT)$/;
+	return 1 if $name =~ m/^vmbr\d+-(:?FW|IN|OUT|IPS)$/;
 	return 1 if $name =~ m/^GROUP-(:?[^\s\-]+)-(:?IN|OUT)$/;
 
 	return undef;
@@ -1056,6 +1056,25 @@ sub generate_nfqueue {
     return $action;
 }
 
+sub ruleset_generate_vm_ipsrules {
+    my ($ruleset, $options, $direction, $iface, $bridge) = @_;
+
+    if ($options->{ips} && $direction eq 'IN') {
+	my $nfqueue = generate_nfqueue($options);
+
+	if (!ruleset_chain_exist($ruleset, "$bridge-IPS")) {
+	    ruleset_create_chain($ruleset, "PVEFW-IPS");
+	}
+
+	if (!ruleset_chain_exist($ruleset, "$bridge-IPS")) {
+	    ruleset_create_chain($ruleset, "$bridge-IPS");
+	    ruleset_insertrule($ruleset, "PVEFW-IPS", "-o $bridge -m physdev --physdev-is-out -j $bridge-IPS");
+	}
+
+        ruleset_addrule($ruleset, "$bridge-IPS", "-m physdev --physdev-out $iface --physdev-is-bridged -j $nfqueue");
+    }
+}
+
 sub generate_venet_rules_direction {
     my ($ruleset, $groups_conf, $vmfw_conf, $vmid, $ip, $direction) = @_;
 
@@ -1126,6 +1145,8 @@ sub generate_tap_rules_direction {
     ruleset_create_vm_chain($ruleset, $tapchain, $options, $macaddr, $direction);
 
     ruleset_generate_vm_rules($ruleset, $rules, $groups_conf, $tapchain, $netid, $direction, $options);
+
+    ruleset_generate_vm_ipsrules($ruleset, $options, $direction, $iface, $bridge);
 
     # implement policy
     my $policy;
@@ -1820,12 +1841,16 @@ sub compile {
 
     enable_host_firewall($ruleset, $hostfw_conf, $groups_conf) if $hostfw_enable;
 
+    my $ips_enable = undef;
+
     # generate firewall rules for QEMU VMs
     foreach my $vmid (keys %{$vmdata->{qemu}}) {
 	my $conf = $vmdata->{qemu}->{$vmid};
 	my $vmfw_conf = $vmfw_configs->{$vmid};
 	next if !$vmfw_conf;
 	next if defined($vmfw_conf->{options}->{enable}) && ($vmfw_conf->{options}->{enable} == 0);
+
+	$ips_enable = 1 if $vmfw_conf->{options}->{ips};
 
 	foreach my $netid (keys %$conf) {
 	    next if $netid !~ m/^net(\d+)$/;
@@ -1856,6 +1881,8 @@ sub compile {
 	next if !$vmfw_conf;
 	next if defined($vmfw_conf->{options}->{enable}) && ($vmfw_conf->{options}->{enable} == 0);
 
+	$ips_enable = 1 if $vmfw_conf->{options}->{ips};
+
 	if ($conf->{ip_address} && $conf->{ip_address}->{value}) {
 	    my $ip = $conf->{ip_address}->{value};
 	    generate_venet_rules_direction($ruleset, $groups_conf, $vmfw_conf, $vmid, $ip, 'IN');
@@ -1885,7 +1912,9 @@ sub compile {
     }
 
     if($hostfw_options->{optimize}){
-	ruleset_insertrule($ruleset, "PVEFW-FORWARD", "-m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
+
+	my $accept = $ips_enable ? "PVEFW-IPS" : "ACCEPT";
+	ruleset_insertrule($ruleset, "PVEFW-FORWARD", "-m conntrack --ctstate RELATED,ESTABLISHED -j $accept");
 	ruleset_insertrule($ruleset, "PVEFW-FORWARD", "-m conntrack --ctstate INVALID -j DROP");
     }
 
