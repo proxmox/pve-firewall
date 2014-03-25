@@ -517,11 +517,10 @@ sub get_firewall_macros {
     $pve_fw_parsed_macros = {};
 
     foreach my $k (keys %$pve_fw_macros) {
-	my $name = lc($k);
-
-	my $macro =  $pve_fw_macros->{$k};
-	$pve_fw_preferred_macro_names->{$name} = $k;
-	$pve_fw_parsed_macros->{$name} = $macro;
+	my $lc_name = lc($k);
+	my $macro = $pve_fw_macros->{$k};
+	$pve_fw_preferred_macro_names->{$lc_name} = $k;
+	$pve_fw_parsed_macros->{$k} = $macro;
     }
 
     return $pve_fw_parsed_macros;
@@ -672,6 +671,10 @@ my $rule_properties = {
 	enum => ['in', 'out', 'group'],
     },
     action => {
+	type => 'string',
+	optional => 1,
+    },
+    macro => {
 	type => 'string',
 	optional => 1,
     },
@@ -845,22 +848,29 @@ sub ruleset_generate_cmdstr {
 
     return if defined($rule->{enable}) && !$rule->{enable};
 
+    die "unable to emit macro - internal error" if $rule->{macro}; # should not happen
+
+    my $nbdport = defined($rule->{dport}) ? parse_port_name_number_or_range($rule->{dport}) : 0;
+    my $nbsport = defined($rule->{sport}) ? parse_port_name_number_or_range($rule->{sport}) : 0;
+    my $nbsource = $rule->{source} ? parse_address_list( $rule->{source}) : 0;
+    my $nbdest = $rule->{dest} ? parse_address_list($rule->{dest}) : 0;
+
     my @cmd = ();
 
     push @cmd, "-i $rule->{iface_in}" if $rule->{iface_in};
     push @cmd, "-o $rule->{iface_out}" if $rule->{iface_out};
 
-    push @cmd, "-m iprange --src-range" if $rule->{nbsource} && $rule->{nbsource} > 1;
+    push @cmd, "-m iprange --src-range" if $nbsource > 1;
     push @cmd, "-s $rule->{source}" if $rule->{source};
-    push @cmd, "-m iprange --dst-range" if $rule->{nbdest} && $rule->{nbdest} > 1;
+    push @cmd, "-m iprange --dst-range" if $nbdest > 1;
     push @cmd, "-d $rule->{dest}" if $rule->{dest};
 
     if ($rule->{proto}) {
 	push @cmd, "-p $rule->{proto}";
 
 	my $multiport = 0;
-	$multiport++ if $rule->{nbdport} && ($rule->{nbdport} > 1);
-	$multiport++ if $rule->{nbsport} && ($rule->{nbsport} > 1);
+	$multiport++ if $nbdport > 1;
+	$multiport++ if $nbsport > 1;
 
 	push @cmd, "--match multiport" if $multiport;
 
@@ -873,7 +883,7 @@ sub ruleset_generate_cmdstr {
 		die "unknown icmp-type '$rule->{dport}'\n" if !defined($icmp_type_names->{$rule->{dport}});
 		push @cmd, "-m icmp --icmp-type $rule->{dport}";
 	    } else {
-		if ($rule->{nbdport} && $rule->{nbdport} > 1) {
+		if ($nbdport > 1) {
 		    if ($multiport == 2) {
 			push @cmd,  "--ports $rule->{dport}";
 		    } else {
@@ -886,7 +896,7 @@ sub ruleset_generate_cmdstr {
 	}
 
 	if ($rule->{sport}) {
-	    if ($rule->{nbsport} && $rule->{nbsport} > 1) {
+	    if ($nbsport > 1) {
 		push @cmd, "--sports $rule->{sport}" if $multiport != 2;
 	    } else {
 		push @cmd, "--sport $rule->{sport}";
@@ -908,16 +918,72 @@ sub ruleset_generate_cmdstr {
     return scalar(@cmd) ? join(' ', @cmd) : undef;
 }
 
+my $apply_macro = sub {
+    my ($macro_name, $param) = @_;
+
+    my $macro_rules = $pve_fw_parsed_macros->{$macro_name};
+    die "unknown macro '$macro_name'\n" if !$macro_rules; # should not happen
+
+    my $rules = [];
+
+    foreach my $templ (@$macro_rules) {
+	my $rule = {};
+	my $param_used = {};
+	foreach my $k (keys %$templ) {
+	    my $v = $templ->{$k};
+	    if ($v eq 'PARAM') {
+		$v = $param->{$k};
+		$param_used->{$k} = 1;
+	    } elsif ($v eq 'DEST') {
+		$v = $param->{dest};
+		$param_used->{dest} = 1;
+	    } elsif ($v eq 'SOURCE') {
+		$v = $param->{source};
+		$param_used->{source} = 1;
+	    }
+
+	    die "missing parameter '$k' in macro '$macro_name'\n" if !defined($v);
+	    $rule->{$k} = $v;
+	}
+	foreach my $k (keys %$param) {
+	    next if $k eq 'macro';
+	    next if !defined($param->{$k});
+	    next if $param_used->{$k};
+	    if (defined($rule->{$k})) {
+		die "parameter '$k' already define in macro (value = '$rule->{$k}')\n"
+		    if $rule->{$k} ne $param->{$k};
+	    } else {
+		$rule->{$k} = $param->{$k};
+	    }
+	}
+	push @$rules, $rule;
+    }
+
+    return $rules;
+};
+
 sub ruleset_generate_rule {
     my ($ruleset, $chain, $rule, $actions, $goto) = @_;
 
-    if (my $cmdstr = ruleset_generate_cmdstr($ruleset, $chain, $rule, $actions, $goto)) {
-	ruleset_addrule($ruleset, $chain, $cmdstr);
+    my $rules;
+
+    if ($rule->{macro}) {
+	$rules = &$apply_macro($rule->{macro}, $rule);
+    } else {
+	$rules = [ $rule ];
+    }
+
+    foreach my $tmp (@$rules) { 
+	if (my $cmdstr = ruleset_generate_cmdstr($ruleset, $chain, $tmp, $actions, $goto)) {
+	    ruleset_addrule($ruleset, $chain, $cmdstr);
+	}
     }
 }
 
 sub ruleset_generate_rule_insert {
     my ($ruleset, $chain, $rule, $actions, $goto) = @_;
+
+    die "implement me" if $rule->{macro}; # not implemented, because not needed so far
 
     if (my $cmdstr = ruleset_generate_cmdstr($ruleset, $chain, $rule, $actions, $goto)) {
 	ruleset_insertrule($ruleset, $chain, $cmdstr);
@@ -1385,7 +1451,6 @@ sub parse_fw_rule {
     die "incomplete rule\n" if ! ($type && $action);
 
     my $macro;
-    my $macro_name;
 
     $type = lc($type);
 
@@ -1393,12 +1458,10 @@ sub parse_fw_rule {
 	if ($action =~ m/^(ACCEPT|DROP|REJECT)$/) {
 	    # OK
 	} elsif ($action =~ m/^(\S+)\((ACCEPT|DROP|REJECT)\)$/) {
-	    ($macro_name, $action) = ($1, $2);
-	    my $lc_macro_name = lc($macro_name);
-	    my $preferred_name = $pve_fw_preferred_macro_names->{$lc_macro_name};
-	    $macro_name = $preferred_name if $preferred_name;
-	    $macro = $macros->{$lc_macro_name};
-	    die "unknown macro '$macro_name'\n" if !$macro;
+	    $action = $2;
+	    my $preferred_name = $pve_fw_preferred_macro_names->{lc($1)};
+	    die "unknown macro '$1'\n" if !$preferred_name;
+	    $macro = $preferred_name;
 	} else {
 	    die "unknown action '$action'\n";
 	}
@@ -1426,73 +1489,25 @@ sub parse_fw_rule {
     $dport = undef if $dport && $dport eq '-';
     $sport = undef if $sport && $sport eq '-';
 
-    my $nbsource = undef;
-    my $nbdest = undef;
+    parse_port_name_number_or_range($dport) if defined($dport);
+    parse_port_name_number_or_range($sport) if defined($sport);
+ 
+    parse_address_list($source) if $source;
+    parse_address_list($dest) if $dest;
 
-    $nbsource = parse_address_list($source) if $source;
-    $nbdest = parse_address_list($dest) if $dest;
-
-    my $rules = [];
-
-    my $param = {
+    return {
 	type => $type,
 	enable => $enable,
 	comment => $comment,
 	action => $action,
+	macro => $macro,
 	iface => $iface,
 	source => $source,
 	dest => $dest,
-	nbsource => $nbsource,
-	nbdest => $nbdest,
 	proto => $proto,
 	dport => $dport,
 	sport => $sport,
     };
-
-    if ($macro) {
-	foreach my $templ (@$macro) {
-	    my $rule = {};
-	    my $param_used = {};
-	    foreach my $k (keys %$templ) {
-		my $v = $templ->{$k};
-		if ($v eq 'PARAM') {
-		    $v = $param->{$k};
-		    $param_used->{$k} = 1;
-		} elsif ($v eq 'DEST') {
-		    $v = $param->{dest};
-		    $param_used->{dest} = 1;
-		} elsif ($v eq 'SOURCE') {
-		    $v = $param->{source};
-		    $param_used->{source} = 1;
-		}
-
-		die "missing parameter '$k' in macro '$macro_name'\n" if !defined($v);
-		$rule->{$k} = $v;
-	    }
-	    foreach my $k (keys %$param) {
-		next if !defined($param->{$k});
-		next if $param_used->{$k};
-		if (defined($rule->{$k})) {
-		    die "parameter '$k' already define in macro (value = '$rule->{$k}')\n"
-			if $rule->{$k} ne $param->{$k};
-		} else {
-		    $rule->{$k} = $param->{$k};
-		}
-	    }
-	    push @$rules, $rule;
-	}
-    } else {
-	push @$rules, $param;
-    }
-
-    foreach my $rule (@$rules) {
-	$rule->{nbdport} = parse_port_name_number_or_range($rule->{dport})
-	    if defined($rule->{dport});
-	$rule->{nbsport} = parse_port_name_number_or_range($rule->{sport})
-	    if defined($rule->{sport});
-    }
-
-    return $rules;
 }
 
 sub parse_vmfw_option {
@@ -1588,14 +1603,14 @@ sub parse_vm_fw_rules {
 	    next;
 	}
 
-	my $rules;
-	eval { $rules = parse_fw_rule($line, 1, 1); };
+	my $rule;
+	eval { $rule = parse_fw_rule($line, 1, 1); };
 	if (my $err = $@) {
 	    warn "$prefix: $err";
 	    next;
 	}
 
-	push @{$res->{$section}}, @$rules;
+	push @{$res->{$section}}, $rule;
     }
 
     $res->{digest} = $digest->b64digest;
@@ -1642,14 +1657,14 @@ sub parse_host_fw_rules {
 	    next;
 	}
 
-	my $rules;
-	eval { $rules = parse_fw_rule($line, 1, 1); };
+	my $rule;
+	eval { $rule = parse_fw_rule($line, 1, 1); };
 	if (my $err = $@) {
 	    warn "$prefix: $err";
 	    next;
 	}
-
-	push @{$res->{$section}}, @$rules;
+	
+	push @{$res->{$section}}, $rule;
     }
 
     $res->{digest} = $digest->b64digest;
@@ -1686,14 +1701,14 @@ sub parse_group_fw_rules {
 	    next;
 	}
 
-	my $rules;
-	eval { $rules = parse_fw_rule($line, 0, 0); };
+	my $rule;
+	eval { $rule = parse_fw_rule($line, 0, 0); };
 	if (my $err = $@) {
 	    warn "$prefix: $err";
 	    next;
 	}
-
-	push @{$res->{$section}->{$group}}, @$rules;
+	
+	push @{$res->{$section}->{$group}}, $rule;
     }
 
     $res->{digest} = $digest->b64digest;
