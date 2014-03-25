@@ -5,6 +5,7 @@ use strict;
 use Data::Dumper;
 use Digest::SHA;
 use PVE::INotify;
+use PVE::JSONSchema qw(get_standard_option);
 use PVE::Cluster;
 use PVE::ProcFSTools;
 use PVE::Tools;
@@ -510,9 +511,7 @@ my $icmp_type_names = {
     'address-mask-reply' => 1,
 };
 
-sub get_firewall_macros {
-
-    return $pve_fw_parsed_macros if $pve_fw_parsed_macros;
+sub init_firewall_macros {
 
     $pve_fw_parsed_macros = {};
 
@@ -522,9 +521,9 @@ sub get_firewall_macros {
 	$pve_fw_preferred_macro_names->{$lc_name} = $k;
 	$pve_fw_parsed_macros->{$k} = $macro;
     }
-
-    return $pve_fw_parsed_macros;
 }
+
+init_firewall_macros();
 
 my $etc_services;
 
@@ -635,6 +634,38 @@ sub parse_port_name_number_or_range {
     return ($nbports);
 }
 
+PVE::JSONSchema::register_format('pve-fw-port-spec', \&pve_fw_verify_port_spec);
+sub pve_fw_verify_port_spec {
+   my ($portstr) = @_;
+
+    parse_port_name_number_or_range($portstr);
+
+   return $portstr;
+}
+
+PVE::JSONSchema::register_format('pve-fw-v4addr-spec', \&pve_fw_verify_v4addr_spec);
+sub pve_fw_verify_v4addr_spec {
+   my ($list) = @_;
+
+   parse_address_list($list);
+
+   return $list;
+}
+
+PVE::JSONSchema::register_format('pve-fw-protocol-spec', \&pve_fw_verify_protocol_spec);
+sub pve_fw_verify_protocol_spec {
+   my ($proto) = @_;
+
+   my $protocols = get_etc_protocols();
+
+   die "unknown protocol '$proto'\n" if $proto &&
+       !(defined($protocols->{byname}->{$proto}) ||
+	 defined($protocols->{byid}->{$proto}));
+
+   return $proto;
+}
+
+
 # helper function for API
 
 my $rule_properties = {
@@ -647,6 +678,8 @@ my $rule_properties = {
     digest => {
 	type => 'string',
 	optional => 1,
+	maxLength => 27,
+	minLength => 27,
     },
     type => {
 	type => 'string',
@@ -656,21 +689,24 @@ my $rule_properties = {
     action => {
 	type => 'string',
 	optional => 1,
+	enum => ['ACCEPT', 'DROP', 'REJECT'],
     },
     macro => {
 	type => 'string',
 	optional => 1,
+	maxLength => 128,
     },
+    iface => get_standard_option('pve-iface', { optional => 1 }),
     source => {
-	type => 'string',
+	type => 'string', format => 'pve-fw-v4addr-spec',
 	optional => 1,
     },
     dest => {
-	type => 'string',
+	type => 'string', format => 'pve-fw-v4addr-spec',
 	optional => 1,
     },
     proto => {
-	type => 'string',
+	type => 'string', format => 'pve-fw-protocol-spec',
 	optional => 1,
     },
     enable => {
@@ -678,11 +714,11 @@ my $rule_properties = {
 	optional => 1,
     },
     sport => {
-	type => 'string',
+	type => 'string', format => 'pve-fw-port-spec',
 	optional => 1,
     },
     dport => {
-	type => 'string',
+	type => 'string', format => 'pve-fw-port-spec',
 	optional => 1,
     },
     comment => {
@@ -1424,9 +1460,6 @@ for (my $i = 0; $i < $MAX_NETS; $i++)  {
 sub parse_fw_rule {
     my ($line, $need_iface, $allow_groups) = @_;
 
-    my $macros = get_firewall_macros();
-    my $protocols = get_etc_protocols();
-
     my ($type, $action, $iface, $source, $dest, $proto, $dport, $sport);
 
     # we can add single line comments to the end of the rule
@@ -1479,9 +1512,7 @@ sub parse_fw_rule {
     }
 
     $proto = undef if $proto && $proto eq '-';
-    die "unknown protokol '$proto'\n" if $proto &&
-	!(defined($protocols->{byname}->{$proto}) ||
-	  defined($protocols->{byid}->{$proto}));
+    pve_fw_verify_protocol_spec($proto) if $proto;
 
     $source = undef if $source && $source eq '-';
     $dest = undef if $dest && $dest eq '-';
