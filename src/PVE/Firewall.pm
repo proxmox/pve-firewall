@@ -1999,16 +1999,12 @@ sub compile {
 
     enable_host_firewall($ruleset, $hostfw_conf, $groups_conf) if $hostfw_enable;
 
-    my $ips_enable = undef;
-
     # generate firewall rules for QEMU VMs
     foreach my $vmid (keys %{$vmdata->{qemu}}) {
 	my $conf = $vmdata->{qemu}->{$vmid};
 	my $vmfw_conf = $vmfw_configs->{$vmid};
 	next if !$vmfw_conf;
 	next if defined($vmfw_conf->{options}->{enable}) && ($vmfw_conf->{options}->{enable} == 0);
-
-	$ips_enable = 1 if $vmfw_conf->{options}->{ips};
 
 	foreach my $netid (keys %$conf) {
 	    next if $netid !~ m/^net(\d+)$/;
@@ -2038,8 +2034,6 @@ sub compile {
 	my $vmfw_conf = $vmfw_configs->{$vmid};
 	next if !$vmfw_conf;
 	next if defined($vmfw_conf->{options}->{enable}) && ($vmfw_conf->{options}->{enable} == 0);
-
-	$ips_enable = 1 if $vmfw_conf->{options}->{ips};
 
 	if ($conf->{ip_address} && $conf->{ip_address}->{value}) {
 	    my $ip = $conf->{ip_address}->{value};
@@ -2071,7 +2065,7 @@ sub compile {
 
     if($hostfw_options->{optimize}){
 
-	my $accept = $ips_enable ? "PVEFW-IPS" : "ACCEPT";
+	my $accept = ruleset_chain_exist($ruleset, "PVEFW-IPS") ? "PVEFW-IPS" : "ACCEPT";
 	ruleset_insertrule($ruleset, "PVEFW-FORWARD", "-m conntrack --ctstate RELATED,ESTABLISHED -j $accept");
 	ruleset_insertrule($ruleset, "PVEFW-FORWARD", "-m conntrack --ctstate INVALID -j DROP");
     }
