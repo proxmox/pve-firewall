@@ -801,6 +801,12 @@ sub iptables_restore_cmdlist {
     run_command("/sbin/iptables-restore -n", input => $cmdlist);
 }
 
+sub ipset_restore_cmdlist {
+    my ($cmdlist) = @_;
+
+    run_command(" /usr/sbin/ipset restore", input => $cmdlist);
+}
+
 sub iptables_get_chains {
 
     my $res = {};
@@ -853,6 +859,38 @@ sub iptables_get_chains {
     };
 
     run_command("/sbin/iptables-save", outfunc => $parser);
+
+    return $res;
+}
+
+sub ipset_get_chains {
+
+    my $res = {};
+    my $chains = {};
+
+    my $parser = sub {
+	my $line = shift;
+
+	return if $line =~ m/^#/;
+	return if $line =~ m/^\s*$/;
+	if ($line =~ m/^(\S+)\s(\S+)\s(\S+)/) {
+	   push @{$chains->{$2}}, $line;
+	} else {
+	    # simply ignore the rest
+	    return;
+	}
+    };
+
+    run_command(" /usr/sbin/ipset save", outfunc => $parser);
+
+    #comptute sig for each chain
+    foreach my $chain (keys %$chains){
+	my $digest = Digest::SHA->new('sha1');
+	foreach my $rule (@{$chains->{$chain}}) {
+	    $digest->add($rule);
+	}
+	$res->{$chain} = $digest->b64digest;
+    }
 
     return $res;
 }
@@ -1709,7 +1747,7 @@ sub parse_group_fw_rules {
     my $section;
     my $group;
 
-    my $res = { rules => {} };
+    my $res = { rules => {}, ipset => {} };
 
     my $digest = Digest::SHA->new('sha1');
 
@@ -1727,19 +1765,46 @@ sub parse_group_fw_rules {
 	    $group = lc($1);
 	    next;
 	}
+
+	if ($line =~ m/^\[ipgroup\s+(\S+)\]\s*$/i) {
+	    $section = 'ipset';
+	    $group = lc($1);
+	    $res->{$section}->{$group}->{type} = 'hash:ip family inet hashsize 1024 maxelem 65536 ';
+
+	    next;
+	}
+	if ($line =~ m/^\[netgroup\s+(\S+)\]\s*$/i) {
+	    $section = 'ipset';
+	    $group = lc($1);
+	    $res->{$section}->{$group}->{type} = 'hash:net family inet hashsize 1024 maxelem 65536 ';
+
+	    next;
+	}
+
 	if (!$section || !$group) {
 	    warn "$prefix: skip line - no section";
 	    next;
 	}
 
-	my $rule;
-	eval { $rule = parse_fw_rule($line, 0, 0); };
-	if (my $err = $@) {
-	    warn "$prefix: $err";
-	    next;
-	}
-	
+	if($section eq 'rules'){
+	    my $rule;
+	    eval { $rule = parse_fw_rule($line, 0, 0); };
+	    if (my $err = $@) {
+		warn "$prefix: $err";
+		next;
+	    }
 	push @{$res->{$section}->{$group}}, $rule;
+
+	}elsif($section eq 'ipset'){
+	    my $ip;
+	    if (!Net::IP->new($line)) {
+		warn "$prefix: $line is not an valid ip address";
+		next;
+	    }
+	    push @{$res->{$section}->{$group}->{ip}}, $line;
+	}
+
+	
     }
 
     $res->{digest} = $digest->b64digest;
@@ -1868,6 +1933,24 @@ sub generate_std_chains {
     }
 }
 
+sub generate_ipset_chains {
+    my ($ipset_ruleset, $options) = @_;
+
+    foreach my $ipset (keys %{$options->{ipset}}) {
+	generate_ipset($ipset_ruleset, $ipset, $options->{ipset}->{$ipset});
+    }
+}
+
+sub generate_ipset {
+    my ($ipset_ruleset, $name, $options) = @_;
+
+    push @{$ipset_ruleset->{$name}}, "create $name $options->{type}";
+
+    foreach my $ip (@{$options->{ip}}) {
+	push @{$ipset_ruleset->{$name}}, "add $name $ip";
+    }
+}
+
 sub save_pvefw_status {
     my ($status) = @_;
 
@@ -1928,7 +2011,7 @@ sub load_security_groups {
 	$groups_conf = parse_group_fw_rules($filename, $fh);
     }
 
-    return $groups_conf;
+    return ($groups_conf);
 }
 
 sub save_security_groups {
@@ -1982,6 +2065,9 @@ sub compile {
     my $routing_table = read_proc_net_route();
 
     my $groups_conf = load_security_groups();
+
+    my $ipset_ruleset = {};
+    generate_ipset_chains($ipset_ruleset, $groups_conf);
 
     my $ruleset = {};
 
@@ -2086,13 +2172,18 @@ sub compile {
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o vmbr+ -j DROP");  
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i vmbr+ -j DROP");
 
-    return wantarray ? ($ruleset, $hostfw_conf) : $ruleset;
+    return wantarray ? ($ruleset, $hostfw_conf, $ipset_ruleset) : $ruleset;
 }
 
 sub get_ruleset_status {
-    my ($ruleset, $verbose) = @_;
+    my ($ruleset, $verbose, $ipset) = @_;
 
-    my $active_chains = iptables_get_chains();
+    my $active_chains = undef;
+    if($ipset){
+	$active_chains = ipset_get_chains();
+    }else{
+	$active_chains = iptables_get_chains();
+    }
 
     my $statushash = {};
 
@@ -2211,16 +2302,62 @@ sub get_rulset_cmdlist {
     return $cmdlist;
 }
 
+sub get_ipset_cmdlist {
+    my ($ruleset, $verbose) = @_;
+
+    my $cmdlist = "";
+
+    my $statushash = get_ruleset_status($ruleset, $verbose, 1);
+
+    foreach my $chain (sort keys %$ruleset) {
+	my $stat = $statushash->{$chain};
+	die "internal error" if !$stat;
+
+	if ($stat->{action} eq 'create') {
+	    foreach my $cmd (@{$ruleset->{$chain}}) {
+		$cmdlist .= "$cmd\n";
+	    }
+        }
+
+	if ($stat->{action} eq 'update') {
+	    my $chain_swap = $chain."_swap";
+
+	    foreach my $cmd (@{$ruleset->{$chain}}) {
+		$cmd =~ s/$chain/$chain_swap/;
+		$cmdlist .= "$cmd\n";
+
+	    }
+	    $cmdlist .= "swap $chain_swap $chain\n";
+	    $cmdlist .= "flush $chain_swap\n";
+	    $cmdlist .= "destroy $chain_swap\n";
+
+        }
+
+    }
+
+    foreach my $chain (keys %$statushash) {
+	next if $statushash->{$chain}->{action} ne 'delete';
+	$cmdlist .= "flush $chain\n";
+	$cmdlist .= "destroy $chain\n";
+    }
+
+    return $cmdlist;
+}
+
 sub apply_ruleset {
-    my ($ruleset, $hostfw_conf, $verbose) = @_;
+    my ($ruleset, $hostfw_conf, $ipset_ruleset, $verbose) = @_;
 
     enable_bridge_firewall();
 
     update_nf_conntrack_max($hostfw_conf);
 
+    my $ipsetcmdlist = get_ipset_cmdlist($ipset_ruleset, $verbose);
+
     my $cmdlist = get_rulset_cmdlist($ruleset, $verbose);
 
     print $cmdlist if $verbose;
+
+    ipset_restore_cmdlist($ipsetcmdlist);
 
     iptables_restore_cmdlist($cmdlist);
 
@@ -2269,13 +2406,13 @@ sub update {
     my $code = sub {
 	my $status = read_pvefw_status();
 
-	my ($ruleset, $hostfw_conf) = PVE::Firewall::compile();
+	my ($ruleset, $hostfw_conf, $ipset_ruleset) = PVE::Firewall::compile();
 
 	if ($start || $status eq 'active') {
 
 	    save_pvefw_status('active')	if ($status ne 'active');
 
-	    apply_ruleset($ruleset, $hostfw_conf, $verbose);
+	    apply_ruleset($ruleset, $hostfw_conf, $ipset_ruleset, $verbose);
 	} else {
 	    print "Firewall not active (status = $status)\n" if $verbose;
 	}
