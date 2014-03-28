@@ -60,8 +60,17 @@ __PACKAGE__->register_method ({
 	    if !defined($param->{verbose}) && ($rpcenv->{type} eq 'cli');
 
 	my $code = sub {
-	    my $ruleset = PVE::Firewall::compile();
-	    PVE::Firewall::get_ruleset_status($ruleset, 1) if $param->{verbose};
+	    my ($ruleset, $hostfw_conf, $ipset_ruleset) = PVE::Firewall::compile();
+
+	    if ($param->{verbose}) {
+		my (undef, $ipset_changes) = PVE::Firewall::get_ipset_cmdlist($ipset_ruleset, 1);
+		my (undef, $ruleset_changes) = PVE::Firewall::get_rulset_cmdlist($ruleset, 1);
+		if ($ipset_changes || $ruleset_changes) {
+		    print "detected changes\n";
+		} else {
+		    print "no changes\n";
+		}
+	    }
 	};
 
 	PVE::Firewall::run_locked($code);
@@ -106,12 +115,12 @@ __PACKAGE__->register_method ({
 
 	    my $res = { status => $status };
 	    if ($status eq 'active') {
-		my $ruleset = PVE::Firewall::compile();
-		my $cmdlist = PVE::Firewall::get_rulset_cmdlist($ruleset);
+		my ($ruleset, $hostfw_conf, $ipset_ruleset) = PVE::Firewall::compile();
 
-		if ($cmdlist ne "*filter\nCOMMIT\n") {
-		    $res->{changes} = 1;
-		}
+		my (undef, $ipset_changes) = PVE::Firewall::get_ipset_cmdlist($ipset_ruleset);
+		my (undef, $ruleset_changes) = PVE::Firewall::get_rulset_cmdlist($ruleset);
+		# fixme: ipset changes
+		$res->{changes} = ($ipset_changes || $ruleset_changes) ? 1 : 0;
 	    } 
 
 	    return $res;

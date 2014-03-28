@@ -863,6 +863,15 @@ sub iptables_get_chains {
     return $res;
 }
 
+sub ipset_chain_digest {
+    my ($rules) = @_;
+    my $digest = Digest::SHA->new('sha1');
+    foreach my $rule (sort @$rules) { # note: sorted
+	$digest->add($rule);
+    }
+    return $digest->b64digest;
+}
+
 sub ipset_get_chains {
 
     my $res = {};
@@ -874,22 +883,18 @@ sub ipset_get_chains {
 	return if $line =~ m/^#/;
 	return if $line =~ m/^\s*$/;
 	if ($line =~ m/^(\S+)\s(\S+)\s(\S+)/) {
-	   push @{$chains->{$2}}, $line;
+	    push @{$chains->{$2}}, $line;
 	} else {
 	    # simply ignore the rest
 	    return;
 	}
     };
 
-    run_command(" /usr/sbin/ipset save", outfunc => $parser);
+    run_command("/usr/sbin/ipset save", outfunc => $parser);
 
-    #comptute sig for each chain
-    foreach my $chain (keys %$chains){
-	my $digest = Digest::SHA->new('sha1');
-	foreach my $rule (@{$chains->{$chain}}) {
-	    $digest->add($rule);
-	}
-	$res->{$chain} = $digest->b64digest;
+    # compute digest for each chain
+    foreach my $chain (keys %$chains) {
+	$res->{$chain} = ipset_chain_digest($chains->{$chain});
     }
 
     return $res;
@@ -1786,16 +1791,17 @@ sub parse_group_fw_rules {
 	    next;
 	}
 
-	if($section eq 'rules'){
+	if ($section eq 'rules') {
 	    my $rule;
 	    eval { $rule = parse_fw_rule($line, 0, 0); };
 	    if (my $err = $@) {
 		warn "$prefix: $err";
 		next;
 	    }
-	push @{$res->{$section}->{$group}}, $rule;
+	    push @{$res->{$section}->{$group}}, $rule;
 
-	}elsif($section eq 'ipset'){
+	} elsif ($section eq 'ipset') {
+	    chomp $line;
 	    my $ip;
 	    if (!Net::IP->new($line)) {
 		warn "$prefix: $line is not an valid ip address";
@@ -2188,11 +2194,7 @@ sub get_ruleset_status {
     my $statushash = {};
 
     foreach my $chain (sort keys %$ruleset) {
-	my $digest = Digest::SHA->new('sha1');
-	foreach my $cmd (@{$ruleset->{$chain}}) {
-	     $digest->add("$cmd\n");
-	}
-	my $sig = $digest->b64digest;
+	my $sig = ipset_chain_digest($ruleset->{$chain});
 	$statushash->{$chain}->{sig} = $sig;
 
 	my $oldsig = $active_chains->{$chain};
@@ -2219,14 +2221,8 @@ sub get_ruleset_status {
 	    print "delete $chain ($sig)\n" if $verbose;
 	}
     }
-
+    
     return $statushash;
-}
-
-sub print_ruleset {
-    my ($ruleset) = @_;
-
-    get_ruleset_status($ruleset, 1);
 }
 
 sub print_sig_rule {
@@ -2297,9 +2293,11 @@ sub get_rulset_cmdlist {
 	$cmdlist .= "-X $chain\n";
     }
 
+    my $changes = $cmdlist ne "*filter\n" ? 1 : 0;
+ 
     $cmdlist .= "COMMIT\n";
 
-    return $cmdlist;
+    return wantarray ? ($cmdlist, $changes) : $cmdlist;
 }
 
 sub get_ipset_cmdlist {
@@ -2330,18 +2328,20 @@ sub get_ipset_cmdlist {
 	    $cmdlist .= "swap $chain_swap $chain\n";
 	    $cmdlist .= "flush $chain_swap\n";
 	    $cmdlist .= "destroy $chain_swap\n";
-
         }
 
     }
 
     foreach my $chain (keys %$statushash) {
 	next if $statushash->{$chain}->{action} ne 'delete';
+
 	$cmdlist .= "flush $chain\n";
 	$cmdlist .= "destroy $chain\n";
     }
 
-    return $cmdlist;
+    my $changes = $cmdlist ? 1 : 0;
+
+    return wantarray ? ($cmdlist, $changes) : $cmdlist;
 }
 
 sub apply_ruleset {
@@ -2354,6 +2354,8 @@ sub apply_ruleset {
     my $ipsetcmdlist = get_ipset_cmdlist($ipset_ruleset, $verbose);
 
     my $cmdlist = get_rulset_cmdlist($ruleset, $verbose);
+
+    print $ipsetcmdlist if $verbose;
 
     print $cmdlist if $verbose;
 
@@ -2406,7 +2408,7 @@ sub update {
     my $code = sub {
 	my $status = read_pvefw_status();
 
-	my ($ruleset, $hostfw_conf, $ipset_ruleset) = PVE::Firewall::compile();
+	my ($ruleset, $hostfw_conf, $ipset_ruleset) = compile();
 
 	if ($start || $status eq 'active') {
 
