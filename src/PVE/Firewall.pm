@@ -1468,9 +1468,9 @@ sub enable_host_firewall {
 
 sub generate_group_rules {
     my ($ruleset, $cluster_conf, $group) = @_;
-    die "no such security group '$group'\n" if !$cluster_conf->{rules}->{$group};
+    die "no such security group '$group'\n" if !$cluster_conf->{groups}->{$group};
 
-    my $rules = $cluster_conf->{rules}->{$group};
+    my $rules = $cluster_conf->{groups}->{$group};
 
     my $chain = "GROUP-${group}-IN";
 
@@ -1640,6 +1640,22 @@ sub parse_hostfw_option {
     return ($opt, $value);
 }
 
+sub parse_clusterfw_option {
+    my ($line) = @_;
+
+    my ($opt, $value);
+
+    if ($line =~ m/^(enable):\s*(0|1)\s*$/i) {
+	$opt = lc($1);
+	$value = int($2);
+    } else {
+	chomp $line;
+	die "can't parse option '$line'\n"
+    }
+
+    return ($opt, $value);
+}
+
 sub parse_vm_fw_rules {
     my ($filename, $fh) = @_;
 
@@ -1748,13 +1764,13 @@ sub parse_host_fw_rules {
     return $res;
 }
 
-sub parse_group_fw_rules {
+sub parse_cluster_fw_rules {
     my ($filename, $fh) = @_;
 
     my $section;
     my $group;
 
-    my $res = { rules => {}, ipset => {} };
+    my $res = { rules => {}, options => {}, groups => {}, ipset => {} };
 
     my $digest = Digest::SHA->new('sha1');
 
@@ -1767,33 +1783,56 @@ sub parse_group_fw_rules {
 	my $linenr = $fh->input_line_number();
 	my $prefix = "$filename (line $linenr)";
 
+	if ($line =~ m/^\[options\]$/i) {
+	    $section = 'options';
+	    next;
+	}
+
 	if ($line =~ m/^\[group\s+(\S+)\]\s*$/i) {
-	    $section = 'rules';
+	    $section = 'groups';
 	    $group = lc($1);
 	    next;
 	}
 
+	if ($line =~ m/^\[rules\]$/i) {
+	    $section = 'rules';
+	    next;
+	}
+    
 	if ($line =~ m/^\[ipgroup\s+(\S+)\]\s*$/i) {
 	    $section = 'ipset';
 	    $group = lc($1);
 	    $res->{$section}->{$group}->{type} = 'hash:ip family inet hashsize 1024 maxelem 65536 ';
-
 	    next;
 	}
+
 	if ($line =~ m/^\[netgroup\s+(\S+)\]\s*$/i) {
 	    $section = 'ipset';
 	    $group = lc($1);
 	    $res->{$section}->{$group}->{type} = 'hash:net family inet hashsize 1024 maxelem 65536 ';
-
 	    next;
 	}
 
-	if (!$section || !$group) {
+	if (!$section) {
 	    warn "$prefix: skip line - no section";
 	    next;
 	}
 
-	if ($section eq 'rules') {
+	if ($section eq 'options') {
+	    eval {
+		my ($opt, $value) = parse_clusterfw_option($line);
+		$res->{options}->{$opt} = $value;
+	    };
+	    warn "$prefix: $@" if $@;
+	} elsif ($section eq 'rules') {
+	    my $rule;
+	    eval { $rule = parse_fw_rule($line, 1, 1); };
+	    if (my $err = $@) {
+		warn "$prefix: $err";
+		next;
+	    }
+	    push @{$res->{$section}}, $rule;
+	} elsif ($section eq 'groups') {
 	    my $rule;
 	    eval { $rule = parse_fw_rule($line, 0, 0); };
 	    if (my $err = $@) {
@@ -1801,7 +1840,6 @@ sub parse_group_fw_rules {
 		next;
 	    }
 	    push @{$res->{$section}->{$group}}, $rule;
-
 	} elsif ($section eq 'ipset') {
 	    chomp $line;
 	    my $ip;
@@ -1811,8 +1849,6 @@ sub parse_group_fw_rules {
 	    }
 	    push @{$res->{$section}->{$group}->{ip}}, $line;
 	}
-
-	
     }
 
     $res->{digest} = $digest->b64digest;
@@ -2015,39 +2051,66 @@ sub load_clusterfw_conf {
 
     my $cluster_conf = {};
      if (my $fh = IO::File->new($clusterfw_conf_filename, O_RDONLY)) {
-	$cluster_conf = parse_group_fw_rules($clusterfw_conf_filename, $fh);
+	$cluster_conf = parse_cluster_fw_rules($clusterfw_conf_filename, $fh);
     }
 
     return $cluster_conf;
 }
+
+my $rules_to_conf = sub {
+    my ($rules, $need_iface) = @_;
+
+    my $raw = '';
+
+    foreach my $rule (@$rules) {
+	if ($rule->{type} eq  'in' || $rule->{type} eq 'out') {
+	    $raw .= '|' if defined($rule->{enable}) && !$rule->{enable};
+	    $raw .= uc($rule->{type});
+	    $raw .= " " . $rule->{action};
+	    $raw .= " " . ($rule->{iface} || '-') if $need_iface;
+	    $raw .= " " . ($rule->{source} || '-');
+	    $raw .= " " . ($rule->{dest} || '-');
+	    $raw .= " " . ($rule->{proto} || '-');
+	    $raw .= " " . ($rule->{dport} || '-');
+	    $raw .= " " . ($rule->{sport} || '-');
+	    $raw .= " # " . encode('utf8', $rule->{comment}) 
+		if $rule->{comment} && $rule->{comment} !~ m/^\s*$/;
+	    $raw .= "\n";
+	} else {
+	    die "implement me '$rule->{type}'";
+	}
+    }
+
+    return $raw;
+};
 
 sub save_clusterfw_conf {
     my ($cluster_conf) = @_;
 
     my $raw = '';
 
-    foreach my $group (sort keys %{$cluster_conf->{rules}}) {
-	my $rules = $cluster_conf->{rules}->{$group};
-	$raw .= "[group $group]\n\n";
-
-	foreach my $rule (@$rules) {
-	    if ($rule->{type} eq  'in' || $rule->{type} eq 'out') {
-		$raw .= '|' if defined($rule->{enable}) && !$rule->{enable};
-		$raw .= uc($rule->{type});
-		$raw .= " " . $rule->{action};
-		$raw .= " " . ($rule->{source} || '-');
-		$raw .= " " . ($rule->{dest} || '-');
-		$raw .= " " . ($rule->{proto} || '-');
-		$raw .= " " . ($rule->{dport} || '-');
-		$raw .= " " . ($rule->{sport} || '-');
-		$raw .= " # " . encode('utf8', $rule->{comment}) 
-		    if $rule->{comment} && $rule->{comment} !~ m/^\s*$/;
-		$raw .= "\n";
-	    } else {
-		die "implement me '$rule->{type}'";
-	    }
+    my $options = $cluster_conf->{options};
+    if (scalar(keys %$options)) {
+	$raw .= "[OPTIONS]\n\n";
+	foreach my $opt (keys %$options) {
+	    $raw .= "$opt: $options->{$opt}\n";
 	}
+	$raw .= "\n";
+    }
 
+    # fixme: save ipset
+
+    my $rules = $cluster_conf->{rules};
+    if (scalar(@$rules)) {
+	$raw .= "[RULES]\n\n";
+	$raw .= &$rules_to_conf($rules, 1);
+	$raw .= "\n";
+    }
+
+    foreach my $group (sort keys %{$cluster_conf->{groups}}) {
+	my $rules = $cluster_conf->{groups}->{$group};
+	$raw .= "[group $group]\n\n";
+	$raw .= &$rules_to_conf($rules, 0);
 	$raw .= "\n";
     }
 

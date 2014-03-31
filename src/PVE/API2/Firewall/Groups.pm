@@ -42,8 +42,8 @@ __PACKAGE__->register_method({
 	my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
 
 	my $res = [];
-	foreach my $group (keys %{$cluster_conf->{rules}}) {
-	    push @$res, { name => $group, count => scalar(@{$cluster_conf->{rules}->{$group}}) };
+	foreach my $group (keys %{$cluster_conf->{groups}}) {
+	    push @$res, { name => $group, count => scalar(@{$cluster_conf->{groups}->{$group}}) };
 	}
 
 	return $res;
@@ -82,7 +82,7 @@ __PACKAGE__->register_method({
 
 	my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
 
-	my $rules = $cluster_conf->{rules}->{$param->{group}};
+	my $rules = $cluster_conf->{groups}->{$param->{group}};
 	die "no such security group\n" if !defined($rules);
 
 	my $digest = $cluster_conf->{digest};
@@ -131,7 +131,7 @@ __PACKAGE__->register_method({
 
 	my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
 
-	my $rules = $cluster_conf->{rules}->{$param->{group}};
+	my $rules = $cluster_conf->{groups}->{$param->{group}};
 	die "no such security group\n" if !defined($rules);
 
 	my $digest = $cluster_conf->{digest};
@@ -168,7 +168,7 @@ __PACKAGE__->register_method({
 
 	my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
 
-	my $rules = $cluster_conf->{rules}->{$param->{group}};
+	my $rules = $cluster_conf->{groups}->{$param->{group}};
 	die "no such security group\n" if !defined($rules);
 
 	my $digest = $cluster_conf->{digest};
@@ -213,7 +213,7 @@ __PACKAGE__->register_method({
 
 	my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
 
-	my $rules = $cluster_conf->{rules}->{$param->{group}};
+	my $rules = $cluster_conf->{groups}->{$param->{group}};
 	die "no such security group\n" if !defined($rules);
 
 	my $digest = $cluster_conf->{digest};
@@ -235,7 +235,7 @@ __PACKAGE__->register_method({
 	    }
 	    push @$newrules, $rule if $moveto >= scalar(@$rules);
 
-	    $cluster_conf->{rules}->{$param->{group}} = $newrules;
+	    $cluster_conf->{groups}->{$param->{group}} = $newrules;
 	} else {
 	    PVE::Firewall::copy_rule_data($rule, $param);
 	}
@@ -273,7 +273,7 @@ __PACKAGE__->register_method({
 
 	my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
 
-	my $rules = $cluster_conf->{rules}->{$param->{group}};
+	my $rules = $cluster_conf->{groups}->{$param->{group}};
 	die "no such security group\n" if !defined($rules);
 
 	my $digest = $cluster_conf->{digest};
