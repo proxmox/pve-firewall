@@ -869,6 +869,15 @@ sub iptables_get_chains {
     return wantarray ? ($res, $hooks) : $res;
 }
 
+sub iptables_chain_digest {
+    my ($rules) = @_;
+    my $digest = Digest::SHA->new('sha1');
+    foreach my $rule (@$rules) { # order is important
+	$digest->add($rule);
+    }
+    return $digest->b64digest;
+}
+
 sub ipset_chain_digest {
     my ($rules) = @_;
     my $digest = Digest::SHA->new('sha1');
@@ -2261,7 +2270,13 @@ sub get_ruleset_status {
     my $statushash = {};
 
     foreach my $chain (sort keys %$ruleset) {
-	my $sig = ipset_chain_digest($ruleset->{$chain});
+	my $sig;
+	if ($ipset) {
+	    $sig = ipset_chain_digest($ruleset->{$chain});
+	} else {
+	    $sig = iptables_chain_digest($ruleset->{$chain});
+	}
+
 	$statushash->{$chain}->{sig} = $sig;
 
 	my $oldsig = $active_chains->{$chain};
