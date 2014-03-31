@@ -1,3 +1,11 @@
+[OPTIONS]
+
+enable: 1
+
+[RULES]
+
+IN  SSH(ACCEPT) vmbr0
+
 [group group1]
 
 IN  ACCEPT - - tcp 22 -

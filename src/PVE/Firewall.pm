@@ -833,6 +833,8 @@ sub iptables_get_chains {
 
     my $table = '';
 
+    my $hooks = {};
+
     my $parser = sub {
 	my $line = shift;
 
@@ -854,6 +856,8 @@ sub iptables_get_chains {
 	    my ($chain, $sig) = ($1, $2);
 	    return if !&$is_pvefw_chain($chain);
 	    $res->{$chain} = $sig;
+	} elsif ($line =~ m/^-A\s+(INPUT|OUTPUT|FORWARD)\s+-j\s+PVEFW-\1$/) {
+	    $hooks->{$1} = 1;
 	} else {
 	    # simply ignore the rest
 	    return;
@@ -862,7 +866,7 @@ sub iptables_get_chains {
 
     run_command("/sbin/iptables-save", outfunc => $parser);
 
-    return $res;
+    return wantarray ? ($res, $hooks) : $res;
 }
 
 sub ipset_chain_digest {
@@ -1770,7 +1774,7 @@ sub parse_cluster_fw_rules {
     my $section;
     my $group;
 
-    my $res = { rules => {}, options => {}, groups => {}, ipset => {} };
+    my $res = { rules => [], options => {}, groups => {}, ipset => {} };
 
     my $digest = Digest::SHA->new('sha1');
 
@@ -2463,6 +2467,29 @@ sub update_nf_conntrack_max {
 	PVE::ProcFSTools::write_proc_entry($filename_hashsize, $hashsize);
 	PVE::ProcFSTools::write_proc_entry($filename_nf_conntrack_max, $max);
     }
+}
+
+sub remove_pvefw_chains {
+
+    my ($chash, $hooks) = iptables_get_chains();
+    my $cmdlist = "*filter\n";
+
+    foreach my $h (qw(INPUT OUTPUT FORWARD)) {
+	if ($hooks->{$h}) {
+	    $cmdlist .= "-D $h -j PVEFW-$h\n";
+	}
+    }
+ 
+    foreach my $chain (keys %$chash) {
+	$cmdlist .= "-F $chain\n";
+    }
+
+    foreach my $chain (keys %$chash) {
+	$cmdlist .= "-X $chain\n";
+    }
+    $cmdlist .= "COMMIT\n";
+
+    iptables_restore_cmdlist($cmdlist);
 }
 
 sub update {

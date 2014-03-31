@@ -196,33 +196,7 @@ __PACKAGE__->register_method ({
 	my ($param) = @_;
 
 	my $code = sub {
-
-	    my $chash = PVE::Firewall::iptables_get_chains();
-	    my $cmdlist = "*filter\n";
-	    my $rule = "INPUT -j PVEFW-INPUT";
-	    if (PVE::Firewall::iptables_rule_exist($rule)) {
-		$cmdlist .= "-D $rule\n";
-	    }
-	    $rule = "OUTPUT -j PVEFW-OUTPUT";
-	    if (PVE::Firewall::iptables_rule_exist($rule)) {
-		$cmdlist .= "-D $rule\n";
-	    }
-
-	    $rule = "FORWARD -j PVEFW-FORWARD";
-	    if (PVE::Firewall::iptables_rule_exist($rule)) {
-		$cmdlist .= "-D $rule\n";
-	    }
-
-	    foreach my $chain (keys %$chash) {
-		$cmdlist .= "-F $chain\n";
-	    }
-	    foreach my $chain (keys %$chash) {
-		$cmdlist .= "-X $chain\n";
-	    }
-	    $cmdlist .= "COMMIT\n";
-
-	    PVE::Firewall::iptables_restore_cmdlist($cmdlist);
-
+	    PVE::Firewall::remove_pvefw_chains();
 	    PVE::Firewall::save_pvefw_status('stopped');
 	};
 
