@@ -19,22 +19,10 @@ IN  ACCEPT 10.0.0.2
 IN  ACCEPT 10.0.0.2 
 
 
-#ipset hash:ip
-[ipgroup ipgroup1]
+[netgroup mynetgroup]
 
-192.168.0.1
-192.168.0.2
-192.168.0.3
-
-
-[ipgroup ipgroup2]
-
-192.168.0.3
-192.168.0.4
-
-#ipset hash:net
-[netgroup netgroup1]
-
+192.168.0.1 #mycomment
+172.16.0.10
 192.168.0.0/24
-10.0.0.0/8
+! 10.0.0.0/8  #nomatch
 
