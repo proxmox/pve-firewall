@@ -791,12 +791,6 @@ sub enable_bridge_firewall {
 
 my $rule_format = "%-15s %-30s %-30s %-15s %-15s %-15s\n";
 
-sub iptables {
-    my ($cmd) = @_;
-
-    run_command("/sbin/iptables $cmd", outfunc => sub {}, errfunc => sub {});
-}
-
 sub iptables_restore_cmdlist {
     my ($cmdlist) = @_;
 
@@ -914,28 +908,6 @@ sub ipset_get_chains {
     }
 
     return $res;
-}
-
-sub iptables_chain_exist {
-    my ($chain) = @_;
-
-    eval{
-	iptables("-n --list $chain");
-    };
-    return undef if $@;
-
-    return 1;
-}
-
-sub iptables_rule_exist {
-    my ($rule) = @_;
-
-    eval{
-	iptables("-C $rule");
-    };
-    return undef if $@;
-
-    return 1;
 }
 
 sub ruleset_generate_cmdstr {
