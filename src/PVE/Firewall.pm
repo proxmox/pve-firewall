@@ -2299,7 +2299,7 @@ sub print_sig_rule {
     return "-A $chain -m comment --comment \"PVESIG:$sig\"\n";
 }
 
-sub get_rulset_cmdlist {
+sub get_ruleset_cmdlist {
     my ($ruleset, $verbose) = @_;
 
     my $cmdlist = "*filter\n"; # we pass this to iptables-restore;
@@ -2420,7 +2420,7 @@ sub apply_ruleset {
 
     my $ipsetcmdlist = get_ipset_cmdlist($ipset_ruleset, $verbose);
 
-    my $cmdlist = get_rulset_cmdlist($ruleset, $verbose);
+    my $cmdlist = get_ruleset_cmdlist($ruleset, $verbose);
 
     print $ipsetcmdlist if $verbose;
 
