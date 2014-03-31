@@ -880,6 +880,7 @@ sub iptables_chain_digest {
 
 sub ipset_chain_digest {
     my ($rules) = @_;
+
     my $digest = Digest::SHA->new('sha1');
     foreach my $rule (sort @$rules) { # note: sorted
 	$digest->add($rule);
@@ -2258,24 +2259,12 @@ sub compile {
 }
 
 sub get_ruleset_status {
-    my ($ruleset, $verbose, $ipset) = @_;
-
-    my $active_chains = undef;
-    if($ipset){
-	$active_chains = ipset_get_chains();
-    }else{
-	$active_chains = iptables_get_chains();
-    }
+    my ($ruleset, $active_chains, $digest_fn, $verbose) = @_;
 
     my $statushash = {};
 
     foreach my $chain (sort keys %$ruleset) {
-	my $sig;
-	if ($ipset) {
-	    $sig = ipset_chain_digest($ruleset->{$chain});
-	} else {
-	    $sig = iptables_chain_digest($ruleset->{$chain});
-	}
+	my $sig = &$digest_fn($ruleset->{$chain});
 
 	$statushash->{$chain}->{sig} = $sig;
 
@@ -2318,8 +2307,9 @@ sub get_ruleset_cmdlist {
     my ($ruleset, $verbose) = @_;
 
     my $cmdlist = "*filter\n"; # we pass this to iptables-restore;
-
-    my $statushash = get_ruleset_status($ruleset, $verbose);
+ 
+    my ($active_chains, $hooks) = iptables_get_chains();
+    my $statushash = get_ruleset_status($ruleset, $active_chains, \&iptables_chain_digest, $verbose);
 
     # create missing chains first
     foreach my $chain (sort keys %$ruleset) {
@@ -2330,18 +2320,10 @@ sub get_ruleset_cmdlist {
 	$cmdlist .= ":$chain - [0:0]\n";
     }
 
-    my $rule = "INPUT -j PVEFW-INPUT";
-    if (!PVE::Firewall::iptables_rule_exist($rule)) {
-	$cmdlist .= "-A $rule\n";
-    }
-    $rule = "OUTPUT -j PVEFW-OUTPUT";
-    if (!PVE::Firewall::iptables_rule_exist($rule)) {
-	$cmdlist .= "-A $rule\n";
-    }
-
-    $rule = "FORWARD -j PVEFW-FORWARD";
-    if (!PVE::Firewall::iptables_rule_exist($rule)) {
-	$cmdlist .= "-A $rule\n";
+    foreach my $h (qw(INPUT OUTPUT FORWARD)) {
+	if (!$hooks->{$h}) {
+	    $cmdlist .= "-A $h -j PVEFW-$h\n";
+	}
     }
 
     foreach my $chain (sort keys %$ruleset) {
@@ -2376,7 +2358,7 @@ sub get_ruleset_cmdlist {
     }
 
     my $changes = $cmdlist ne "*filter\n" ? 1 : 0;
- 
+
     $cmdlist .= "COMMIT\n";
 
     return wantarray ? ($cmdlist, $changes) : $cmdlist;
@@ -2387,7 +2369,8 @@ sub get_ipset_cmdlist {
 
     my $cmdlist = "";
 
-    my $statushash = get_ruleset_status($ruleset, $verbose, 1);
+    my $active_chains = ipset_get_chains();
+    my $statushash = get_ruleset_status($ruleset, $active_chains, \&ipset_chain_digest, $verbose);
 
     foreach my $chain (sort keys %$ruleset) {
 	my $stat = $statushash->{$chain};
@@ -2446,7 +2429,8 @@ sub apply_ruleset {
     iptables_restore_cmdlist($cmdlist);
 
     # test: re-read status and check if everything is up to date
-    my $statushash = get_ruleset_status($ruleset);
+    my $active_chains = iptables_get_chains();
+    my $statushash = get_ruleset_status($ruleset, $active_chains, \&iptables_chain_digest, $verbose);
 
     my $errors;
     foreach my $chain (sort keys %$ruleset) {
