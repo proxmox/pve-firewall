@@ -16,6 +16,8 @@ use Net::IP;
 use PVE::Tools qw(run_command lock_file);
 use Encode;
 
+my $clusterfw_conf_filename = "/etc/pve/firewall/cluster.fw";
+
 # dynamically include PVE::QemuServer and PVE::OpenVZ 
 # to avoid dependency problems
 my $have_qemu_server;
@@ -1225,7 +1227,7 @@ sub ruleset_create_vm_chain {
 }
 
 sub ruleset_generate_vm_rules {
-    my ($ruleset, $rules, $groups_conf, $chain, $netid, $direction, $options) = @_;
+    my ($ruleset, $rules, $cluster_conf, $chain, $netid, $direction, $options) = @_;
 
     my $lc_direction = lc($direction);
 
@@ -1235,7 +1237,7 @@ sub ruleset_generate_vm_rules {
 	if ($rule->{type} eq 'group') {
 	    my $group_chain = "GROUP-$rule->{action}-$direction"; 
 	    if(!ruleset_chain_exist($ruleset, $group_chain)){
-		generate_group_rules($ruleset, $groups_conf, $rule->{action});
+		generate_group_rules($ruleset, $cluster_conf, $rule->{action});
 	    }
 	    ruleset_addrule($ruleset, $chain, "-j $group_chain");
 	    if ($direction eq 'OUT'){
@@ -1299,7 +1301,7 @@ sub ruleset_generate_vm_ipsrules {
 }
 
 sub generate_venet_rules_direction {
-    my ($ruleset, $groups_conf, $vmfw_conf, $vmid, $ip, $direction) = @_;
+    my ($ruleset, $cluster_conf, $vmfw_conf, $vmid, $ip, $direction) = @_;
 
     parse_address_list($ip); # make sure we have a valid $ip list
 
@@ -1314,7 +1316,7 @@ sub generate_venet_rules_direction {
 
     ruleset_create_vm_chain($ruleset, $chain, $options, undef, $direction);
 
-    ruleset_generate_vm_rules($ruleset, $rules, $groups_conf, $chain, 'venet', $direction);
+    ruleset_generate_vm_rules($ruleset, $rules, $cluster_conf, $chain, 'venet', $direction);
 
     # implement policy
     my $policy;
@@ -1354,7 +1356,7 @@ sub generate_venet_rules_direction {
 }
 
 sub generate_tap_rules_direction {
-    my ($ruleset, $groups_conf, $iface, $netid, $macaddr, $vmfw_conf, $vmid, $bridge, $direction) = @_;
+    my ($ruleset, $cluster_conf, $iface, $netid, $macaddr, $vmfw_conf, $vmid, $bridge, $direction) = @_;
 
     my $lc_direction = lc($direction);
 
@@ -1367,7 +1369,7 @@ sub generate_tap_rules_direction {
 
     ruleset_create_vm_chain($ruleset, $tapchain, $options, $macaddr, $direction);
 
-    ruleset_generate_vm_rules($ruleset, $rules, $groups_conf, $tapchain, $netid, $direction, $options);
+    ruleset_generate_vm_rules($ruleset, $rules, $cluster_conf, $tapchain, $netid, $direction, $options);
 
     ruleset_generate_vm_ipsrules($ruleset, $options, $direction, $iface, $bridge);
 
@@ -1395,7 +1397,7 @@ sub generate_tap_rules_direction {
 }
 
 sub enable_host_firewall {
-    my ($ruleset, $hostfw_conf, $groups_conf) = @_;
+    my ($ruleset, $hostfw_conf, $cluster_conf) = @_;
 
     # fixme: allow security groups
 
@@ -1465,10 +1467,10 @@ sub enable_host_firewall {
 }
 
 sub generate_group_rules {
-    my ($ruleset, $groups_conf, $group) = @_;
-    die "no such security group '$group'\n" if !$groups_conf->{rules}->{$group};
+    my ($ruleset, $cluster_conf, $group) = @_;
+    die "no such security group '$group'\n" if !$cluster_conf->{rules}->{$group};
 
-    my $rules = $groups_conf->{rules}->{$group};
+    my $rules = $cluster_conf->{rules}->{$group};
 
     my $chain = "GROUP-${group}-IN";
 
@@ -2009,25 +2011,23 @@ sub read_proc_net_route {
     return $res;
 }
 
-sub load_security_groups {
+sub load_clusterfw_conf {
 
-    my $groups_conf = {};
-    my $filename = "/etc/pve/firewall/groups.fw";
-    if (my $fh = IO::File->new($filename, O_RDONLY)) {
-	$groups_conf = parse_group_fw_rules($filename, $fh);
+    my $cluster_conf = {};
+     if (my $fh = IO::File->new($clusterfw_conf_filename, O_RDONLY)) {
+	$cluster_conf = parse_group_fw_rules($clusterfw_conf_filename, $fh);
     }
 
-    return ($groups_conf);
+    return $cluster_conf;
 }
 
-sub save_security_groups {
-    my ($groups_conf) = @_;
+sub save_clusterfw_conf {
+    my ($cluster_conf) = @_;
 
     my $raw = '';
-    my $filename = "/etc/pve/firewall/groups.fw";
 
-    foreach my $group (sort keys %{$groups_conf->{rules}}) {
-	my $rules = $groups_conf->{rules}->{$group};
+    foreach my $group (sort keys %{$cluster_conf->{rules}}) {
+	my $rules = $cluster_conf->{rules}->{$group};
 	$raw .= "[group $group]\n\n";
 
 	foreach my $rule (@$rules) {
@@ -2051,7 +2051,7 @@ sub save_security_groups {
 	$raw .= "\n";
     }
 
-    PVE::Tools::file_set_contents($filename, $raw);
+    PVE::Tools::file_set_contents($clusterfw_conf_filename, $raw);
 }
 
 sub load_hostfw_conf {
@@ -2070,10 +2070,10 @@ sub compile {
 
     my $routing_table = read_proc_net_route();
 
-    my $groups_conf = load_security_groups();
+    my $cluster_conf = load_clusterfw_conf();
 
     my $ipset_ruleset = {};
-    generate_ipset_chains($ipset_ruleset, $groups_conf);
+    generate_ipset_chains($ipset_ruleset, $cluster_conf);
 
     my $ruleset = {};
 
@@ -2089,7 +2089,7 @@ sub compile {
 
     my $hostfw_enable = !(defined($hostfw_options->{enable}) && ($hostfw_options->{enable} == 0));
 
-    enable_host_firewall($ruleset, $hostfw_conf, $groups_conf) if $hostfw_enable;
+    enable_host_firewall($ruleset, $hostfw_conf, $cluster_conf) if $hostfw_enable;
 
     # generate firewall rules for QEMU VMs
     foreach my $vmid (keys %{$vmdata->{qemu}}) {
@@ -2112,9 +2112,9 @@ sub compile {
 	    generate_bridge_chains($ruleset, $hostfw_conf, $bridge, $routing_table);
 
 	    my $macaddr = $net->{macaddr};
-	    generate_tap_rules_direction($ruleset, $groups_conf, $iface, $netid, $macaddr, 
+	    generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr, 
 					 $vmfw_conf, $vmid, $bridge, 'IN');
-	    generate_tap_rules_direction($ruleset, $groups_conf, $iface, $netid, $macaddr, 
+	    generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr, 
 					 $vmfw_conf, $vmid, $bridge, 'OUT');
 	}
     }
@@ -2129,8 +2129,8 @@ sub compile {
 
 	if ($conf->{ip_address} && $conf->{ip_address}->{value}) {
 	    my $ip = $conf->{ip_address}->{value};
-	    generate_venet_rules_direction($ruleset, $groups_conf, $vmfw_conf, $vmid, $ip, 'IN');
-	    generate_venet_rules_direction($ruleset, $groups_conf, $vmfw_conf, $vmid, $ip, 'OUT');
+	    generate_venet_rules_direction($ruleset, $cluster_conf, $vmfw_conf, $vmid, $ip, 'IN');
+	    generate_venet_rules_direction($ruleset, $cluster_conf, $vmfw_conf, $vmid, $ip, 'OUT');
 	}
 
 	if ($conf->{netif} && $conf->{netif}->{value}) {
@@ -2147,9 +2147,9 @@ sub compile {
 
 		my $macaddr = $d->{mac};
 		my $iface = $d->{host_ifname};
-		generate_tap_rules_direction($ruleset, $groups_conf, $iface, $netid, $macaddr, 
+		generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr, 
 					     $vmfw_conf, $vmid, $bridge, 'IN');
-		generate_tap_rules_direction($ruleset, $groups_conf, $iface, $netid, $macaddr, 
+		generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr, 
 					     $vmfw_conf, $vmid, $bridge, 'OUT');
 	    }
 	}

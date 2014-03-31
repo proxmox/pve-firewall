@@ -39,11 +39,11 @@ __PACKAGE__->register_method({
     code => sub {
 	my ($param) = @_;
 
-	my $groups_conf = PVE::Firewall::load_security_groups();
+	my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
 
 	my $res = [];
-	foreach my $group (keys %{$groups_conf->{rules}}) {
-	    push @$res, { name => $group, count => scalar(@{$groups_conf->{rules}->{$group}}) };
+	foreach my $group (keys %{$cluster_conf->{rules}}) {
+	    push @$res, { name => $group, count => scalar(@{$cluster_conf->{rules}->{$group}}) };
 	}
 
 	return $res;
@@ -80,12 +80,12 @@ __PACKAGE__->register_method({
     code => sub {
 	my ($param) = @_;
 
-	my $groups_conf = PVE::Firewall::load_security_groups();
+	my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
 
-	my $rules = $groups_conf->{rules}->{$param->{group}};
+	my $rules = $cluster_conf->{rules}->{$param->{group}};
 	die "no such security group\n" if !defined($rules);
 
-	my $digest = $groups_conf->{digest};
+	my $digest = $cluster_conf->{digest};
 
 	my $res = [];
 
@@ -129,12 +129,12 @@ __PACKAGE__->register_method({
     code => sub {
 	my ($param) = @_;
 
-	my $groups_conf = PVE::Firewall::load_security_groups();
+	my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
 
-	my $rules = $groups_conf->{rules}->{$param->{group}};
+	my $rules = $cluster_conf->{rules}->{$param->{group}};
 	die "no such security group\n" if !defined($rules);
 
-	my $digest = $groups_conf->{digest};
+	my $digest = $cluster_conf->{digest};
 	# fixme: check digest
 	
 	die "no rule at position $param->{pos}\n" if $param->{pos} >= scalar(@$rules);
@@ -166,12 +166,12 @@ __PACKAGE__->register_method({
     code => sub {
 	my ($param) = @_;
 
-	my $groups_conf = PVE::Firewall::load_security_groups();
+	my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
 
-	my $rules = $groups_conf->{rules}->{$param->{group}};
+	my $rules = $cluster_conf->{rules}->{$param->{group}};
 	die "no such security group\n" if !defined($rules);
 
-	my $digest = $groups_conf->{digest};
+	my $digest = $cluster_conf->{digest};
 		
 	my $rule = { type => 'out', action => 'ACCEPT', enable => 0};
 
@@ -179,7 +179,7 @@ __PACKAGE__->register_method({
 
 	unshift @$rules, $rule;
 
-	PVE::Firewall::save_security_groups($groups_conf);
+	PVE::Firewall::save_clusterfw_conf($cluster_conf);
 
 	return undef;
    }});
@@ -211,12 +211,12 @@ __PACKAGE__->register_method({
     code => sub {
 	my ($param) = @_;
 
-	my $groups_conf = PVE::Firewall::load_security_groups();
+	my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
 
-	my $rules = $groups_conf->{rules}->{$param->{group}};
+	my $rules = $cluster_conf->{rules}->{$param->{group}};
 	die "no such security group\n" if !defined($rules);
 
-	my $digest = $groups_conf->{digest};
+	my $digest = $cluster_conf->{digest};
 	# fixme: check digest
 	
 	die "no rule at position $param->{pos}\n" if $param->{pos} >= scalar(@$rules);
@@ -235,12 +235,12 @@ __PACKAGE__->register_method({
 	    }
 	    push @$newrules, $rule if $moveto >= scalar(@$rules);
 
-	    $groups_conf->{rules}->{$param->{group}} = $newrules;
+	    $cluster_conf->{rules}->{$param->{group}} = $newrules;
 	} else {
 	    PVE::Firewall::copy_rule_data($rule, $param);
 	}
 
-	PVE::Firewall::save_security_groups($groups_conf);
+	PVE::Firewall::save_clusterfw_conf($cluster_conf);
 
 	return undef;
    }});
@@ -271,19 +271,19 @@ __PACKAGE__->register_method({
     code => sub {
 	my ($param) = @_;
 
-	my $groups_conf = PVE::Firewall::load_security_groups();
+	my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
 
-	my $rules = $groups_conf->{rules}->{$param->{group}};
+	my $rules = $cluster_conf->{rules}->{$param->{group}};
 	die "no such security group\n" if !defined($rules);
 
-	my $digest = $groups_conf->{digest};
+	my $digest = $cluster_conf->{digest};
 	# fixme: check digest
 	
 	die "no rule at position $param->{pos}\n" if $param->{pos} >= scalar(@$rules);
 	
 	splice(@$rules, $param->{pos}, 1);
 
-	PVE::Firewall::save_security_groups($groups_conf);
+	PVE::Firewall::save_clusterfw_conf($cluster_conf);
 
 	return undef;
    }});
