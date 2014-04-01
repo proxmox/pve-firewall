@@ -935,7 +935,7 @@ sub ruleset_generate_cmdstr {
 
     if ($source){
         if($source =~ m/^(\+)(\S+)$/){
-	    die "no such netgroup $2" if !$cluster_conf->{ipset}->{$2};
+	    die "no such ipset $2" if !$cluster_conf->{ipset}->{$2};
 	    push @cmd, "-m set --match-set PVEFW-$2 src";
 
         }elsif ($source =~ m/^(\d+)\.(\d+).(\d+).(\d+)\-(\d+)\.(\d+).(\d+).(\d+)$/){
@@ -948,7 +948,7 @@ sub ruleset_generate_cmdstr {
 
     if ($dest){
         if($dest =~ m/^(\+)(\S+)$/){
-	    die "no such netgroup $2" if !$cluster_conf->{ipset}->{$2};
+	    die "no such ipset $2" if !$cluster_conf->{ipset}->{$2};
 	    push @cmd, "-m set --match-set PVEFW-$2 dst";
 
         }elsif ($dest =~ m/^(\d+)\.(\d+).(\d+).(\d+)\-(\d+)\.(\d+).(\d+).(\d+)$/){
@@ -1812,7 +1812,7 @@ sub parse_cluster_fw_rules {
 	    next;
 	}
     
-	if ($line =~ m/^\[netgroup\s+(\S+)\]\s*$/i) {
+	if ($line =~ m/^\[ipset\s+(\S+)\]\s*$/i) {
 	    $section = 'ipset';
 	    $group = lc($1);
 	    next;

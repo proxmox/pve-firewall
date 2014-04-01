@@ -20,7 +20,7 @@ IN  ACCEPT 10.0.0.1,10.0.0.2,10.0.0.3
 IN  ACCEPT +mynetgroup 
 
 
-[netgroup mynetgroup]
+[ipset myipset]
 
 192.168.0.1 #mycomment
 172.16.0.10
