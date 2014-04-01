@@ -895,7 +895,7 @@ sub ipset_get_chains {
 
 	return if $line =~ m/^#/;
 	return if $line =~ m/^\s*$/;
-	if ($line =~ m/^(?:\S+)\s(\S+)\s(?:\S+).*/) {
+	if ($line =~ m/^(?:\S+)\s(PVEFW-\S+)\s(?:\S+).*/) {
 	    my $chain = $1;
 	    $line =~ s/\s+$//; # delete trailing white space
 	    push @{$chains->{$chain}}, $line;
@@ -936,7 +936,7 @@ sub ruleset_generate_cmdstr {
     if ($source){
         if($source =~ m/^(\+)(\S+)$/){
 	    die "no such netgroup $2" if !$cluster_conf->{ipset}->{$2};
-	    push @cmd, "-m set --match-set $2 src";
+	    push @cmd, "-m set --match-set PVEFW-$2 src";
 
         }elsif ($source =~ m/^(\d+)\.(\d+).(\d+).(\d+)\-(\d+)\.(\d+).(\d+).(\d+)$/){
 	    push @cmd, "-m iprange --src-range $source";
@@ -949,7 +949,7 @@ sub ruleset_generate_cmdstr {
     if ($dest){
         if($dest =~ m/^(\+)(\S+)$/){
 	    die "no such netgroup $2" if !$cluster_conf->{ipset}->{$2};
-	    push @cmd, "-m set --match-set $2 dst";
+	    push @cmd, "-m set --match-set PVEFW-$2 dst";
 
         }elsif ($dest =~ m/^(\d+)\.(\d+).(\d+).(\d+)\-(\d+)\.(\d+).(\d+).(\d+)$/){
 	    push @cmd, "-m iprange --dst-range $dest";
@@ -2054,7 +2054,7 @@ sub generate_ipset_chains {
     my ($ipset_ruleset, $fw_conf) = @_;
 
     foreach my $ipset (keys %{$fw_conf->{ipset}}) {
-	generate_ipset($ipset_ruleset, $ipset, $fw_conf->{ipset}->{$ipset});
+	generate_ipset($ipset_ruleset, "PVEFW-$ipset", $fw_conf->{ipset}->{$ipset});
     }
 }
 
