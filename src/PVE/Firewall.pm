@@ -892,8 +892,10 @@ sub ipset_get_chains {
 
 	return if $line =~ m/^#/;
 	return if $line =~ m/^\s*$/;
-	if ($line =~ m/^(\S+)\s(\S+)\s(\S+)/) {
-	    push @{$chains->{$2}}, $line;
+	if ($line =~ m/^(?:\S+)\s(\S+)\s(?:\S+).*/) {
+	    my $chain = $1;
+	    $line =~ s/\s+$//; # delete trailing white space
+	    push @{$chains->{$chain}}, $line;
 	} else {
 	    # simply ignore the rest
 	    return;
@@ -2404,15 +2406,23 @@ sub apply_ruleset {
 
     update_nf_conntrack_max($hostfw_conf);
 
-    my ($ipset_create_cmdlist, $ipset_delete_cmdlist) = get_ipset_cmdlist($ipset_ruleset, undef, $verbose);
+    my ($ipset_create_cmdlist, $ipset_delete_cmdlist, $ipset_changes) = 
+	get_ipset_cmdlist($ipset_ruleset, undef, $verbose);
 
-    my $cmdlist = get_ruleset_cmdlist($ruleset, $verbose);
+    my ($cmdlist, $changes) = get_ruleset_cmdlist($ruleset, $verbose);
 
-    print $ipset_create_cmdlist if $verbose;
+    if ($verbose) {
+	if ($ipset_changes) {
+	    print "ipset changes:\n";
+	    print $ipset_create_cmdlist if $ipset_create_cmdlist;
+	    print $ipset_delete_cmdlist if $ipset_delete_cmdlist;
+	}
 
-    print $ipset_delete_cmdlist if $verbose;
-
-    print $cmdlist if $verbose;
+	if ($changes) {
+	    print "iptables changes:\n";
+	    print $cmdlist;
+	}
+    }
 
     ipset_restore_cmdlist($ipset_create_cmdlist);
 
@@ -2422,7 +2432,7 @@ sub apply_ruleset {
 
     # test: re-read status and check if everything is up to date
     my $active_chains = iptables_get_chains();
-    my $statushash = get_ruleset_status($ruleset, $active_chains, \&iptables_chain_digest, $verbose);
+    my $statushash = get_ruleset_status($ruleset, $active_chains, \&iptables_chain_digest, 0);
 
     my $errors;
     foreach my $chain (sort keys %$ruleset) {
