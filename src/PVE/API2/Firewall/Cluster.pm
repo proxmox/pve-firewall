@@ -1,0 +1,47 @@
+package PVE::API2::Firewall::Cluster;
+
+use strict;
+use warnings;
+use PVE::JSONSchema qw(get_standard_option);
+
+use PVE::Firewall;
+use PVE::API2::Firewall::Groups;
+
+use Data::Dumper; # fixme: remove
+
+use base qw(PVE::RESTHandler);
+
+__PACKAGE__->register_method ({
+    subclass => "PVE::API2::Firewall::Groups",  
+    path => 'groups',
+});
+
+__PACKAGE__->register_method({
+    name => 'index',
+    path => '',
+    method => 'GET',
+    permissions => { user => 'all' },
+    description => "Directory index.",
+    parameters => {
+    	additionalProperties => 0,
+    },
+    returns => {
+	type => 'array',
+	items => {
+	    type => "object",
+	    properties => {},
+	},
+	links => [ { rel => 'child', href => "{name}" } ],
+    },
+    code => sub {
+	my ($param) = @_;
+
+	my $result = [
+	    { name => 'rules' },
+	    { name => 'options' },
+	    { name => 'groups' },
+	    { name => 'netgroups' },
+	    ];
+
+	return $result;
+    }});

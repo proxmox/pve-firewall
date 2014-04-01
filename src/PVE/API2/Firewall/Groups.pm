@@ -16,12 +16,8 @@ __PACKAGE__->register_method({
     path => '',
     method => 'GET',
     description => "List security groups.",
-    proxyto => 'node',
     parameters => {
     	additionalProperties => 0,
-	properties => {
-	    node => get_standard_option('pve-node'),
-	},
     },
     returns => {
 	type => 'array',
@@ -54,11 +50,9 @@ __PACKAGE__->register_method({
     path => '{group}',
     method => 'GET',
     description => "List security groups rules.",
-    proxyto => 'node',
     parameters => {
     	additionalProperties => 0,
 	properties => {
-	    node => get_standard_option('pve-node'),
 	    group => {
 		description => "Security group name.",
 		type => 'string',
@@ -102,11 +96,9 @@ __PACKAGE__->register_method({
     path => '{group}/{pos}',
     method => 'GET',
     description => "Get single rule data.",
-    proxyto => 'node',
     parameters => {
     	additionalProperties => 0,
 	properties => {
-	    node => get_standard_option('pve-node'),
 	    group => {
 		description => "Security group name.",
 		type => 'string',
@@ -150,12 +142,10 @@ __PACKAGE__->register_method({
     path => '{group}',
     method => 'POST',
     description => "Create new rule.",
-    proxyto => 'node',
     protected => 1,
     parameters => {
     	additionalProperties => 0,
 	properties => PVE::Firewall::add_rule_properties({
-	    node => get_standard_option('pve-node'),
 	    group => {
 		description => "Security group name.",
 		type => 'string',
@@ -189,12 +179,10 @@ __PACKAGE__->register_method({
     path => '{group}/{pos}',
     method => 'PUT',
     description => "Modify rule data.",
-    proxyto => 'node',
     protected => 1,
     parameters => {
     	additionalProperties => 0,
 	properties => PVE::Firewall::add_rule_properties({
-	    node => get_standard_option('pve-node'),
 	    group => {
 		description => "Security group name.",
 		type => 'string',
@@ -250,12 +238,10 @@ __PACKAGE__->register_method({
     path => '{group}/{pos}',
     method => 'DELETE',
     description => "Delete rule.",
-    proxyto => 'node',
     protected => 1,
     parameters => {
     	additionalProperties => 0,
 	properties => {
-	    node => get_standard_option('pve-node'),
 	    group => {
 		description => "Security group name.",
 		type => 'string',

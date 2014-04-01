@@ -1,4 +1,5 @@
 LIB_SOURCES=			\
+	Cluster.pm		\
 	Host.pm			\
 	VM.pm			\
 	Groups.pm
