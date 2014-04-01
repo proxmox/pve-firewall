@@ -63,7 +63,7 @@ __PACKAGE__->register_method ({
 	    my ($ruleset, $hostfw_conf, $ipset_ruleset) = PVE::Firewall::compile();
 
 	    if ($param->{verbose}) {
-		my (undef, $ipset_changes) = PVE::Firewall::get_ipset_cmdlist($ipset_ruleset, 1);
+		my (undef, undef, $ipset_changes) = PVE::Firewall::get_ipset_cmdlist($ipset_ruleset, 1);
 		my (undef, $ruleset_changes) = PVE::Firewall::get_ruleset_cmdlist($ruleset, 1);
 		if ($ipset_changes || $ruleset_changes) {
 		    print "detected changes\n";
@@ -117,7 +117,7 @@ __PACKAGE__->register_method ({
 	    if ($status eq 'active') {
 		my ($ruleset, $hostfw_conf, $ipset_ruleset) = PVE::Firewall::compile();
 
-		my (undef, $ipset_changes) = PVE::Firewall::get_ipset_cmdlist($ipset_ruleset);
+		my (undef, undef, $ipset_changes) = PVE::Firewall::get_ipset_cmdlist($ipset_ruleset);
 		my (undef, $ruleset_changes) = PVE::Firewall::get_ruleset_cmdlist($ruleset);
 		# fixme: ipset changes
 		$res->{changes} = ($ipset_changes || $ruleset_changes) ? 1 : 0;

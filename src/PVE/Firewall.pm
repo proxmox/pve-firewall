@@ -800,7 +800,7 @@ sub iptables_restore_cmdlist {
 sub ipset_restore_cmdlist {
     my ($cmdlist) = @_;
 
-    run_command(" /usr/sbin/ipset restore", input => $cmdlist);
+    run_command("/usr/sbin/ipset restore", input => $cmdlist);
 }
 
 sub iptables_get_chains {
@@ -1964,39 +1964,37 @@ sub generate_std_chains {
 }
 
 sub generate_ipset_chains {
-    my ($ipset_ruleset, $options) = @_;
+    my ($ipset_ruleset, $fw_conf) = @_;
 
-    foreach my $ipset (keys %{$options->{ipset}}) {
-	generate_ipset($ipset_ruleset, $ipset, $options->{ipset}->{$ipset});
+    foreach my $ipset (keys %{$fw_conf->{ipset}}) {
+	generate_ipset($ipset_ruleset, $ipset, $fw_conf->{ipset}->{$ipset});
     }
 }
 
 sub generate_ipset {
     my ($ipset_ruleset, $name, $options) = @_;
 
-    my $hashsize = @{$options};
-    if ($hashsize <= 64){
+    my $hashsize = scalar(@$options);
+    if ($hashsize <= 64) {
 	$hashsize = 64;
-    }else{
+    } else {
 	$hashsize = round_powerof2($hashsize);
     }
 
-    push @{$ipset_ruleset->{$name}}, "create $name hash:net family inet hashsize $hashsize maxelem $hashsize ";
+    push @{$ipset_ruleset->{$name}}, "create $name hash:net family inet hashsize $hashsize maxelem $hashsize";
 
-    foreach my $ip (@{$options}) {
+    foreach my $ip (@$options) {
 	push @{$ipset_ruleset->{$name}}, "add $name $ip";
     }
-
 }
 
 sub round_powerof2 {
-   my ($int) = @_;
+    my ($int) = @_;
 
-   $int--;
-   $int |= $int >> $_ foreach (1,2,4,8,16);
-   return ++$int;
+    $int--;
+    $int |= $int >> $_ foreach (1,2,4,8,16);
+    return ++$int;
 }
-
 
 sub save_pvefw_status {
     my ($status) = @_;
@@ -2354,52 +2352,49 @@ sub get_ruleset_cmdlist {
 }
 
 sub get_ipset_cmdlist {
-    my ($ruleset, $delete, $verbose) = @_;
+    my ($ruleset, $verbose) = @_;
 
     my $cmdlist = "";
+
+    my $delete_cmdlist = "";
 
     my $active_chains = ipset_get_chains();
     my $statushash = get_ruleset_status($ruleset, $active_chains, \&ipset_chain_digest, $verbose);
 
-    if(!$delete){
+    foreach my $chain (sort keys %$ruleset) {
+	my $stat = $statushash->{$chain};
+	die "internal error" if !$stat;
 
-	foreach my $chain (sort keys %$ruleset) {
-	    my $stat = $statushash->{$chain};
-	    die "internal error" if !$stat;
-
-	    if ($stat->{action} eq 'create') {
-		foreach my $cmd (@{$ruleset->{$chain}}) {
+	if ($stat->{action} eq 'create') {
+	    foreach my $cmd (@{$ruleset->{$chain}}) {
 		$cmdlist .= "$cmd\n";
-		}
 	    }
-
-	    if ($stat->{action} eq 'update') {
-		my $chain_swap = $chain."_swap";
-
-		foreach my $cmd (@{$ruleset->{$chain}}) {
-		    $cmd =~ s/$chain/$chain_swap/;
-		    $cmdlist .= "$cmd\n";
-		}
-		$cmdlist .= "swap $chain_swap $chain\n";
-		$cmdlist .= "flush $chain_swap\n";
-		$cmdlist .= "destroy $chain_swap\n";
-	    }
-
 	}
 
-    }else{
-
-	foreach my $chain (keys %$statushash) {
-	    next if $statushash->{$chain}->{action} ne 'delete';
-
-	    $cmdlist .= "flush $chain\n";
-	    $cmdlist .= "destroy $chain\n";
+	if ($stat->{action} eq 'update') {
+	    my $chain_swap = $chain."_swap";
+	    
+	    foreach my $cmd (@{$ruleset->{$chain}}) {
+		$cmd =~ s/$chain/$chain_swap/;
+		$cmdlist .= "$cmd\n";
+	    }
+	    $cmdlist .= "swap $chain_swap $chain\n";
+	    $cmdlist .= "flush $chain_swap\n";
+	    $cmdlist .= "destroy $chain_swap\n";
 	}
+
     }
 
-    my $changes = $cmdlist ? 1 : 0;
+    foreach my $chain (keys %$statushash) {
+	next if $statushash->{$chain}->{action} ne 'delete';
 
-    return wantarray ? ($cmdlist, $changes) : $cmdlist;
+	$delete_cmdlist .= "flush $chain\n";
+	$delete_cmdlist .= "destroy $chain\n";
+    }
+
+    my $changes = ($cmdlist || $delete_cmdlist) ? 1 : 0;
+    
+    return ($cmdlist, $delete_cmdlist, $changes);
 }
 
 sub apply_ruleset {
@@ -2409,9 +2404,7 @@ sub apply_ruleset {
 
     update_nf_conntrack_max($hostfw_conf);
 
-    my $ipset_create_cmdlist = get_ipset_cmdlist($ipset_ruleset, undef, $verbose);
-
-    my $ipset_delete_cmdlist = get_ipset_cmdlist($ipset_ruleset, 1, $verbose);
+    my ($ipset_create_cmdlist, $ipset_delete_cmdlist) = get_ipset_cmdlist($ipset_ruleset, undef, $verbose);
 
     my $cmdlist = get_ruleset_cmdlist($ruleset, $verbose);
 
@@ -2425,7 +2418,7 @@ sub apply_ruleset {
 
     iptables_restore_cmdlist($cmdlist);
 
-    ipset_restore_cmdlist($ipset_delete_cmdlist);
+    ipset_restore_cmdlist($ipset_delete_cmdlist) if $ipset_delete_cmdlist;
 
     # test: re-read status and check if everything is up to date
     my $active_chains = iptables_get_chains();
