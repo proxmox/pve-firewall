@@ -15,8 +15,9 @@ OUT ACCEPT - - icmp - -
 [group group3]
 
 IN  ACCEPT 10.0.0.1 
-IN  ACCEPT 10.0.0.2
-IN  ACCEPT 10.0.0.2 
+IN  ACCEPT 10.0.0.1-10.0.0.10
+IN  ACCEPT 10.0.0.1,10.0.0.2,10.0.0.3
+IN  ACCEPT +mynetgroup 
 
 
 [netgroup mynetgroup]

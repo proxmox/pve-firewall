@@ -603,6 +603,9 @@ sub parse_address_list {
 
     my $nbaor = 0;
     foreach my $aor (split(/,/, $str)) {
+	if($nbaor > 0 && $aor =~ m/-/){
+	    die "you can use a range in a list";
+	}
 	if (!Net::IP->new($aor)) {
 	    my $err = Net::IP::Error();
 	    die "invalid IP address: $err\n";
@@ -610,7 +613,6 @@ sub parse_address_list {
 	    $nbaor++;
 	}
     }
-    return $nbaor;
 }
 
 sub parse_port_name_number_or_range {
@@ -914,7 +916,7 @@ sub ipset_get_chains {
 }
 
 sub ruleset_generate_cmdstr {
-    my ($ruleset, $chain, $rule, $actions, $goto) = @_;
+    my ($ruleset, $chain, $rule, $actions, $goto, $cluster_conf) = @_;
 
     return if defined($rule->{enable}) && !$rule->{enable};
 
@@ -922,18 +924,40 @@ sub ruleset_generate_cmdstr {
 
     my $nbdport = defined($rule->{dport}) ? parse_port_name_number_or_range($rule->{dport}) : 0;
     my $nbsport = defined($rule->{sport}) ? parse_port_name_number_or_range($rule->{sport}) : 0;
-    my $nbsource = $rule->{source} ? parse_address_list( $rule->{source}) : 0;
-    my $nbdest = $rule->{dest} ? parse_address_list($rule->{dest}) : 0;
 
     my @cmd = ();
 
     push @cmd, "-i $rule->{iface_in}" if $rule->{iface_in};
     push @cmd, "-o $rule->{iface_out}" if $rule->{iface_out};
 
-    push @cmd, "-m iprange --src-range" if $nbsource > 1;
-    push @cmd, "-s $rule->{source}" if $rule->{source};
-    push @cmd, "-m iprange --dst-range" if $nbdest > 1;
-    push @cmd, "-d $rule->{dest}" if $rule->{dest};
+    my $source = $rule->{source};
+    my $dest = $rule->{dest};
+
+    if ($source){
+        if($source =~ m/^(\+)(\S+)$/){
+	    die "no such netgroup $2" if !$cluster_conf->{ipset}->{$2};
+	    push @cmd, "-m set --match-set $2 src";
+
+        }elsif ($source =~ m/^(\d+)\.(\d+).(\d+).(\d+)\-(\d+)\.(\d+).(\d+).(\d+)$/){
+	    push @cmd, "-m iprange --src-range $source";
+
+	}else{
+	    push @cmd, "-s $source";
+        }
+    }
+
+    if ($dest){
+        if($dest =~ m/^(\+)(\S+)$/){
+	    die "no such netgroup $2" if !$cluster_conf->{ipset}->{$2};
+	    push @cmd, "-m set --match-set $2 dst";
+
+        }elsif ($dest =~ m/^(\d+)\.(\d+).(\d+).(\d+)\-(\d+)\.(\d+).(\d+).(\d+)$/){
+	    push @cmd, "-m iprange --dst-range $dest";
+
+	}else{
+	    push @cmd, "-s $dest";
+        }
+    }
 
     if ($rule->{proto}) {
 	push @cmd, "-p $rule->{proto}";
@@ -1033,7 +1057,7 @@ my $apply_macro = sub {
 };
 
 sub ruleset_generate_rule {
-    my ($ruleset, $chain, $rule, $actions, $goto) = @_;
+    my ($ruleset, $chain, $rule, $actions, $goto, $cluster_conf) = @_;
 
     my $rules;
 
@@ -1044,7 +1068,7 @@ sub ruleset_generate_rule {
     }
 
     foreach my $tmp (@$rules) { 
-	if (my $cmdstr = ruleset_generate_cmdstr($ruleset, $chain, $tmp, $actions, $goto)) {
+	if (my $cmdstr = ruleset_generate_cmdstr($ruleset, $chain, $tmp, $actions, $goto, $cluster_conf)) {
 	    ruleset_addrule($ruleset, $chain, $cmdstr);
 	}
     }
@@ -1240,10 +1264,10 @@ sub ruleset_generate_vm_rules {
 	    next if $rule->{type} ne $lc_direction;
 	    if ($direction eq 'OUT') {
 		ruleset_generate_rule($ruleset, $chain, $rule, 
-				      { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" });
+				      { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" }, undef, $cluster_conf);
 	    } else {
 		my $accept = generate_nfqueue($options);
-		ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept , REJECT => "PVEFW-reject" });
+		ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept , REJECT => "PVEFW-reject" }, undef, $cluster_conf);
 	    }
 	}
     }
@@ -1419,7 +1443,7 @@ sub enable_host_firewall {
 
     foreach my $rule (@$rules) {
 	next if $rule->{type} ne 'in';
-	ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" });
+	ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" }, undef, $cluster_conf);
     }
 
     # implement input policy
@@ -1444,7 +1468,7 @@ sub enable_host_firewall {
 
     foreach my $rule (@$rules) {
 	next if $rule->{type} ne 'out';
-	ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" });
+	ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" }, undef, $cluster_conf);
     }
 
     # implement output policy
@@ -1468,7 +1492,7 @@ sub generate_group_rules {
 
     foreach my $rule (@$rules) {
 	next if $rule->{type} ne 'in';
-	ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" });
+	ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" }, undef, $cluster_conf);
     }
 
     $chain = "GROUP-${group}-OUT";
@@ -1481,7 +1505,7 @@ sub generate_group_rules {
 	# we use PVEFW-SET-ACCEPT-MARK (Instead of ACCEPT) because we need to
 	# check also other tap rules later
 	ruleset_generate_rule($ruleset, $chain, $rule, 
-			      { ACCEPT => 'PVEFW-SET-ACCEPT-MARK', REJECT => "PVEFW-reject" });
+			      { ACCEPT => 'PVEFW-SET-ACCEPT-MARK', REJECT => "PVEFW-reject" }, undef, $cluster_conf);
     }
 }
 
@@ -1556,9 +1580,9 @@ sub parse_fw_rule {
 
     parse_port_name_number_or_range($dport) if defined($dport);
     parse_port_name_number_or_range($sport) if defined($sport);
- 
-    parse_address_list($source) if $source;
-    parse_address_list($dest) if $dest;
+
+    parse_address_list($source) if $source && $source !~ m/^(\+)(\S+)$/;
+    parse_address_list($dest) if $dest && $dest !~ m/^(\+)(\S+)$/;
 
     return {
 	type => $type,
