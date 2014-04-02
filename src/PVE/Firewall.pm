@@ -1906,6 +1906,62 @@ sub load_vmfw_conf {
     return $vmfw_conf;
 }
 
+my $format_rules = sub {
+    my ($rules, $need_iface) = @_;
+
+    my $raw = '';
+
+    foreach my $rule (@$rules) {
+	if ($rule->{type} eq  'in' || $rule->{type} eq 'out') {
+	    $raw .= '|' if defined($rule->{enable}) && !$rule->{enable};
+	    $raw .= uc($rule->{type});
+	    $raw .= " " . $rule->{action};
+	    $raw .= " " . ($rule->{iface} || '-') if $need_iface;
+	    $raw .= " " . ($rule->{source} || '-');
+	    $raw .= " " . ($rule->{dest} || '-');
+	    $raw .= " " . ($rule->{proto} || '-');
+	    $raw .= " " . ($rule->{dport} || '-');
+	    $raw .= " " . ($rule->{sport} || '-');
+	    $raw .= " # " . encode('utf8', $rule->{comment}) 
+		if $rule->{comment} && $rule->{comment} !~ m/^\s*$/;
+	    $raw .= "\n";
+	} else {
+	    die "implement me '$rule->{type}'";
+	}
+    }
+
+    return $raw;
+};
+
+my $format_options = sub {
+    my ($raw, $options) = @_;
+
+    $raw .= "[OPTIONS]\n\n";
+    foreach my $opt (keys %$options) {
+	$raw .= "$opt: $options->{$opt}\n";
+    }
+    $raw .= "\n";
+};
+
+sub save_vmfw_conf {
+    my ($vmid, $vmfw_conf) = @_;
+
+    my $raw = '';
+
+    my $options = $vmfw_conf->{options};
+    &$format_options($raw, $options) if scalar(keys %$options);
+    
+    my $rules = $vmfw_conf->{rules};
+    if (scalar(@$rules)) {
+	$raw .= "[RULES]\n\n";
+	$raw .= &$format_rules($rules, 1);
+	$raw .= "\n";
+    }
+
+    my $filename = "/etc/pve/firewall/$vmid.fw";
+    PVE::Tools::file_set_contents($filename, $raw);
+}
+
 sub read_vm_firewall_configs {
     my ($vmdata) = @_;
     my $vmfw_configs = {};
@@ -2060,43 +2116,6 @@ sub load_clusterfw_conf {
 
     return $cluster_conf;
 }
-
-my $format_rules = sub {
-    my ($rules, $need_iface) = @_;
-
-    my $raw = '';
-
-    foreach my $rule (@$rules) {
-	if ($rule->{type} eq  'in' || $rule->{type} eq 'out') {
-	    $raw .= '|' if defined($rule->{enable}) && !$rule->{enable};
-	    $raw .= uc($rule->{type});
-	    $raw .= " " . $rule->{action};
-	    $raw .= " " . ($rule->{iface} || '-') if $need_iface;
-	    $raw .= " " . ($rule->{source} || '-');
-	    $raw .= " " . ($rule->{dest} || '-');
-	    $raw .= " " . ($rule->{proto} || '-');
-	    $raw .= " " . ($rule->{dport} || '-');
-	    $raw .= " " . ($rule->{sport} || '-');
-	    $raw .= " # " . encode('utf8', $rule->{comment}) 
-		if $rule->{comment} && $rule->{comment} !~ m/^\s*$/;
-	    $raw .= "\n";
-	} else {
-	    die "implement me '$rule->{type}'";
-	}
-    }
-
-    return $raw;
-};
-
-my $format_options = sub {
-    my ($raw, $options) = @_;
-
-    $raw .= "[OPTIONS]\n\n";
-    foreach my $opt (keys %$options) {
-	$raw .= "$opt: $options->{$opt}\n";
-    }
-    $raw .= "\n";
-};
 
 sub save_clusterfw_conf {
     my ($cluster_conf) = @_;

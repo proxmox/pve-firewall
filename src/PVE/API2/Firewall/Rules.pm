@@ -359,4 +359,35 @@ sub save_rules {
 
 __PACKAGE__->register_handlers();
 
+package PVE::API2::Firewall::VMRules;
+
+use strict;
+use warnings;
+use PVE::JSONSchema qw(get_standard_option);
+
+use base qw(PVE::API2::Firewall::RulesBase);
+
+__PACKAGE__->additional_parameters({ 
+    node => get_standard_option('pve-node'),
+    vmid => get_standard_option('pve-vmid'),				   
+});
+
+sub load_config {
+    my ($class, $param) = @_;
+
+    my $fw_conf = PVE::Firewall::load_vmfw_conf($param->{vmid});
+    my $rules = $fw_conf->{rules};
+
+    return ($fw_conf, $rules);
+}
+
+sub save_rules {
+    my ($class, $param, $fw_conf, $rules) = @_;
+
+    $fw_conf->{rules} = $rules;
+    PVE::Firewall::save_vmfw_conf($param->{vmid}, $fw_conf);
+}
+
+__PACKAGE__->register_handlers();
+
 1;

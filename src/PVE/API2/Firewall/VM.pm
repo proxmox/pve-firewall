@@ -5,10 +5,16 @@ use warnings;
 use PVE::JSONSchema qw(get_standard_option);
 use PVE::Cluster;
 use PVE::Firewall;
+use PVE::API2::Firewall::Rules;
 
 use Data::Dumper; # fixme: remove
 
 use base qw(PVE::RESTHandler);
+
+__PACKAGE__->register_method ({
+    subclass => "PVE::API2::Firewall::VMRules",  
+    path => 'rules',
+});
 
 __PACKAGE__->register_method({
     name => 'index',
@@ -40,52 +46,6 @@ __PACKAGE__->register_method({
 	    ];
 
 	return $result;
-    }});
-
-__PACKAGE__->register_method({
-    name => 'get_rules',
-    path => 'rules',
-    method => 'GET',
-    description => "List VM firewall rules.",
-    proxyto => 'node',
-    parameters => {
-    	additionalProperties => 0,
-	properties => {
-	    node => get_standard_option('pve-node'),
-	    vmid => get_standard_option('pve-vmid'),
-	},
-    },
-    returns => {
-	type => 'array',
-	items => {
-	    type => "object",
-	    properties => {},
-	},
-    },
-    code => sub {
-	my ($param) = @_;
-
-	my $vmid = $param->{vmid};
-
-	my $vmlist = PVE::Cluster::get_vmlist();
-
-	die "no such VM ('$vmid')\n" 
-	    if !($vmlist && $vmlist->{ids} && defined($vmlist->{ids}->{$vmid}));
-
-	my $vmfw_conf = PVE::Firewall::load_vmfw_conf($vmid);
-
-	my $rules = $vmfw_conf->{rules} || [];
-
-	my $digest = $vmfw_conf->{digest};
-
-	my $res = [];
-	
-	my $ind = 0;
-	foreach my $rule (@$rules) {
-	    push @$res, PVE::Firewall::cleanup_fw_rule($rule, $digest, $ind++);
-	}
-
-	return $res;
     }});
 
 __PACKAGE__->register_method({
