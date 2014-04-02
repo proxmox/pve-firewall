@@ -105,6 +105,7 @@ __PACKAGE__->register_method({
     path => 'options',
     method => 'PUT',
     description => "Set Firewall options.",
+    protected => 1,
     parameters => {
     	additionalProperties => 0,
 	properties => &$add_option_properties({
@@ -132,7 +133,6 @@ __PACKAGE__->register_method({
 	if (defined($param->{enable})) {
 	    $cluster_conf->{options}->{enable} = $param->{enable} ? 1 : 0;
 	}
-
 
 	PVE::Firewall::save_clusterfw_conf($cluster_conf);
 

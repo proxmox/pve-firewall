@@ -1934,13 +1934,17 @@ my $format_rules = sub {
 };
 
 my $format_options = sub {
-    my ($raw, $options) = @_;
+    my ($options) = @_;
+
+    my $raw = '';
 
     $raw .= "[OPTIONS]\n\n";
     foreach my $opt (keys %$options) {
 	$raw .= "$opt: $options->{$opt}\n";
     }
     $raw .= "\n";
+
+    return $raw;
 };
 
 sub save_vmfw_conf {
@@ -1949,7 +1953,7 @@ sub save_vmfw_conf {
     my $raw = '';
 
     my $options = $vmfw_conf->{options};
-    &$format_options($raw, $options) if scalar(keys %$options);
+    $raw .= &$format_options($options) if scalar(keys %$options);
     
     my $rules = $vmfw_conf->{rules};
     if (scalar(@$rules)) {
@@ -2123,7 +2127,7 @@ sub save_clusterfw_conf {
     my $raw = '';
 
     my $options = $cluster_conf->{options};
-    &$format_options($raw, $options) if scalar(keys %$options);
+    $raw .= &$format_options($options) if scalar(keys %$options);
 
     # fixme: save ipset
 
@@ -2159,7 +2163,7 @@ sub save_hostfw_conf {
     my $raw = '';
 
     my $options = $hostfw_conf->{options};
-    &$format_options($raw, $options) if scalar(keys %$options);
+    $raw .= &$format_options($options) if scalar(keys %$options);
     
     my $rules = $hostfw_conf->{rules};
     if (scalar(@$rules)) {
