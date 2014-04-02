@@ -16,6 +16,7 @@ use Net::IP;
 use PVE::Tools qw(run_command lock_file);
 use Encode;
 
+my $hostfw_conf_filename = "/etc/pve/local/host.fw";
 my $clusterfw_conf_filename = "/etc/pve/firewall/cluster.fw";
 
 # dynamically include PVE::QemuServer and PVE::OpenVZ 
@@ -2060,7 +2061,7 @@ sub load_clusterfw_conf {
     return $cluster_conf;
 }
 
-my $rules_to_conf = sub {
+my $format_rules = sub {
     my ($rules, $need_iface) = @_;
 
     my $raw = '';
@@ -2087,33 +2088,37 @@ my $rules_to_conf = sub {
     return $raw;
 };
 
+my $format_options = sub {
+    my ($raw, $options) = @_;
+
+    $raw .= "[OPTIONS]\n\n";
+    foreach my $opt (keys %$options) {
+	$raw .= "$opt: $options->{$opt}\n";
+    }
+    $raw .= "\n";
+};
+
 sub save_clusterfw_conf {
     my ($cluster_conf) = @_;
 
     my $raw = '';
 
     my $options = $cluster_conf->{options};
-    if (scalar(keys %$options)) {
-	$raw .= "[OPTIONS]\n\n";
-	foreach my $opt (keys %$options) {
-	    $raw .= "$opt: $options->{$opt}\n";
-	}
-	$raw .= "\n";
-    }
+    &$format_options($raw, $options) if scalar(keys %$options);
 
     # fixme: save ipset
 
     my $rules = $cluster_conf->{rules};
     if (scalar(@$rules)) {
 	$raw .= "[RULES]\n\n";
-	$raw .= &$rules_to_conf($rules, 1);
+	$raw .= &$format_rules($rules, 1);
 	$raw .= "\n";
     }
 
     foreach my $group (sort keys %{$cluster_conf->{groups}}) {
 	my $rules = $cluster_conf->{groups}->{$group};
 	$raw .= "[group $group]\n\n";
-	$raw .= &$rules_to_conf($rules, 0);
+	$raw .= &$format_rules($rules, 0);
 	$raw .= "\n";
     }
 
@@ -2123,11 +2128,28 @@ sub save_clusterfw_conf {
 sub load_hostfw_conf {
 
     my $hostfw_conf = {};
-    my $filename = "/etc/pve/local/host.fw";
-    if (my $fh = IO::File->new($filename, O_RDONLY)) {
-	$hostfw_conf = parse_host_fw_rules($filename, $fh);
+    if (my $fh = IO::File->new($hostfw_conf_filename, O_RDONLY)) {
+	$hostfw_conf = parse_host_fw_rules($hostfw_conf_filename, $fh);
     }
     return $hostfw_conf;
+}
+
+sub save_hostfw_conf {
+    my ($hostfw_conf) = @_;
+
+    my $raw = '';
+
+    my $options = $hostfw_conf->{options};
+    &$format_options($raw, $options) if scalar(keys %$options);
+    
+    my $rules = $hostfw_conf->{rules};
+    if (scalar(@$rules)) {
+	$raw .= "[RULES]\n\n";
+	$raw .= &$format_rules($rules, 1);
+	$raw .= "\n";
+    }
+
+    PVE::Tools::file_set_contents($hostfw_conf_filename, $raw);
 }
 
 sub compile {

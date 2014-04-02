@@ -9,11 +9,6 @@ use PVE::Firewall;
 use base qw(PVE::RESTHandler);
 
 my $api_properties = { 
-    group => {
-	description => "Security group name.",
-	type => 'string',
-	maxLength => 20, # fixme: what length?
-    },
     pos => {
 	description => "Rule position.",
 	type => 'integer',
@@ -35,24 +30,26 @@ sub save_rules {
     die "implement this in subclass";
 }
 
-my $need_group_param_hash = {};
+my $additional_param_hash = {};
 
-sub need_group_param {
+sub additional_parameters {
     my ($class, $new_value) = @_;
 
-    $need_group_param_hash->{$class} = $new_value if defined($new_value);
+    if (defined($new_value)) {
+	$additional_param_hash->{$class} = $new_value;
+    }
 
-    return $need_group_param_hash->{$class};
+    # return a copy
+    my $copy = {};
+    my $org = $additional_param_hash->{$class} || {};
+    foreach my $p (keys %$org) { $copy->{$p} = $org->{$p}; }
+    return $copy;
 }
 
 sub register_get_rules {
     my ($class) = @_;
 
-    my $properties = {};
-
-    if ($class->need_group_param()) {
-	$properties->{group} = $api_properties->{group};
-    } 
+    my $properties = $class->additional_parameters();
 
     $class->register_method({
 	name => 'get_rules',
@@ -96,14 +93,10 @@ sub register_get_rules {
 sub register_get_rule {
     my ($class) = @_;
 
-    my $properties = {};
+    my $properties = $class->additional_parameters();
 
     $properties->{pos} = $api_properties->{pos};
     
-    if ($class->need_group_param()) {
-	$properties->{group} = $api_properties->{group};
-    }
-
     $class->register_method({
 	name => 'get_rule',
 	path => '{pos}',
@@ -140,11 +133,7 @@ sub register_get_rule {
 sub register_create_rule {
     my ($class) = @_;
 
-    my $properties = {};
-
-    if ($class->need_group_param()) {
-	$properties->{group} = $api_properties->{group};
-    }
+    my $properties = $class->additional_parameters();
 
     my $create_rule_properties = PVE::Firewall::add_rule_properties($properties);
 
@@ -181,14 +170,10 @@ sub register_create_rule {
 sub register_update_rule {
     my ($class) = @_;
 
-    my $properties = {};
+    my $properties = $class->additional_parameters();
 
     $properties->{pos} = $api_properties->{pos};
     
-    if ($class->need_group_param()) {
-	$properties->{group} = $api_properties->{group};
-    }
-
     $properties->{moveto} = {
 	description => "Move rule to new position <moveto>. Other arguments are ignored.",
 	type => 'integer',
@@ -246,14 +231,10 @@ sub register_update_rule {
 sub register_delete_rule {
     my ($class) = @_;
 
-    my $properties = {};
+    my $properties = $class->additional_parameters();
 
     $properties->{pos} = $api_properties->{pos};
     
-    if ($class->need_group_param()) {
-	$properties->{group} = $api_properties->{group};
-    }
-
     $class->register_method({
 	name => 'delete_rule',
 	path => '{pos}',
@@ -300,7 +281,11 @@ use warnings;
 
 use base qw(PVE::API2::Firewall::RulesBase);
 
-__PACKAGE__->need_group_param(1);
+__PACKAGE__->additional_parameters({ group => {
+    description => "Security group name.",
+    type => 'string',
+    maxLength => 20, # fixme: what length?
+}});
 
 sub load_config {
     my ($class, $param) = @_;
@@ -319,7 +304,7 @@ sub save_rules {
     PVE::Firewall::save_clusterfw_conf($fw_conf);
 }
 
-__PACKAGE__->register_handlers('groups');
+__PACKAGE__->register_handlers();
 
 package PVE::API2::Firewall::ClusterRules;
 
@@ -344,6 +329,34 @@ sub save_rules {
     PVE::Firewall::save_clusterfw_conf($fw_conf);
 }
 
-__PACKAGE__->register_handlers('cluster');
+__PACKAGE__->register_handlers();
+
+package PVE::API2::Firewall::HostRules;
+
+use strict;
+use warnings;
+use PVE::JSONSchema qw(get_standard_option);
+
+use base qw(PVE::API2::Firewall::RulesBase);
+
+__PACKAGE__->additional_parameters({ node => get_standard_option('pve-node')});
+
+sub load_config {
+    my ($class, $param) = @_;
+
+    my $fw_conf = PVE::Firewall::load_hostfw_conf();
+    my $rules = $fw_conf->{rules};
+
+    return ($fw_conf, $rules);
+}
+
+sub save_rules {
+    my ($class, $param, $fw_conf, $rules) = @_;
+
+    $fw_conf->{rules} = $rules;
+    PVE::Firewall::save_hostfw_conf($fw_conf);
+}
+
+__PACKAGE__->register_handlers();
 
 1;
