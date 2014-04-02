@@ -6,6 +6,7 @@ use PVE::Exception qw(raise raise_param_exc raise_perm_exc);
 use PVE::JSONSchema qw(get_standard_option);
 
 use PVE::Firewall;
+use PVE::API2::Firewall::Rules;
 use PVE::API2::Firewall::Groups;
 
 #fixme: locking?
@@ -17,6 +18,11 @@ use base qw(PVE::RESTHandler);
 __PACKAGE__->register_method ({
     subclass => "PVE::API2::Firewall::Groups",  
     path => 'groups',
+});
+
+__PACKAGE__->register_method ({
+    subclass => "PVE::API2::Firewall::ClusterRules",  
+    path => 'rules',
 });
 
 __PACKAGE__->register_method({

@@ -1,4 +1,5 @@
 LIB_SOURCES=			\
+	Rules.pm		\
 	Cluster.pm		\
 	Host.pm			\
 	VM.pm			\
