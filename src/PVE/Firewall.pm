@@ -952,7 +952,7 @@ sub ruleset_generate_cmdstr {
 	    die "no such ipset $2" if !$cluster_conf->{ipset}->{$2};
 	    push @cmd, "-m set --match-set PVEFW-$2 src";
 
-        } elsif ($source =~ m/^(\d+)\.(\d+).(\d+).(\d+)\-(\d+)\.(\d+).(\d+).(\d+)$/){
+        } elsif ($source =~ m/\-/){
 	    push @cmd, "-m iprange --src-range $source";
 
 	} else {
