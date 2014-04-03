@@ -136,7 +136,9 @@ sub register_create_rule {
     my $properties = $class->additional_parameters();
 
     my $create_rule_properties = PVE::Firewall::add_rule_properties($properties);
-
+    $create_rule_properties->{action}->{optional} = 0;
+    $create_rule_properties->{type}->{optional} = 0;
+    
     $class->register_method({
 	name => 'create_rule',
 	path => '',
@@ -154,10 +156,12 @@ sub register_create_rule {
 	    my ($fw_conf, $rules) = $class->load_config($param);
 
 	    my $digest = $fw_conf->{digest};
-	    
-	    my $rule = { type => 'out', action => 'ACCEPT', enable => 0};
+
+	    my $rule = {};
 
 	    PVE::Firewall::copy_rule_data($rule, $param);
+
+	    $rule->{enable} = 0 if !defined($param->{enable});
 
 	    unshift @$rules, $rule;
 
@@ -219,6 +223,11 @@ sub register_update_rule {
 		push @$newrules, $rule if $moveto >= scalar(@$rules);
 		$rules = $newrules;
 	    } else {
+		raise_param_exc({ type => "property is missing"})
+		    if !defined($param->{type});
+		raise_param_exc({ action => "property is missing"})
+		    if !defined($param->{action});
+
 		PVE::Firewall::copy_rule_data($rule, $param);
 	    }
 

@@ -767,7 +767,9 @@ sub add_rule_properties {
     my ($properties) = @_;
 
     foreach my $k (keys %$rule_properties) {
-	$properties->{$k} = $rule_properties->{$k};
+	my $h = $rule_properties->{$k};
+	# copy data, so that we can modify later without side effects
+	foreach my $opt (keys %$h) { $properties->{$k}->{$opt} = $h->{$opt}; }
     }
 
     return $properties;
