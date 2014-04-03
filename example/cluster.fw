@@ -25,5 +25,5 @@ IN  ACCEPT +mynetgroup
 192.168.0.1 #mycomment
 172.16.0.10
 192.168.0.0/24
-! 10.0.0.0/8  #nomatch
+! 10.0.0.0/8  #nomatch - needs kernel 3.7 or newer
 

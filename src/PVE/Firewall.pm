@@ -2,6 +2,7 @@ package PVE::Firewall;
 
 use warnings;
 use strict;
+use POSIX;
 use Data::Dumper;
 use Digest::SHA;
 use PVE::INotify;
@@ -19,7 +20,7 @@ use Encode;
 my $hostfw_conf_filename = "/etc/pve/local/host.fw";
 my $clusterfw_conf_filename = "/etc/pve/firewall/cluster.fw";
 
-# dynamically include PVE::QemuServer and PVE::OpenVZ 
+# dynamically include PVE::QemuServer and PVE::OpenVZ
 # to avoid dependency problems
 my $have_qemu_server;
 eval {
@@ -31,6 +32,17 @@ my $have_pve_manager;
 eval {
     require PVE::OpenVZ;
     $have_pve_manager = 1;
+};
+
+my $feature_ipset_nomatch = 0;
+eval  {
+    my (undef, undef, $release) = POSIX::uname();
+    if ($release =~ m/^(\d+)\.(\d+)\.\d+-/) {
+	my ($major, $minor) = ($1, $2);
+	$feature_ipset_nomatch = 1 if ($major > 3) ||
+	    ($major == 3 && $minor >= 7);
+    }
+
 };
 
 use Data::Dumper;
@@ -397,12 +409,12 @@ my $pve_std_chains = {
 	{ action => 'DROP', dsttype => 'BROADCAST' },
 	{ action => 'DROP', dsttype => 'MULTICAST' },
 	{ action => 'DROP', dsttype => 'ANYCAST' },
-	{ action => 'DROP', dest => '224.0.0.0/4' }, 
+	{ action => 'DROP', dest => '224.0.0.0/4' },
     ],
     'PVEFW-reject' => [
 	# same as shorewall 'reject'
 	{ action => 'DROP', dsttype => 'BROADCAST' },
-	{ action => 'DROP', source => '224.0.0.0/4' }, 
+	{ action => 'DROP', source => '224.0.0.0/4' },
 	{ action => 'DROP', proto => 'icmp' },
 	"-p tcp -j REJECT --reject-with tcp-reset",
 	"-p udp -j REJECT --reject-with icmp-port-unreachable",
@@ -410,7 +422,7 @@ my $pve_std_chains = {
 	"-j REJECT --reject-with icmp-host-prohibited",
     ],
     'PVEFW-Drop' => [
-	# same as shorewall 'Drop', which is equal to DROP, 
+	# same as shorewall 'Drop', which is equal to DROP,
 	# but REJECT/DROP some packages to reduce logging,
 	# and ACCEPT critical ICMP types
 	{ action => 'PVEFW-reject',  proto => 'tcp', dport => '43' }, # REJECT 'auth'
@@ -433,7 +445,7 @@ my $pve_std_chains = {
 	{ action => 'DROP', proto => 'udp', sport => 53 },
     ],
     'PVEFW-Reject' => [
-	# same as shorewall 'Reject', which is equal to Reject, 
+	# same as shorewall 'Reject', which is equal to Reject,
 	# but REJECT/DROP some packages to reduce logging,
 	# and ACCEPT critical ICMP types
 	{ action => 'PVEFW-reject',  proto => 'tcp', dport => '43' }, # REJECT 'auth'
@@ -755,7 +767,7 @@ sub add_rule_properties {
     foreach my $k (keys %$rule_properties) {
 	$properties->{$k} = $rule_properties->{$k};
     }
-    
+
     return $properties;
 }
 
@@ -933,28 +945,28 @@ sub ruleset_generate_cmdstr {
     my $source = $rule->{source};
     my $dest = $rule->{dest};
 
-    if ($source){
-        if($source =~ m/^(\+)(\S+)$/){
+    if ($source) {
+        if ($source =~ m/^(\+)(\S+)$/) {
 	    die "no such ipset $2" if !$cluster_conf->{ipset}->{$2};
 	    push @cmd, "-m set --match-set PVEFW-$2 src";
 
-        }elsif ($source =~ m/^(\d+)\.(\d+).(\d+).(\d+)\-(\d+)\.(\d+).(\d+).(\d+)$/){
+        } elsif ($source =~ m/^(\d+)\.(\d+).(\d+).(\d+)\-(\d+)\.(\d+).(\d+).(\d+)$/){
 	    push @cmd, "-m iprange --src-range $source";
 
-	}else{
+	} else {
 	    push @cmd, "-s $source";
         }
     }
 
-    if ($dest){
-        if($dest =~ m/^(\+)(\S+)$/){
+    if ($dest) {
+        if ($dest =~ m/^(\+)(\S+)$/) {
 	    die "no such ipset $2" if !$cluster_conf->{ipset}->{$2};
 	    push @cmd, "-m set --match-set PVEFW-$2 dst";
 
-        }elsif ($dest =~ m/^(\d+)\.(\d+).(\d+).(\d+)\-(\d+)\.(\d+).(\d+).(\d+)$/){
+        } elsif ($dest =~ m/^(\d+)\.(\d+).(\d+).(\d+)\-(\d+)\.(\d+).(\d+).(\d+)$/){
 	    push @cmd, "-m iprange --dst-range $dest";
 
-	}else{
+	} else {
 	    push @cmd, "-s $dest";
         }
     }
@@ -968,7 +980,7 @@ sub ruleset_generate_cmdstr {
 
 	push @cmd, "--match multiport" if $multiport;
 
-	die "multiport: option '--sports' cannot be used together with '--dports'\n" 
+	die "multiport: option '--sports' cannot be used together with '--dports'\n"
 	    if ($multiport == 2) && ($rule->{dport} ne $rule->{sport});
 
 	if ($rule->{dport}) {
@@ -1004,7 +1016,7 @@ sub ruleset_generate_cmdstr {
     push @cmd, "-m addrtype --dst-type $rule->{dsttype}" if $rule->{dsttype};
 
     if (my $action = $rule->{action}) {
-	$action = $actions->{$action} if defined($actions->{$action}); 
+	$action = $actions->{$action} if defined($actions->{$action});
 	$goto = 1 if !defined($goto) && $action eq 'PVEFW-SET-ACCEPT-MARK';
 	push @cmd, $goto ? "-g $action" : "-j $action";
     }
@@ -1067,7 +1079,7 @@ sub ruleset_generate_rule {
 	$rules = [ $rule ];
     }
 
-    foreach my $tmp (@$rules) { 
+    foreach my $tmp (@$rules) {
 	if (my $cmdstr = ruleset_generate_cmdstr($ruleset, $chain, $tmp, $actions, $goto, $cluster_conf)) {
 	    ruleset_addrule($ruleset, $chain, $cmdstr);
 	}
@@ -1119,12 +1131,12 @@ sub ruleset_insertrule {
 
 sub get_log_rule_base {
     my ($chain, $vmid, $msg, $loglevel) = @_;
-    
+
     die "internal error - no log level" if !defined($loglevel);
 
     $vmid = 0 if !defined($vmid);
 
-    # Note: we use special format for prefix to pass further 
+    # Note: we use special format for prefix to pass further
     # info to log daemon (VMID, LOGVELEL and CHAIN)
 
     return "-j NFLOG --nflog-prefix \":$vmid:$loglevel:$chain: $msg\"";
@@ -1210,10 +1222,10 @@ sub ruleset_create_vm_chain {
 
     if (!(defined($options->{dhcp}) && $options->{dhcp} == 0)) {
 	if ($direction eq 'OUT') {
-	    ruleset_generate_rule($ruleset, $chain, { action => 'PVEFW-SET-ACCEPT-MARK', 
+	    ruleset_generate_rule($ruleset, $chain, { action => 'PVEFW-SET-ACCEPT-MARK',
 						      proto => 'udp', sport => 68, dport => 67 });
 	} else {
-	    ruleset_generate_rule($ruleset, $chain, { action => 'ACCEPT', 
+	    ruleset_generate_rule($ruleset, $chain, { action => 'ACCEPT',
 						      proto => 'udp', sport => 67, dport => 68 });
 	}
     }
@@ -1223,20 +1235,18 @@ sub ruleset_create_vm_chain {
     }
 
     ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate INVALID -j DROP");
-    if($direction eq 'OUT'){
+    if ($direction eq 'OUT') {
 	ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate RELATED,ESTABLISHED -g PVEFW-SET-ACCEPT-MARK");
-
-    }else{
+    } else {
 	ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate RELATED,ESTABLISHED -j $accept");
     }
+
     if ($direction eq 'OUT') {
 	if (defined($macaddr) && !(defined($options->{macfilter}) && $options->{macfilter} == 0)) {
 	    ruleset_addrule($ruleset, $chain, "-m mac ! --mac-source $macaddr -j DROP");
 	}
 	ruleset_addrule($ruleset, $chain, "-j MARK --set-mark 0"); # clear mark
     }
-
-
 }
 
 sub ruleset_generate_vm_rules {
@@ -1248,7 +1258,7 @@ sub ruleset_generate_vm_rules {
 	next if $rule->{iface} && $rule->{iface} ne $netid;
 	next if !$rule->{enable};
 	if ($rule->{type} eq 'group') {
-	    my $group_chain = "GROUP-$rule->{action}-$direction"; 
+	    my $group_chain = "GROUP-$rule->{action}-$direction";
 	    if(!ruleset_chain_exist($ruleset, $group_chain)){
 		generate_group_rules($ruleset, $cluster_conf, $rule->{action});
 	    }
@@ -1263,7 +1273,7 @@ sub ruleset_generate_vm_rules {
 	} else {
 	    next if $rule->{type} ne $lc_direction;
 	    if ($direction eq 'OUT') {
-		ruleset_generate_rule($ruleset, $chain, $rule, 
+		ruleset_generate_rule($ruleset, $chain, $rule,
 				      { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" }, undef, $cluster_conf);
 	    } else {
 		my $accept = generate_nfqueue($options);
@@ -1504,7 +1514,7 @@ sub generate_group_rules {
 	next if $rule->{type} ne 'out';
 	# we use PVEFW-SET-ACCEPT-MARK (Instead of ACCEPT) because we need to
 	# check also other tap rules later
-	ruleset_generate_rule($ruleset, $chain, $rule, 
+	ruleset_generate_rule($ruleset, $chain, $rule,
 			      { ACCEPT => 'PVEFW-SET-ACCEPT-MARK', REJECT => "PVEFW-reject" }, undef, $cluster_conf);
     }
 }
@@ -1560,7 +1570,7 @@ sub parse_fw_rule {
 	die "wrong number of rule elements\n" if scalar(@data) != 3;
 	die "groups disabled\n" if !$allow_groups;
 
-	die "invalid characters in group name\n" if $action !~ m/^[A-Za-z0-9_\-]+$/;	
+	die "invalid characters in group name\n" if $action !~ m/^[A-Za-z0-9_\-]+$/;
     } else {
 	die "unknown rule type '$type'\n";
     }
@@ -1768,11 +1778,11 @@ sub parse_host_fw_rules {
 	    warn "$prefix: $err";
 	    next;
 	}
-	
+
 	push @{$res->{$section}}, $rule;
     }
 
-    $res->{digest} = $digest->b64digest;
+$res->{digest} = $digest->b64digest;
 
     return $res;
 }
@@ -1811,7 +1821,7 @@ sub parse_cluster_fw_rules {
 	    $section = 'rules';
 	    next;
 	}
-    
+
 	if ($line =~ m/^\[ipset\s+(\S+)\]\s*$/i) {
 	    $section = 'ipset';
 	    $group = lc($1);
@@ -1819,7 +1829,7 @@ sub parse_cluster_fw_rules {
 	}
 
 	if (!$section) {
-	    warn "$prefix: skip line - no section";
+	    warn "$prefix: skip line - no section\n";
 	    next;
 	}
 
@@ -1847,21 +1857,28 @@ sub parse_cluster_fw_rules {
 	    push @{$res->{$section}->{$group}}, $rule;
 	} elsif ($section eq 'ipset') {
 	    chomp $line;
-	    $line =~ m/^(\!)?(\s)?((\d+)\.(\d+)\.(\d+)\.(\d+)(\/(\d+))?)/;
+	    $line =~ m/^(\!)?\s*((\d+)\.(\d+)\.(\d+)\.(\d+)(\/(\d+))?)/;
 	    my $nomatch = $1;
-	    my $ip = $3;
+	my $ip = $2;
 
 	    if(!$ip){
-		warn "$prefix: $line is not an valid ip address";
+		warn "$prefix: $line is not an valid ip address\n";
 		next;
 	    }
 	    if (!Net::IP->new($ip)) {
-		warn "$prefix: $line is not an valid ip address";
+		warn "$prefix: $line is not an valid ip address\n";
 		next;
 	    }
-	    $ip .= " nomatch" if $nomatch;
 
-	    push @{$res->{$section}->{$group}}, $ip;
+	    if ($nomatch) {
+		if ($feature_ipset_nomatch) {
+		    push @{$res->{$section}->{$group}}, "$ip nomatch";
+		} else {
+		    warn "$prefix: ignore $line - nomatch not supported by kernel\n";
+		}
+	    } else {
+		push @{$res->{$section}->{$group}}, $ip;
+	    }
 	}
     }
 
@@ -1946,7 +1963,7 @@ my $format_rules = sub {
 	    $raw .= " " . ($rule->{proto} || '-');
 	    $raw .= " " . ($rule->{dport} || '-');
 	    $raw .= " " . ($rule->{sport} || '-');
-	    $raw .= " # " . encode('utf8', $rule->{comment}) 
+	    $raw .= " # " . encode('utf8', $rule->{comment})
 		if $rule->{comment} && $rule->{comment} !~ m/^\s*$/;
 	    $raw .= "\n";
 	} else {
@@ -1978,7 +1995,7 @@ sub save_vmfw_conf {
 
     my $options = $vmfw_conf->{options};
     $raw .= &$format_options($options) if scalar(keys %$options);
-    
+
     my $rules = $vmfw_conf->{rules};
     if (scalar(@$rules)) {
 	$raw .= "[RULES]\n\n";
@@ -2022,7 +2039,7 @@ sub get_option_log_level {
 
 sub generate_std_chains {
     my ($ruleset, $options) = @_;
-    
+
     my $loglevel = get_option_log_level($options, 'smurf_log_level');
 
     # same as shorewall smurflog.
@@ -2188,7 +2205,7 @@ sub save_hostfw_conf {
 
     my $options = $hostfw_conf->{options};
     $raw .= &$format_options($options) if scalar(keys %$options);
-    
+
     my $rules = $hostfw_conf->{rules};
     if (scalar(@$rules)) {
 	$raw .= "[RULES]\n\n";
@@ -2247,9 +2264,9 @@ sub compile {
 	    generate_bridge_chains($ruleset, $hostfw_conf, $bridge, $routing_table);
 
 	    my $macaddr = $net->{macaddr};
-	    generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr, 
+	    generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
 					 $vmfw_conf, $vmid, $bridge, 'IN');
-	    generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr, 
+	    generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
 					 $vmfw_conf, $vmid, $bridge, 'OUT');
 	}
     }
@@ -2277,14 +2294,14 @@ sub compile {
 		    warn "no bridge device for CT $vmid iface '$netid'\n";
 		    next; # fixme?
 		}
-		
+
 		generate_bridge_chains($ruleset, $hostfw_conf, $bridge, $routing_table);
 
 		my $macaddr = $d->{mac};
 		my $iface = $d->{host_ifname};
-		generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr, 
+		generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
 					     $vmfw_conf, $vmid, $bridge, 'IN');
-		generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr, 
+		generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
 					     $vmfw_conf, $vmid, $bridge, 'OUT');
 	    }
 	}
@@ -2306,11 +2323,11 @@ sub compile {
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i venet0 -j RETURN");
 
     # disable interbridge routing
-    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o vmbr+ -j PVEFW-Drop"); 
+    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o vmbr+ -j PVEFW-Drop");
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i vmbr+ -j PVEFW-Drop");
-    ruleset_addlog($ruleset, "PVEFW-FORWARD", 0, "DROP: ", $loglevel, "-o vmbr+");  
-    ruleset_addlog($ruleset, "PVEFW-FORWARD", 0, "DROP: ", $loglevel, "-i vmbr+");  
-    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o vmbr+ -j DROP");  
+    ruleset_addlog($ruleset, "PVEFW-FORWARD", 0, "DROP: ", $loglevel, "-o vmbr+");
+    ruleset_addlog($ruleset, "PVEFW-FORWARD", 0, "DROP: ", $loglevel, "-i vmbr+");
+    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o vmbr+ -j DROP");
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i vmbr+ -j DROP");
 
     return wantarray ? ($ruleset, $hostfw_conf, $ipset_ruleset) : $ruleset;
@@ -2365,7 +2382,7 @@ sub get_ruleset_cmdlist {
     my ($ruleset, $verbose) = @_;
 
     my $cmdlist = "*filter\n"; # we pass this to iptables-restore;
- 
+
     my ($active_chains, $hooks) = iptables_get_chains();
     my $statushash = get_ruleset_status($ruleset, $active_chains, \&iptables_chain_digest, $verbose);
 
@@ -2444,7 +2461,7 @@ sub get_ipset_cmdlist {
 
 	if ($stat->{action} eq 'update') {
 	    my $chain_swap = $chain."_swap";
-	    
+
 	    foreach my $cmd (@{$ruleset->{$chain}}) {
 		$cmd =~ s/$chain/$chain_swap/;
 		$cmdlist .= "$cmd\n";
@@ -2464,7 +2481,7 @@ sub get_ipset_cmdlist {
     }
 
     my $changes = ($cmdlist || $delete_cmdlist) ? 1 : 0;
-    
+
     return ($cmdlist, $delete_cmdlist, $changes);
 }
 
@@ -2475,7 +2492,7 @@ sub apply_ruleset {
 
     update_nf_conntrack_max($hostfw_conf);
 
-    my ($ipset_create_cmdlist, $ipset_delete_cmdlist, $ipset_changes) = 
+    my ($ipset_create_cmdlist, $ipset_delete_cmdlist, $ipset_changes) =
 	get_ipset_cmdlist($ipset_ruleset, undef, $verbose);
 
     my ($cmdlist, $changes) = get_ruleset_cmdlist($ruleset, $verbose);
@@ -2549,7 +2566,7 @@ sub remove_pvefw_chains {
 	    $cmdlist .= "-D $h -j PVEFW-$h\n";
 	}
     }
- 
+
     foreach my $chain (keys %$chash) {
 	$cmdlist .= "-F $chain\n";
     }
