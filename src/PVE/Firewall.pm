@@ -775,6 +775,20 @@ sub add_rule_properties {
     return $properties;
 }
 
+sub delete_rule_properties {
+    my ($rule, $delete_str) = @_;
+    
+    foreach my $opt (PVE::Tools::split_list($delete_str)) {
+	raise_param_exc({ 'delete' => "no such property ('$opt')"})
+	    if !defined($rule_properties->{$opt});
+	raise_param_exc({ 'delete' => "unable to delete required property '$opt'"})
+	    if $opt eq 'type' || $opt eq 'action';
+	delete $rule->{$opt};
+    }
+
+    return $rule;
+}
+
 sub copy_rule_data {
     my ($rule, $param) = @_;
 

@@ -185,6 +185,12 @@ sub register_update_rule {
 	optional => 1,
     };
 
+    $properties->{delete} = {
+	type => 'string', format => 'pve-configid-list',
+	description => "A list of settings you want to delete.",
+	optional => 1,
+    };
+
     my $update_rule_properties = PVE::Firewall::add_rule_properties($properties);
 
     $class->register_method({
@@ -229,6 +235,8 @@ sub register_update_rule {
 		    if !defined($param->{action});
 
 		PVE::Firewall::copy_rule_data($rule, $param);
+		
+		PVE::Firewall::delete_rule_properties($rule, $param->{'delete'}) if $param->{'delete'};
 	    }
 
 	    $class->save_rules($param, $fw_conf, $rules);
