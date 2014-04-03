@@ -613,6 +613,8 @@ sub get_etc_protocols {
 sub parse_address_list {
     my ($str) = @_;
 
+    return if $str !~ m/^(\+)(\S+)$/; # ipset ref
+
     my $count = 0;
     my $iprange = 0;
     foreach my $elem (split(/,/, $str)) {
@@ -1591,8 +1593,8 @@ sub parse_fw_rule {
     parse_port_name_number_or_range($dport) if defined($dport);
     parse_port_name_number_or_range($sport) if defined($sport);
 
-    parse_address_list($source) if $source && $source !~ m/^(\+)(\S+)$/;
-    parse_address_list($dest) if $dest && $dest !~ m/^(\+)(\S+)$/;
+    parse_address_list($source) if $source;
+    parse_address_list($dest) if $dest;
 
     return {
 	type => $type,
