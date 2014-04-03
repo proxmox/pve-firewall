@@ -613,18 +613,18 @@ sub get_etc_protocols {
 sub parse_address_list {
     my ($str) = @_;
 
-    my $nbaor = 0;
-    foreach my $aor (split(/,/, $str)) {
-	if($nbaor > 0 && $aor =~ m/-/){
-	    die "you can use a range in a list";
-	}
-	if (!Net::IP->new($aor)) {
+    my $count = 0;
+    my $iprange = 0;
+    foreach my $elem (split(/,/, $str)) {
+	$count++;
+	if (!Net::IP->new($elem)) {
 	    my $err = Net::IP::Error();
 	    die "invalid IP address: $err\n";
-	}else{
-	    $nbaor++;
 	}
+	$iprange = 1 if $elem =~ m/-/;
     }
+    
+    die "you can use a range in a list\n" if $iprange && $count > 1;
 }
 
 sub parse_port_name_number_or_range {
