@@ -6,6 +6,7 @@ use POSIX;
 use Data::Dumper;
 use Digest::SHA;
 use PVE::INotify;
+use PVE::Exception qw(raise raise_param_exc);
 use PVE::JSONSchema qw(get_standard_option);
 use PVE::Cluster;
 use PVE::ProcFSTools;
@@ -692,31 +693,29 @@ sub parse_port_name_number_or_range {
     my ($str) = @_;
 
     my $services = PVE::Firewall::get_etc_services();
-    my $nbports = 0;
+    my $count = 0;
     foreach my $item (split(/,/, $str)) {
-	my $portlist = "";
-	my $oldpon = undef;
-	$nbports++;
-	foreach my $pon (split(':', $item, 2)) {
-	    $pon = $services->{byname}->{$pon}->{port} if $services->{byname}->{$pon}->{port};
-	    if ($pon =~ m/^\d+$/){
-		die "invalid port '$pon'\n" if $pon < 0 && $pon > 65535;
-		die "port '$pon' must be bigger than port '$oldpon' \n" if $oldpon && ($pon < $oldpon);
-		$oldpon = $pon;
-	    }else{
-		die "invalid port $services->{byname}->{$pon}\n" if !$services->{byname}->{$pon};
-	    }
+	$count++;
+	if ($item =~ m/^(\d+):(\d+)$/) {
+	    my ($port1, $port2) = ($1, $2);
+	    die "invalid port '$port1'\n" if $port1 > 65535;
+	    die "invalid port '$port2'\n" if $port2 > 65535;
+	} elsif ($item =~ m/^(\d+)$/) {
+	    my $port = $1;
+	    die "invalid port '$port'\n" if $port > 65535;
+	} else {
+	    die "invalid port '$item'\n" if !$services->{byname}->{$item}; 
 	}
     }
 
-    return ($nbports);
+    return $count;
 }
 
 PVE::JSONSchema::register_format('pve-fw-port-spec', \&pve_fw_verify_port_spec);
 sub pve_fw_verify_port_spec {
    my ($portstr) = @_;
 
-    parse_port_name_number_or_range($portstr);
+   parse_port_name_number_or_range($portstr);
 
    return $portstr;
 }
@@ -848,6 +847,57 @@ sub delete_rule_properties {
     return $rule;
 }
 
+sub verify_rule {
+    my ($rule, $allow_groups) = @_;
+
+    my $type = $rule->{type};
+
+    raise_param_exc({ type => "missing property"}) if !$type;
+    raise_param_exc({ action => "missing property"}) if !$rule->{action};
+ 
+    if ($type eq  'in' || $type eq 'out') {
+	raise_param_exc({ action => "unknown action '$rule->{action}'"})
+	    if $rule->{action} !~ m/^(ACCEPT|DROP|REJECT)$/;
+    } elsif ($type eq 'group') {
+	raise_param_exc({ type => "security groups not allowed"}) 
+	    if !$allow_groups;
+	raise_param_exc({ action => "invalid characters in security group name"}) 
+	    if $rule->{action} !~ m/^[A-Za-z0-9_\-]+$/;
+    } else {
+	raise_param_exc({ type => "unknown rule type '$type'"});
+    }
+   
+    # fixme: verify $rule->{iface}?
+
+    if ($rule->{macro}) {
+	my $preferred_name = $pve_fw_preferred_macro_names->{lc($rule->{macro})};
+	raise_param_exc({ macro => "unknown macro '$rule->{macro}'"}) if !$preferred_name;
+	$rule->{macro} = $preferred_name;
+    }
+
+    if ($rule->{dport}) {
+	eval { parse_port_name_number_or_range($rule->{dport}); };
+	raise_param_exc({ dport => $@ }) if $@;
+    }
+
+    if ($rule->{sport}) {
+	eval { parse_port_name_number_or_range($rule->{sport}); };
+	raise_param_exc({ sport => $@ }) if $@;
+    }
+
+    if ($rule->{source}) {
+	eval { parse_address_list($rule->{source}); };
+	raise_param_exc({ source => $@ }) if $@;
+    }
+
+    if ($rule->{dest}) {
+	eval { parse_address_list($rule->{dest}); };
+	raise_param_exc({ dest => $@ }) if $@;
+    }
+
+    return $rule;
+}
+
 sub copy_rule_data {
     my ($rule, $param) = @_;
 
@@ -862,6 +912,9 @@ sub copy_rule_data {
 	    delete $rule->{$k};
 	}
     }
+
+    # verify rule now
+
     return $rule;
 }
 
@@ -2033,7 +2086,11 @@ my $format_rules = sub {
 	if ($rule->{type} eq  'in' || $rule->{type} eq 'out') {
 	    $raw .= '|' if defined($rule->{enable}) && !$rule->{enable};
 	    $raw .= uc($rule->{type});
-	    $raw .= " " . $rule->{action};
+	    if ($rule->{macro}) {
+		$raw .= " $rule->{macro}($rule->{action})";
+	    } else {
+		$raw .= " " . $rule->{action};
+	    }
 	    $raw .= " " . ($rule->{iface} || '-') if $need_iface;
 	    $raw .= " " . ($rule->{source} || '-');
 	    $raw .= " " . ($rule->{dest} || '-');

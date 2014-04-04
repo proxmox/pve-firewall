@@ -32,6 +32,10 @@ sub save_rules {
 
 my $additional_param_hash = {};
 
+sub allow_groups {
+    return 1;
+}
+
 sub additional_parameters {
     my ($class, $new_value) = @_;
 
@@ -160,6 +164,7 @@ sub register_create_rule {
 	    my $rule = {};
 
 	    PVE::Firewall::copy_rule_data($rule, $param);
+	    PVE::Firewall::verify_rule($rule, $class->allow_groups());
 
 	    $rule->{enable} = 0 if !defined($param->{enable});
 
@@ -237,6 +242,8 @@ sub register_update_rule {
 		PVE::Firewall::copy_rule_data($rule, $param);
 		
 		PVE::Firewall::delete_rule_properties($rule, $param->{'delete'}) if $param->{'delete'};
+
+		PVE::Firewall::verify_rule($rule, $class->allow_groups());
 	    }
 
 	    $class->save_rules($param, $fw_conf, $rules);
@@ -303,6 +310,10 @@ __PACKAGE__->additional_parameters({ group => {
     type => 'string',
     maxLength => 20, # fixme: what length?
 }});
+
+sub allow_groups {
+    return 0;
+}
 
 sub load_config {
     my ($class, $param) = @_;
