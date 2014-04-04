@@ -68,124 +68,134 @@ my $log_level_hash = {
 # imported/converted from: /usr/share/shorewall/macro.*
 my $pve_fw_macros = {
     'Amanda' => [
+	"Amanda Backup",
 	{ action => 'PARAM', proto => 'udp', dport => '10080' },
 	{ action => 'PARAM', proto => 'tcp', dport => '10080' },
     ],
     'Auth' => [
+	"Auth (identd) traffic",
 	{ action => 'PARAM', proto => 'tcp', dport => '113' },
     ],
     'BGP' => [
+	"Border Gateway Protocol traffic",
 	{ action => 'PARAM', proto => 'tcp', dport => '179' },
     ],
     'BitTorrent' => [
+	"BitTorrent traffic for BitTorrent 3.1 and earlier",
 	{ action => 'PARAM', proto => 'tcp', dport => '6881:6889' },
 	{ action => 'PARAM', proto => 'udp', dport => '6881' },
     ],
     'BitTorrent32' => [
+	"BitTorrent traffic for BitTorrent 3.2 and later",
 	{ action => 'PARAM', proto => 'tcp', dport => '6881:6999' },
 	{ action => 'PARAM', proto => 'udp', dport => '6881' },
     ],
     'CVS' => [
+	"Concurrent Versions System pserver traffic",
 	{ action => 'PARAM', proto => 'tcp', dport => '2401' },
     ],
     'Citrix' => [
+	"Citrix/ICA traffic (ICA, ICA Browser, CGP)",
 	{ action => 'PARAM', proto => 'tcp', dport => '1494' },
 	{ action => 'PARAM', proto => 'udp', dport => '1604' },
 	{ action => 'PARAM', proto => 'tcp', dport => '2598' },
     ],
     'DAAP' => [
+	"Digital Audio Access Protocol traffic (iTunes, Rythmbox daemons)",
 	{ action => 'PARAM', proto => 'tcp', dport => '3689' },
 	{ action => 'PARAM', proto => 'udp', dport => '3689' },
     ],
     'DCC' => [
+	"Distributed Checksum Clearinghouse spam filtering mechanism",
 	{ action => 'PARAM', proto => 'tcp', dport => '6277' },
     ],
     'DHCPfwd' => [
+	"Forwarded DHCP traffic (bidirectional)",
 	{ action => 'PARAM', proto => 'udp', dport => '67:68', sport => '67:68' },
 	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'udp', dport => '67:68', sport => '67:68' },
     ],
     'DNS' => [
+	"Domain Name System traffic (upd and tcp)",
 	{ action => 'PARAM', proto => 'udp', dport => '53' },
 	{ action => 'PARAM', proto => 'tcp', dport => '53' },
     ],
     'Distcc' => [
+	"Distributed Compiler service",
 	{ action => 'PARAM', proto => 'tcp', dport => '3632' },
     ],
-    'Edonkey' => [
-	{ action => 'PARAM', proto => 'tcp', dport => '4662' },
-	{ action => 'PARAM', proto => 'udp', dport => '4665' },
-    ],
     'FTP' => [
+	"File Transfer Protocol",
 	{ action => 'PARAM', proto => 'tcp', dport => '21' },
     ],
     'Finger' => [
+	"Finger protocol (RFC 742)",
 	{ action => 'PARAM', proto => 'tcp', dport => '79' },
     ],
     'GNUnet' => [
+	"GNUnet secure peer-to-peer networking traffic",
 	{ action => 'PARAM', proto => 'tcp', dport => '2086' },
 	{ action => 'PARAM', proto => 'udp', dport => '2086' },
 	{ action => 'PARAM', proto => 'tcp', dport => '1080' },
 	{ action => 'PARAM', proto => 'udp', dport => '1080' },
     ],
     'GRE' => [
+	"Generic Routing Encapsulation tunneling protocol (bidirectional)",
 	{ action => 'PARAM', proto => '47' },
 	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => '47' },
     ],
     'Git' => [
+	"Git distributed revision control traffic",
 	{ action => 'PARAM', proto => 'tcp', dport => '9418' },
     ],
-    'Gnutella' => [
-	{ action => 'PARAM', proto => 'tcp', dport => '6346' },
-	{ action => 'PARAM', proto => 'udp', dport => '6346' },
-    ],
     'HKP' => [
+	"OpenPGP HTTP keyserver protocol traffic",
 	{ action => 'PARAM', proto => 'tcp', dport => '11371' },
     ],
     'HTTP' => [
+	"Hypertext Transfer Protocol (WWW)",
 	{ action => 'PARAM', proto => 'tcp', dport => '80' },
     ],
     'HTTPS' => [
+	"Hypertext Transfer Protocol (WWW) over SSL",
 	{ action => 'PARAM', proto => 'tcp', dport => '443' },
     ],
     'ICPV2' => [
+	"Internet Cache Protocol V2 (Squid) traffic",
 	{ action => 'PARAM', proto => 'udp', dport => '3130' },
     ],
     'ICQ' => [
+	"AOL Instant Messenger traffic",
 	{ action => 'PARAM', proto => 'tcp', dport => '5190' },
     ],
     'IMAP' => [
+	"Internet Message Access Protocol",
 	{ action => 'PARAM', proto => 'tcp', dport => '143' },
     ],
     'IMAPS' => [
+	"Internet Message Access Protocol over SSL",
 	{ action => 'PARAM', proto => 'tcp', dport => '993' },
     ],
     'IPIP' => [
+	"IPIP capsulation traffic (bidirectional)",
 	{ action => 'PARAM', proto => '94' },
 	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => '94' },
     ],
-    'IPP' => [
-	{ action => 'PARAM', proto => 'tcp', dport => '631' },
-    ],
-    'IPPbrd' => [
-	{ action => 'PARAM', proto => 'udp', dport => '631' },
-    ],
-    'IPPserver' => [
-	{ action => 'PARAM', source => 'SOURCE', dest => 'DEST', proto => 'tcp', dport => '631' },
-	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'udp', dport => '631' },
-    ],
     'IPsec' => [
+	"IPsec traffic (bidirectional)",
 	{ action => 'PARAM', proto => 'udp', dport => '500', sport => '500' },
 	{ action => 'PARAM', proto => '50' },
 	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'udp', dport => '500', sport => '500' },
 	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => '50' },
     ],
     'IPsecah' => [
+	"IPsec authentication (AH) traffic (bidirectional)",
 	{ action => 'PARAM', proto => 'udp', dport => '500', sport => '500' },
 	{ action => 'PARAM', proto => '51' },
 	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'udp', dport => '500', sport => '500' },
 	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => '51' },
     ],
     'IPsecnat' => [
+	"IPsec traffic and Nat-Traversal (bidirectional)",
 	{ action => 'PARAM', proto => 'udp', dport => '500' },
 	{ action => 'PARAM', proto => 'udp', dport => '4500' },
 	{ action => 'PARAM', proto => '50' },
@@ -194,123 +204,142 @@ my $pve_fw_macros = {
 	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => '50' },
     ],
     'IRC' => [
+	"Internet Relay Chat traffic",
 	{ action => 'PARAM', proto => 'tcp', dport => '6667' },
     ],
-    'JabberPlain' => [
-	{ action => 'PARAM', proto => 'tcp', dport => '5222' },
-    ],
-    'JabberSecure' => [
-	{ action => 'PARAM', proto => 'tcp', dport => '5223' },
-    ],
-    'Jabberd' => [
-	{ action => 'PARAM', proto => 'tcp', dport => '5269' },
-    ],
     'Jetdirect' => [
+	"HP Jetdirect printing",
 	{ action => 'PARAM', proto => 'tcp', dport => '9100' },
     ],
     'L2TP' => [
+	"Layer 2 Tunneling Protocol traffic",
 	{ action => 'PARAM', proto => 'udp', dport => '1701' },
 	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'udp', dport => '1701' },
     ],
     'LDAP' => [
+	"Lightweight Directory Access Protocol traffic",
 	{ action => 'PARAM', proto => 'tcp', dport => '389' },
     ],
     'LDAPS' => [
+	"Secure Lightweight Directory Access Protocol traffic",
 	{ action => 'PARAM', proto => 'tcp', dport => '636' },
     ],
     'MSNP' => [
+	"Microsoft Notification Protocol",
 	{ action => 'PARAM', proto => 'tcp', dport => '1863' },
     ],
     'MSSQL' => [
+	"Microsoft SQL Server",
 	{ action => 'PARAM', proto => 'tcp', dport => '1433' },
     ],
     'Mail' => [
+	"Mail traffic (SMTP, SMTPS, Submission)",
 	{ action => 'PARAM', proto => 'tcp', dport => '25' },
 	{ action => 'PARAM', proto => 'tcp', dport => '465' },
 	{ action => 'PARAM', proto => 'tcp', dport => '587' },
     ],
     'Munin' => [
+	"Munin networked resource monitoring traffic",
 	{ action => 'PARAM', proto => 'tcp', dport => '4949' },
     ],
     'MySQL' => [
+	"MySQL server",
 	{ action => 'PARAM', proto => 'tcp', dport => '3306' },
     ],
     'NNTP' => [
+	"NNTP traffic (Usenet).",
 	{ action => 'PARAM', proto => 'tcp', dport => '119' },
     ],
     'NNTPS' => [
+	"Encrypted NNTP traffic (Usenet)",
 	{ action => 'PARAM', proto => 'tcp', dport => '563' },
     ],
     'NTP' => [
+	"Network Time Protocol (ntpd)",
 	{ action => 'PARAM', proto => 'udp', dport => '123' },
     ],
     'NTPbi' => [
+	"Bi-directional NTP (for NTP peers)",
 	{ action => 'PARAM', proto => 'udp', dport => '123' },
 	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'udp', dport => '123' },
     ],
-    'NTPbrd' => [
-	{ action => 'PARAM', proto => 'udp', dport => '123' },
-	{ action => 'PARAM', proto => 'udp', dport => '1024:65535', sport => '123' },
-    ],
     'OSPF' => [
+	"OSPF multicast traffic",
 	{ action => 'PARAM', proto => '89' },
     ],
     'OpenVPN' => [
+	"OpenVPN traffic",
 	{ action => 'PARAM', proto => 'udp', dport => '1194' },
     ],
     'PCA' => [
+	"Symantec PCAnywere (tm)",
 	{ action => 'PARAM', proto => 'udp', dport => '5632' },
 	{ action => 'PARAM', proto => 'tcp', dport => '5631' },
     ],
     'POP3' => [
+	"POP3 traffic",
 	{ action => 'PARAM', proto => 'tcp', dport => '110' },
     ],
     'POP3S' => [
+	"Encrypted POP3 traffic",
 	{ action => 'PARAM', proto => 'tcp', dport => '995' },
     ],
     'PPtP' => [
+	"Point-to-Point Tunneling Protocol",
 	{ action => 'PARAM', proto => '47' },
 	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => '47' },
 	{ action => 'PARAM', proto => 'tcp', dport => '1723' },
     ],
     'Ping' => [
+	"ICMP echo request",
 	{ action => 'PARAM', proto => 'icmp', dport => 'echo-request' },
     ],
     'PostgreSQL' => [
+	"PostgreSQL server",
 	{ action => 'PARAM', proto => 'tcp', dport => '5432' },
     ],
     'Printer' => [
+	"Line Printer protocol printing",
 	{ action => 'PARAM', proto => 'tcp', dport => '515' },
     ],
     'RDP' => [
+	"Microsoft Remote Desktop Protocol traffic",
 	{ action => 'PARAM', proto => 'tcp', dport => '3389' },
     ],
     'RIPbi' => [
+	"Routing Information Protocol (bidirectional)",
 	{ action => 'PARAM', proto => 'udp', dport => '520' },
 	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'udp', dport => '520' },
     ],
     'RNDC' => [
+	"BIND remote management protocol",
 	{ action => 'PARAM', proto => 'tcp', dport => '953' },
     ],
     'Razor' => [
+	"Razor Antispam System",
 	{ action => 'ACCEPT', proto => 'tcp', dport => '2703' },
     ],
     'Rdate' => [
+	"Remote time retrieval (rdate)",
 	{ action => 'PARAM', proto => 'tcp', dport => '37' },
     ],
     'Rsync' => [
+	"Rsync server",
 	{ action => 'PARAM', proto => 'tcp', dport => '873' },
     ],
     'SANE' => [
+	"SANE network scanning",
 	{ action => 'PARAM', proto => 'tcp', dport => '6566' },
     ],
     'SMB' => [
+	"Microsoft SMB traffic",
 	{ action => 'PARAM', proto => 'udp', dport => '135,445' },
 	{ action => 'PARAM', proto => 'udp', dport => '137:139' },
 	{ action => 'PARAM', proto => 'udp', dport => '1024:65535', sport => '137' },
 	{ action => 'PARAM', proto => 'tcp', dport => '135,139,445' },
     ],
     'SMBBI' => [
+	"Microsoft SMB traffic (bidirectional)",
 	{ action => 'PARAM', proto => 'udp', dport => '135,445' },
 	{ action => 'PARAM', proto => 'udp', dport => '137:139' },
 	{ action => 'PARAM', proto => 'udp', dport => '1024:65535', sport => '137' },
@@ -321,81 +350,104 @@ my $pve_fw_macros = {
 	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'tcp', dport => '135,139,445' },
     ],
     'SMBswat' => [
+	"Samba Web Administration Tool",
 	{ action => 'PARAM', proto => 'tcp', dport => '901' },
     ],
     'SMTP' => [
+	"Simple Mail Transfer Protocol",
 	{ action => 'PARAM', proto => 'tcp', dport => '25' },
     ],
     'SMTPS' => [
+	"Encrypted Simple Mail Transfer Protocol",
 	{ action => 'PARAM', proto => 'tcp', dport => '465' },
     ],
     'SNMP' => [
+	"Simple Network Management Protocol",
 	{ action => 'PARAM', proto => 'udp', dport => '161:162' },
 	{ action => 'PARAM', proto => 'tcp', dport => '161' },
     ],
     'SPAMD' => [
+	"Spam Assassin SPAMD traffic",
 	{ action => 'PARAM', proto => 'tcp', dport => '783' },
     ],
     'SSH' => [
+	"Secure shell traffic",
 	{ action => 'PARAM', proto => 'tcp', dport => '22' },
     ],
     'SVN' => [
+	"Subversion server (svnserve)",
 	{ action => 'PARAM', proto => 'tcp', dport => '3690' },
     ],
     'SixXS' => [
+	"SixXS IPv6 Deployment and Tunnel Broker",
 	{ action => 'PARAM', proto => 'tcp', dport => '3874' },
 	{ action => 'PARAM', proto => 'udp', dport => '3740' },
 	{ action => 'PARAM', proto => '41' },
 	{ action => 'PARAM', proto => 'udp', dport => '5072,8374' },
     ],
     'Squid' => [
+	"Squid web proxy traffic",
 	{ action => 'PARAM', proto => 'tcp', dport => '3128' },
     ],
     'Submission' => [
+	"Mail message submission traffic",
 	{ action => 'PARAM', proto => 'tcp', dport => '587' },
     ],
     'Syslog' => [
+	"Syslog protocol (RFC 5424) traffic",
 	{ action => 'PARAM', proto => 'udp', dport => '514' },
 	{ action => 'PARAM', proto => 'tcp', dport => '514' },
     ],
     'TFTP' => [
+	"Trivial File Transfer Protocol traffic",
 	{ action => 'PARAM', proto => 'udp', dport => '69' },
     ],
     'Telnet' => [
+	"Telnet traffic",
 	{ action => 'PARAM', proto => 'tcp', dport => '23' },
     ],
     'Telnets' => [
+	"Telnet over SSL",
 	{ action => 'PARAM', proto => 'tcp', dport => '992' },
     ],
     'Time' => [
+	"RFC 868 Time protocol",
 	{ action => 'PARAM', proto => 'tcp', dport => '37' },
     ],
     'Trcrt' => [
+	"Traceroute (for up to 30 hops) traffic",
 	{ action => 'PARAM', proto => 'udp', dport => '33434:33524' },
 	{ action => 'PARAM', proto => 'icmp', dport => 'echo-request' },
     ],
     'VNC' => [
+	"VNC traffic for VNC display's 0 - 9",
 	{ action => 'PARAM', proto => 'tcp', dport => '5900:5909' },
     ],
     'VNCL' => [
+	"VNC traffic from Vncservers to Vncviewers in listen mode",
 	{ action => 'PARAM', proto => 'tcp', dport => '5500' },
     ],
     'Web' => [
+	"WWW traffic (HTTP and HTTPS)",
 	{ action => 'PARAM', proto => 'tcp', dport => '80' },
 	{ action => 'PARAM', proto => 'tcp', dport => '443' },
     ],
     'Webcache' => [
+	"Web Cache/Proxy traffic (port 8080)",
 	{ action => 'PARAM', proto => 'tcp', dport => '8080' },
     ],
     'Webmin' => [
+	"Webmin traffic",
 	{ action => 'PARAM', proto => 'tcp', dport => '10000' },
     ],
     'Whois' => [
+	"Whois (nicname, RFC 3912) traffic",
 	{ action => 'PARAM', proto => 'tcp', dport => '43' },
     ],
 };
 
 my $pve_fw_parsed_macros;
+my $pve_fw_macro_descr;
 my $pve_fw_preferred_macro_names = {};
 
 my $pve_std_chains = {
@@ -533,12 +585,19 @@ sub init_firewall_macros {
     foreach my $k (keys %$pve_fw_macros) {
 	my $lc_name = lc($k);
 	my $macro = $pve_fw_macros->{$k};
+	if (!ref($macro->[0])) {
+	    $pve_fw_macro_descr->{$k} = shift @$macro;
+	}
 	$pve_fw_preferred_macro_names->{$lc_name} = $k;
 	$pve_fw_parsed_macros->{$k} = $macro;
     }
 }
 
 init_firewall_macros();
+
+sub get_macros {
+    return wantarray ? ($pve_fw_parsed_macros, $pve_fw_macro_descr): $pve_fw_parsed_macros;
+}
 
 my $etc_services;
 

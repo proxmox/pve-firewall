@@ -50,6 +50,7 @@ __PACKAGE__->register_method({
 	    { name => 'options' },
 	    { name => 'groups' },
 	    { name => 'netgroups' },
+	    { name => 'macros' },
 	    ];
 
 	return $result;
@@ -138,3 +139,43 @@ __PACKAGE__->register_method({
 
 	return undef;
     }});
+
+__PACKAGE__->register_method({
+    name => 'get_macros',
+    path => 'macros',
+    method => 'GET',
+    description => "List available macros",
+    parameters => {
+    	additionalProperties => 0,
+    },
+    returns => {
+	type => 'array',
+	items => {
+	    type => "object",
+	    properties => {
+		macro => {
+		    description => "Macro name.",
+		    type => 'string',
+		},
+		descr => {
+		    description => "More verbose description (if available).",
+		    type => 'string',
+		}
+	    },
+	},
+    },
+    code => sub {
+	my ($param) = @_;
+
+	my $res = [];
+
+	my ($macros, $descr) = PVE::Firewall::get_macros();
+
+	foreach my $macro (keys %$macros) {
+	    push @$res, { macro => $macro, descr => $descr->{$macro} || $macro };
+	}
+
+	return $res;
+    }});
+
+1;
