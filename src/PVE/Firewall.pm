@@ -847,6 +847,57 @@ sub delete_rule_properties {
     return $rule;
 }
 
+my $apply_macro = sub {
+    my ($macro_name, $param, $verify) = @_;
+
+    my $macro_rules = $pve_fw_parsed_macros->{$macro_name};
+    die "unknown macro '$macro_name'\n" if !$macro_rules; # should not happen
+
+    my $rules = [];
+
+    foreach my $templ (@$macro_rules) {
+	my $rule = {};
+	my $param_used = {};
+	foreach my $k (keys %$templ) {
+	    my $v = $templ->{$k};
+	    if ($v eq 'PARAM') {
+		$v = $param->{$k};
+		$param_used->{$k} = 1;
+	    } elsif ($v eq 'DEST') {
+		$v = $param->{dest};
+		$param_used->{dest} = 1;
+	    } elsif ($v eq 'SOURCE') {
+		$v = $param->{source};
+		$param_used->{source} = 1;
+	    }
+
+	    if (!defined($v)) {
+		my $msg = "missing parameter '$k' in macro '$macro_name'";
+		raise_param_exc({ macro => $msg }) if $verify; 
+		die "$msg\n";
+	    }
+	    $rule->{$k} = $v;
+	}
+	foreach my $k (keys %$param) {
+	    next if $k eq 'macro';
+	    next if !defined($param->{$k});
+	    next if $param_used->{$k};
+	    if (defined($rule->{$k})) {
+		if ($rule->{$k} ne $param->{$k}) {
+		    my $msg = "parameter '$k' already define in macro (value = '$rule->{$k}')";
+		    raise_param_exc({ $k => $msg }) if $verify; 
+		    die "$msg\n";
+		}
+	    } else {
+		$rule->{$k} = $param->{$k};
+	    }
+	}
+	push @$rules, $rule;
+    }
+
+    return $rules;
+};
+
 sub verify_rule {
     my ($rule, $allow_groups) = @_;
 
@@ -893,6 +944,10 @@ sub verify_rule {
     if ($rule->{dest}) {
 	eval { parse_address_list($rule->{dest}); };
 	raise_param_exc({ dest => $@ }) if $@;
+    }
+
+    if ($rule->{macro}) {
+	&$apply_macro($rule->{macro}, $rule, 1);
     }
 
     return $rule;
@@ -1153,50 +1208,6 @@ sub ruleset_generate_cmdstr {
 
     return scalar(@cmd) ? join(' ', @cmd) : undef;
 }
-
-my $apply_macro = sub {
-    my ($macro_name, $param) = @_;
-
-    my $macro_rules = $pve_fw_parsed_macros->{$macro_name};
-    die "unknown macro '$macro_name'\n" if !$macro_rules; # should not happen
-
-    my $rules = [];
-
-    foreach my $templ (@$macro_rules) {
-	my $rule = {};
-	my $param_used = {};
-	foreach my $k (keys %$templ) {
-	    my $v = $templ->{$k};
-	    if ($v eq 'PARAM') {
-		$v = $param->{$k};
-		$param_used->{$k} = 1;
-	    } elsif ($v eq 'DEST') {
-		$v = $param->{dest};
-		$param_used->{dest} = 1;
-	    } elsif ($v eq 'SOURCE') {
-		$v = $param->{source};
-		$param_used->{source} = 1;
-	    }
-
-	    die "missing parameter '$k' in macro '$macro_name'\n" if !defined($v);
-	    $rule->{$k} = $v;
-	}
-	foreach my $k (keys %$param) {
-	    next if $k eq 'macro';
-	    next if !defined($param->{$k});
-	    next if $param_used->{$k};
-	    if (defined($rule->{$k})) {
-		die "parameter '$k' already define in macro (value = '$rule->{$k}')\n"
-		    if $rule->{$k} ne $param->{$k};
-	    } else {
-		$rule->{$k} = $param->{$k};
-	    }
-	}
-	push @$rules, $rule;
-    }
-
-    return $rules;
-};
 
 sub ruleset_generate_rule {
     my ($ruleset, $chain, $rule, $actions, $goto, $cluster_conf) = @_;
