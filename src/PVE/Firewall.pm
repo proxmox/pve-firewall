@@ -2143,7 +2143,13 @@ my $format_ipset = sub {
 
     my $raw = '';
 
+    my $nethash = {};
     foreach my $entry (@$options) {
+	$nethash->{$entry->{cidr}} = $entry;
+    }
+
+    foreach my $cidr (sort keys %$nethash) {
+	my $entry = $nethash->{$cidr};
 	my $line = $entry->{nomatch} ? '!' : '';
 	$line .= $entry->{cidr};
 	$line .= " # " . encode('utf8', $entry->{comment})
