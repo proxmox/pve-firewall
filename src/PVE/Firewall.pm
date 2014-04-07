@@ -10,7 +10,7 @@ use PVE::Exception qw(raise raise_param_exc);
 use PVE::JSONSchema qw(get_standard_option);
 use PVE::Cluster;
 use PVE::ProcFSTools;
-use PVE::Tools;
+use PVE::Tools qw($IPV4RE);
 use File::Basename;
 use File::Path;
 use IO::File;
@@ -34,6 +34,18 @@ eval {
     require PVE::OpenVZ;
     $have_pve_manager = 1;
 };
+
+PVE::JSONSchema::register_format('IPv4orCIDR', \&pve_verify_ipv4_or_cidr);
+sub pve_verify_ipv4_or_cidr {
+    my ($cidr, $noerr) = @_;
+
+    if ($cidr =~ m!^(?:$IPV4RE)(/(\d+))?$! && (!$1 || (($2 > 7) && ($2 <= 32)))) {
+	return $cidr;
+    }
+    return undef if $noerr;
+    die "value does not look like a valid IP address or CIDR network\n";
+}
+
 
 my $feature_ipset_nomatch = 0;
 eval  {

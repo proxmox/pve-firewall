@@ -1,4 +1,5 @@
 LIB_SOURCES=			\
+	IPSet.pm		\
 	Rules.pm		\
 	Cluster.pm		\
 	Host.pm			\
