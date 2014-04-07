@@ -2,6 +2,7 @@ package PVE::API2::Firewall::IPSetBase;
 
 use strict;
 use warnings;
+use PVE::Exception qw(raise raise_param_exc);
 use PVE::JSONSchema qw(get_standard_option);
 
 use PVE::Firewall;
@@ -128,11 +129,16 @@ sub register_add_ip {
 
 	    my ($fw_conf, $ipset) = $class->load_config($param);
 
-	    my $data = { cidr => $param->{cidr} };
+	    my $cidr = $param->{cidr};
+	    
+	    foreach my $entry (@$ipset) {
+		raise_param_exc({ cidr => "address '$cidr' already exists" }) 
+		    if $entry->{cidr} eq $cidr;
+	    }
+
+	    my $data = { cidr => $cidr };
 	    $data->{nomatch} = 1 if $param->{nomatch};
 	    $data->{comment} = $param->{comment} if $param->{comment};
-
-	    # fixme: verify
 
 	    unshift @$ipset, $data;
 
@@ -166,10 +172,14 @@ sub register_remove_ip {
 
 	    my ($fw_conf, $ipset) = $class->load_config($param);
 
-	    die "implement me $param->{cidr}";
+	    my $new = [];
+   
+	    foreach my $entry (@$ipset) {
+		push @$new, $entry if $entry->{cidr} ne $param->{cidr};
+	    }
 
-	    $class->save_ipset($param, $fw_conf, $ipset);
-
+	    $class->save_ipset($param, $fw_conf, $new);
+	    
 	    return undef;
 	}});
 }
