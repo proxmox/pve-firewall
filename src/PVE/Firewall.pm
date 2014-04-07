@@ -694,6 +694,8 @@ sub parse_port_name_number_or_range {
 
     my $services = PVE::Firewall::get_etc_services();
     my $count = 0;
+    my $icmp_port = 0;
+
     foreach my $item (split(/,/, $str)) {
 	$count++;
 	if ($item =~ m/^(\d+):(\d+)$/) {
@@ -704,9 +706,15 @@ sub parse_port_name_number_or_range {
 	    my $port = $1;
 	    die "invalid port '$port'\n" if $port > 65535;
 	} else {
-	    die "invalid port '$item'\n" if !$services->{byname}->{$item}; 
+	    if ($icmp_type_names->{$item}) {
+		$icmp_port = 1;
+	    } else {
+		die "invalid port '$item'\n" if !$services->{byname}->{$item}; 
+	    }
 	}
     }
+
+    die "ICPM ports not allowed in port range\n" if $icmp_port && $count > 1;
 
     return $count;
 }
