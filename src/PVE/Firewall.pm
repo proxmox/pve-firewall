@@ -39,8 +39,10 @@ PVE::JSONSchema::register_format('IPv4orCIDR', \&pve_verify_ipv4_or_cidr);
 sub pve_verify_ipv4_or_cidr {
     my ($cidr, $noerr) = @_;
 
-    if ($cidr =~ m!^(?:$IPV4RE)(/(\d+))?$! && (!$1 || (($2 > 7) && ($2 <= 32)))) {
-	return $cidr;
+    if ($cidr =~ m!^(?:$IPV4RE)(/(\d+))?$!) {
+	return $cidr if Net::IP->new($cidr); 
+	return undef if $noerr;
+	die Net::IP::Error() . "\n";
     }
     return undef if $noerr;
     die "value does not look like a valid IP address or CIDR network\n";
@@ -2020,15 +2022,15 @@ sub parse_cluster_fw_rules {
 	    # we can add single line comments to the end of the rule
 	    my $comment = decode('utf8', $1) if $line =~ s/#\s*(.*?)\s*$//;
 
-	    $line =~ m/^(\!)?\s*((?:\d+)\.(?:\d+)\.(?:\d+)\.(?:\d+))(?:\/(\d+))?\s*$/;
+	    $line =~ m/^(\!)?\s*(\S+)\s*$/;
 	    my $nomatch = $1;
 	    my $cidr = $2;
 
-	    $cidr .= "/$3" if defined($3) && $3 != 32;
-
-	    if (!Net::IP->new($cidr)) {
-		my $err = Net::IP::Error();
-		warn "$prefix: $cidr - $err\n";
+	    $cidr =~ s|/32$||;
+	    
+	    eval { pve_verify_ipv4_or_cidr($cidr); };
+	    if (my $err = $@) {
+		warn "$prefix: $cidr - $err";
 		next;
 	    }
 
@@ -2271,8 +2273,15 @@ sub generate_ipset {
 
     push @{$ipset_ruleset->{$name}}, "create $name hash:net family inet hashsize $hashsize maxelem $hashsize";
 
+    # remove duplicates
+    my $nethash = {};
     foreach my $entry (@$options) {
-	my $cidr = $entry->{cidr};
+	$nethash->{$entry->{cidr}} = $entry;
+    }
+
+    foreach my $cidr (sort keys %$nethash) {
+	my $entry = $nethash->{$cidr};
+
 	my $cmd = "add $name $cidr";
 	if ($entry->{nomatch}) {
 	    if ($feature_ipset_nomatch) {
@@ -2647,6 +2656,13 @@ sub get_ipset_cmdlist {
 
     my $active_chains = ipset_get_chains();
     my $statushash = get_ruleset_status($ruleset, $active_chains, \&ipset_chain_digest, $verbose);
+
+    # remove stale _swap chains 
+    foreach my $chain (keys %$active_chains) {
+	if ($chain =~ m/^PVEFW-\S+_swap$/) {
+	    $cmdlist .= "destroy $chain\n";
+	}
+    }
 
     foreach my $chain (sort keys %$ruleset) {
 	my $stat = $statushash->{$chain};
