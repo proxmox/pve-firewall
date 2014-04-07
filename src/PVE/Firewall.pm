@@ -2005,29 +2005,26 @@ sub parse_cluster_fw_rules {
 	    }
 	    push @{$res->{$section}->{$group}}, $rule;
 	} elsif ($section eq 'ipset') {
-	    chomp $line;
-	    $line =~ m/^(\!)?\s*((\d+)\.(\d+)\.(\d+)\.(\d+)(\/(\d+))?)/;
+	    # we can add single line comments to the end of the rule
+	    my $comment = decode('utf8', $1) if $line =~ s/#\s*(.*?)\s*$//;
+
+	    $line =~ m/^(\!)?\s*((?:\d+)\.(?:\d+)\.(?:\d+)\.(?:\d+))(?:\/(\d+))?\s*$/;
 	    my $nomatch = $1;
-	my $ip = $2;
+	    my $cidr = $2;
 
-	    if(!$ip){
-		warn "$prefix: $line is not an valid ip address\n";
+	    $cidr .= "/$3" if defined($3) && $3 != 32;
+
+	    if (!Net::IP->new($cidr)) {
+		my $err = Net::IP::Error();
+		warn "$prefix: $cidr - $err\n";
 		next;
 	    }
-	    if (!Net::IP->new($ip)) {
-		warn "$prefix: $line is not an valid ip address\n";
-		next;
-	    }
 
-	    if ($nomatch) {
-		if ($feature_ipset_nomatch) {
-		    push @{$res->{$section}->{$group}}, "$ip nomatch";
-		} else {
-		    warn "$prefix: ignore $line - nomatch not supported by kernel\n";
-		}
-	    } else {
-		push @{$res->{$section}->{$group}}, $ip;
-	    }
+	    my $entry = { cidr => $cidr }; 
+	    $entry->{nomatch} = 1 if $nomatch;
+	    $entry->{comment} = $comment if $comment;
+	    
+	    push @{$res->{$section}->{$group}}, $entry;
 	}
     }
 
@@ -2141,6 +2138,22 @@ my $format_options = sub {
     return $raw;
 };
 
+my $format_ipset = sub {
+    my ($options) = @_;
+
+    my $raw = '';
+
+    foreach my $entry (@$options) {
+	my $line = $entry->{nomatch} ? '!' : '';
+	$line .= $entry->{cidr};
+	$line .= " # " . encode('utf8', $entry->{comment})
+	    if $entry->{comment} && $entry->{comment} !~ m/^\s*$/;
+	$raw .= "$line\n";
+    }
+ 
+    return $raw;
+};
+
 sub save_vmfw_conf {
     my ($vmid, $vmfw_conf) = @_;
 
@@ -2240,8 +2253,18 @@ sub generate_ipset {
 
     push @{$ipset_ruleset->{$name}}, "create $name hash:net family inet hashsize $hashsize maxelem $hashsize";
 
-    foreach my $ip (@$options) {
-	push @{$ipset_ruleset->{$name}}, "add $name $ip";
+    foreach my $entry (@$options) {
+	my $cidr = $entry->{cidr};
+	my $cmd = "add $name $cidr";
+	if ($entry->{nomatch}) {
+	    if ($feature_ipset_nomatch) {
+		push @{$ipset_ruleset->{$name}}, "$cmd nomatch";
+	    } else {
+		warn "ignore !$cidr - nomatch not supported by kernel\n";
+	    }
+	} else {
+	    push @{$ipset_ruleset->{$name}}, $cmd;
+	}
     }
 }
 
@@ -2323,7 +2346,12 @@ sub save_clusterfw_conf {
     my $options = $cluster_conf->{options};
     $raw .= &$format_options($options) if scalar(keys %$options);
 
-    # fixme: save ipset
+    foreach my $ipset (sort keys %{$cluster_conf->{ipset}}) {
+	$raw .= "[IPSET $ipset]\n\n";
+	my $options = $cluster_conf->{ipset}->{$ipset};
+	$raw .= &$format_ipset($options);
+	$raw .= "\n";
+    }
 
     my $rules = $cluster_conf->{rules};
     if (scalar(@$rules)) {

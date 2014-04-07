@@ -49,7 +49,7 @@ __PACKAGE__->register_method({
 	    { name => 'rules' },
 	    { name => 'options' },
 	    { name => 'groups' },
-	    { name => 'netgroups' },
+	    { name => 'ipset' },
 	    { name => 'macros' },
 	    ];
 
