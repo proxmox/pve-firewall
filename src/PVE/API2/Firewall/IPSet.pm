@@ -291,4 +291,163 @@ sub save_ipset {
 
 __PACKAGE__->register_handlers();
 
+package PVE::API2::Firewall::BaseIPSetList;
+
+use strict;
+use warnings;
+use PVE::Firewall;
+use PVE::Exception qw(raise_param_exc);
+
+use base qw(PVE::RESTHandler);
+
+sub register_index {
+    my ($class) = @_;
+
+    $class->register_method({
+	name => 'ipset_index',
+	path => '',
+	method => 'GET',
+	description => "List IPSets",
+	parameters => {
+	    additionalProperties => 0,
+	},
+	returns => {
+	    type => 'array',
+	    items => {
+		type => "object",
+		properties => { 
+		    name => {
+			description => "IPSet name.",
+			type => 'string',
+		    },
+		},
+	    },
+	    links => [ { rel => 'child', href => "{name}" } ],
+	},
+	code => sub {
+	    my ($param) = @_;
+	    
+	    my $fw_conf = $class->load_config();
+
+	    my $res = [];
+	    foreach my $name (keys %{$fw_conf->{ipset}}) {
+		push @$res, { name => $name, count => scalar(@{$fw_conf->{ipset}->{$name}}) };
+	    }
+
+	    return $res;
+	}});
+}
+
+sub register_create {
+    my ($class) = @_;
+
+    $class->register_method({
+	name => 'create_ipset',
+	path => '',
+	method => 'POST',
+	description => "Create new IPSet",
+	protected => 1,
+	parameters => {
+	    additionalProperties => 0,
+	    properties => { 
+		name => {
+		    # fixme: verify format
+		    description => "IP set name.",
+		    type => 'string',
+		},
+	    }
+	},
+	returns => { type => 'null' },
+	code => sub {
+	    my ($param) = @_;
+	    
+	    my $fw_conf = $class->load_config();
+
+	    foreach my $name (keys %{$fw_conf->{ipset}}) {
+		raise_param_exc({ name => "IPSet '$name' already exists" }) 
+		    if $name eq $param->{name};
+	    }
+
+	    $fw_conf->{ipset}->{$param->{name}} = [];
+	    $class->save_config($fw_conf);
+
+	    return undef;
+	}});
+}
+
+sub register_delete {
+    my ($class) = @_;
+
+    $class->register_method({
+	name => 'delete_ipset',
+	path => '{name}',
+	method => 'DELETE',
+	description => "Delete IPSet",
+	protected => 1,
+	parameters => {
+	    additionalProperties => 0,
+	    properties => { 
+		name => {
+		    # fixme: verify format
+		    description => "IP set name.",
+		    type => 'string',
+		},
+	    }
+	},
+	returns => { type => 'null' },
+	code => sub {
+	    my ($param) = @_;
+	    
+	    my $fw_conf = $class->load_config();
+
+	    return undef if !$fw_conf->{ipset}->{$param->{name}};
+
+	    die "IPSet '$param->{name}' is not empty" 
+		if scalar(@{$fw_conf->{ipset}->{$param->{name}}});
+
+	    delete $fw_conf->{ipset}->{$param->{name}};
+
+	    $class->save_config($fw_conf);
+
+	    return undef;
+	}});
+}
+
+sub register_handlers {
+    my ($class) = @_;
+
+    $class->register_index();
+    $class->register_create();
+    $class->register_delete();
+}
+
+package PVE::API2::Firewall::ClusterIPSetList;
+
+use strict;
+use warnings;
+use PVE::Firewall;
+
+use base qw(PVE::API2::Firewall::BaseIPSetList);
+
+sub load_config {
+    my ($class) = @_;
+ 
+    return PVE::Firewall::load_clusterfw_conf();
+}
+
+sub save_config {
+    my ($class, $fw_conf) = @_;
+
+    PVE::Firewall::save_clusterfw_conf($fw_conf);
+}
+
+__PACKAGE__->register_handlers();
+
+__PACKAGE__->register_method ({
+    subclass => "PVE::API2::Firewall::ClusterIPset",  
+    path => '{name}',
+    # set fragment delimiter (no subdirs) - we need that, because CIDR address contain a slash '/' 
+    fragmentDelimiter => '', 
+});
+
 1;

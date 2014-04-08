@@ -1977,6 +1977,7 @@ sub parse_cluster_fw_rules {
 	if ($line =~ m/^\[group\s+(\S+)\]\s*$/i) {
 	    $section = 'groups';
 	    $group = lc($1);
+	    $res->{$section}->{$group} = [];
 	    next;
 	}
 
@@ -1988,6 +1989,7 @@ sub parse_cluster_fw_rules {
 	if ($line =~ m/^\[ipset\s+(\S+)\]\s*$/i) {
 	    $section = 'ipset';
 	    $group = lc($1);
+	    $res->{$section}->{$group} = [];
 	    next;
 	}
 

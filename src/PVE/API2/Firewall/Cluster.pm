@@ -26,6 +26,11 @@ __PACKAGE__->register_method ({
     path => 'rules',
 });
 
+__PACKAGE__->register_method ({
+    subclass => "PVE::API2::Firewall::ClusterIPSetList",  
+    path => 'ipset',
+});
+
 __PACKAGE__->register_method({
     name => 'index',
     path => '',
@@ -178,46 +183,5 @@ __PACKAGE__->register_method({
 
 	return $res;
     }});
-
-__PACKAGE__->register_method({
-    name => 'ipset',
-    path => 'ipset',
-    method => 'GET',
-    description => "List IPSets",
-    parameters => {
-    	additionalProperties => 0,
-    },
-    returns => {
-	type => 'array',
-	items => {
-	    type => "object",
-	    properties => { 
-		name => {
-		    description => "IPSet name.",
-		    type => 'string',
-		},
-	    },
-	},
-	links => [ { rel => 'child', href => "{name}" } ],
-    },
-    code => sub {
-	my ($param) = @_;
-
-	my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
-
-	my $res = [];
-	foreach my $name (keys %{$cluster_conf->{ipset}}) {
-	    push @$res, { name => $name, count => scalar(@{$cluster_conf->{ipset}->{$name}}) };
-	}
-
-	return $res;
-    }});
-
-__PACKAGE__->register_method ({
-    subclass => "PVE::API2::Firewall::ClusterIPset",  
-    path => 'ipset/{name}',
-    # set fragment delimiter (no subdirs) - we need that, because CIDR address contain a slash '/' 
-    fragmentDelimiter => '', 
-});
 
 1;
