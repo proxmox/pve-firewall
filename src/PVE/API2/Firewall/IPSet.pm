@@ -103,7 +103,7 @@ sub register_get_ipset {
 	}});
 }
 
-sub register_add_ip {
+sub register_create_ip {
     my ($class) = @_;
 
     my $properties = $class->additional_parameters();
@@ -114,7 +114,7 @@ sub register_add_ip {
     $properties->{comment} = $api_properties->{comment};
     
     $class->register_method({
-	name => 'add_ip',
+	name => 'create_ip',
 	path => '',
 	method => 'POST',
 	description => "Add IP or Network to IPSet.",
@@ -148,7 +148,78 @@ sub register_add_ip {
 	}});
 }
 
-sub register_remove_ip {
+sub register_read_ip {
+    my ($class) = @_;
+
+    my $properties = $class->additional_parameters();
+
+    $properties->{name} = $api_properties->{name};
+    $properties->{cidr} = $api_properties->{cidr};
+    
+    $class->register_method({
+	name => 'read_ip',
+	path => '{cidr}',
+	method => 'GET',
+	description => "Read IP or Network settings from IPSet.",
+	protected => 1,
+	parameters => {
+	    additionalProperties => 0,
+	    properties => $properties,
+	},
+	returns => { type => "object" },
+	code => sub {
+	    my ($param) = @_;
+
+	    my ($fw_conf, $ipset) = $class->load_config($param);
+
+	    foreach my $entry (@$ipset) {
+		return $entry if $entry->{cidr} eq $param->{cidr};
+	    }
+
+	    raise_param_exc({ cidr => "no such IP/Network" });
+	}});
+}
+
+sub register_update_ip {
+    my ($class) = @_;
+
+    my $properties = $class->additional_parameters();
+
+    $properties->{name} = $api_properties->{name};
+    $properties->{cidr} = $api_properties->{cidr};
+    $properties->{nomatch} = $api_properties->{nomatch};
+    $properties->{comment} = $api_properties->{comment};
+    
+    $class->register_method({
+	name => 'update_ip',
+	path => '{cidr}',
+	method => 'PUT',
+	description => "Update IP or Network settings",
+	protected => 1,
+	parameters => {
+	    additionalProperties => 0,
+	    properties => $properties,
+	},
+	returns => { type => "null" },
+	code => sub {
+	    my ($param) = @_;
+
+	    my ($fw_conf, $ipset) = $class->load_config($param);
+
+	    foreach my $entry (@$ipset) {
+		if($entry->{cidr} eq $param->{cidr}) {
+		    $entry->{nomatch} = $param->{nomatch};
+		    $entry->{comment} = $param->{comment};
+		    $class->save_ipset($param, $fw_conf, $ipset);
+		    return;
+		}
+	    }
+
+	    raise_param_exc({ cidr => "no such IP/Network" });
+	}});
+}
+
+sub register_delete_ip {
     my ($class) = @_;
 
     my $properties = $class->additional_parameters();
@@ -188,8 +259,10 @@ sub register_handlers {
     my ($class) = @_;
 
     $class->register_get_ipset();
-    $class->register_add_ip();
-    $class->register_remove_ip();
+    $class->register_create_ip();
+    $class->register_read_ip();
+    $class->register_update_ip();
+    $class->register_delete_ip();
 }
 
 package PVE::API2::Firewall::ClusterIPset;
