@@ -687,7 +687,7 @@ sub get_etc_protocols {
 sub parse_address_list {
     my ($str) = @_;
 
-    return if $str !~ m/^(\+)(\S+)$/; # ipset ref
+    return if $str =~ m/^(\+)(\S+)$/; # ipset ref
 
     my $count = 0;
     my $iprange = 0;
