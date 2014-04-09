@@ -3,6 +3,7 @@ package PVE::API2::Firewall::Groups;
 use strict;
 use warnings;
 use PVE::JSONSchema qw(get_standard_option);
+use PVE::Exception qw(raise raise_param_exc);
 
 use PVE::Firewall;
 use PVE::API2::Firewall::Rules;
@@ -25,6 +26,10 @@ __PACKAGE__->register_method({
 	    type => "object",
 	    properties => { 
 		name => get_standard_option('pve-security-group-name'),
+		comment => { 
+		    type => 'string',
+		    optional => 1,
+		}
 	    },
 	},
 	links => [ { rel => 'child', href => "{name}" } ],
@@ -36,7 +41,14 @@ __PACKAGE__->register_method({
 
 	my $res = [];
 	foreach my $group (keys %{$cluster_conf->{groups}}) {
-	    push @$res, { name => $group, count => scalar(@{$cluster_conf->{groups}->{$group}}) };
+	    my $data = { 
+		name => $group,
+		count => scalar(@{$cluster_conf->{groups}->{$group}}) 
+	    };
+	    if (my $comment = $cluster_conf->{group_comments}->{$group}) {
+		$data->{comment} = $comment;
+	    }
+	    push @$res, $data;
 	}
 
 	return $res;
@@ -52,8 +64,12 @@ __PACKAGE__->register_method({
 	additionalProperties => 0,
 	properties => { 
 	    name => get_standard_option('pve-security-group-name'),
+	    comment => {
+		type => 'string',
+		optional => 1,
+	    },
 	    rename => get_standard_option('pve-security-group-name', {
-		description => "Rename an existing security group.",
+		description => "Rename/update an existing security group. You can set 'rename' to the same value as 'name' to update the 'comment' of an existing group.",
 		optional => 1,
 	    }),
 	},
@@ -66,7 +82,7 @@ __PACKAGE__->register_method({
 
 	foreach my $name (keys %{$cluster_conf->{groups}}) {
 	    raise_param_exc({ name => "Security group '$name' already exists" }) 
-		if $name eq $param->{name};
+		if !$param->{rename} && $name eq $param->{name};
 	}
 
 	if ($param->{rename}) {
@@ -74,15 +90,19 @@ __PACKAGE__->register_method({
 		if !$cluster_conf->{groups}->{$param->{rename}};
 	    my $data = delete $cluster_conf->{groups}->{$param->{rename}};
 	    $cluster_conf->{groups}->{$param->{name}} = $data;
+	    if (my $comment = delete $cluster_conf->{group_comments}->{$param->{rename}}) {
+		$cluster_conf->{group_comments}->{$param->{name}} = $comment;
+	    }
+	    $cluster_conf->{group_comments}->{$param->{name}} = $param->{comment} if defined($param->{comment});
 	} else {
 	    $cluster_conf->{groups}->{$param->{name}} = [];
+	    $cluster_conf->{group_comments}->{$param->{name}} = $param->{comment} if defined($param->{comment});
 	}
 
 	PVE::Firewall::save_clusterfw_conf($cluster_conf);
 	
 	return undef;
     }});
-
 
 __PACKAGE__->register_method({
     name => 'delete_security_group',

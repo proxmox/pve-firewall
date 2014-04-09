@@ -1976,7 +1976,13 @@ sub parse_cluster_fw_rules {
     my $section;
     my $group;
 
-    my $res = { rules => [], options => {}, groups => {}, ipset => {} };
+    my $res = { 
+	rules => [], 
+	options => {}, 
+	groups => {}, 
+	group_comments => {}, 
+	ipset => {} 
+    };
 
     my $digest = Digest::SHA->new('sha1');
 
@@ -1994,10 +2000,12 @@ sub parse_cluster_fw_rules {
 	    next;
 	}
 
-	if ($line =~ m/^\[group\s+(\S+)\]\s*$/i) {
+	if ($line =~ m/^\[group\s+(\S+)\]\s*(?:#\s*(.*?)\s*)?$/i) {
 	    $section = 'groups';
 	    $group = lc($1);
+	    my $comment = $2;
 	    $res->{$section}->{$group} = [];
+	    $res->{group_comments}->{$group} = $comment if $comment;
 	    next;
 	}
 
@@ -2415,7 +2423,12 @@ sub save_clusterfw_conf {
 
     foreach my $group (sort keys %{$cluster_conf->{groups}}) {
 	my $rules = $cluster_conf->{groups}->{$group};
-	$raw .= "[group $group]\n\n";
+	if (my $comment = $cluster_conf->{group_comments}->{$group}) {
+	    $raw .= "[group $group] # $comment\n\n";
+	} else {
+	    $raw .= "[group $group]\n\n";
+	}
+
 	$raw .= &$format_rules($rules, 0);
 	$raw .= "\n";
     }
