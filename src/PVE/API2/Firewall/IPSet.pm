@@ -355,6 +355,11 @@ sub register_create {
 		    description => "IP set name.",
 		    type => 'string',
 		},
+		rename => {
+		    description => "Rename an existing IPSet.",
+		    type => 'string',
+		    optional => 1,
+		},
 	    }
 	},
 	returns => { type => 'null' },
@@ -368,7 +373,15 @@ sub register_create {
 		    if $name eq $param->{name};
 	    }
 
-	    $fw_conf->{ipset}->{$param->{name}} = [];
+	    if ($param->{rename}) {
+		raise_param_exc({ name => "IPSet '$param->{rename}' does not exists" }) 
+		    if !$fw_conf->{ipset}->{$param->{rename}};
+		my $data = delete $fw_conf->{ipset}->{$param->{rename}};
+		$fw_conf->{ipset}->{$param->{name}} = $data;
+	    } else {
+		$fw_conf->{ipset}->{$param->{name}} = [];
+	    }
+
 	    $class->save_config($fw_conf);
 
 	    return undef;
