@@ -7,7 +7,7 @@ use Data::Dumper;
 use Digest::SHA;
 use PVE::INotify;
 use PVE::Exception qw(raise raise_param_exc);
-use PVE::JSONSchema qw(get_standard_option);
+use PVE::JSONSchema qw(register_standard_option get_standard_option);
 use PVE::Cluster;
 use PVE::ProcFSTools;
 use PVE::Tools qw($IPV4RE);
@@ -48,6 +48,13 @@ sub pve_verify_ipv4_or_cidr {
     die "value does not look like a valid IP address or CIDR network\n";
 }
 
+PVE::JSONSchema::register_standard_option('ipset-name', {
+    description => "IP set name.",
+    type => 'string',
+    pattern => '[A-Za-z][A-Za-z0-9\-\_]+',
+    minLength => 2, 
+    maxLength => 20,	  					  
+});
 
 my $feature_ipset_nomatch = 0;
 eval  {

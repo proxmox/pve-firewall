@@ -14,10 +14,7 @@ my $api_properties = {
 	description => "Network/IP specification in CIDR format.",
 	type => 'string', format => 'IPv4orCIDR',
     },
-    name => {
-	description => "IP set name.",
-	type => 'string',
-    },
+    name => get_standard_option('ipset-name'),
     comment => {
 	type => 'string',
 	optional => 1,
@@ -295,8 +292,9 @@ package PVE::API2::Firewall::BaseIPSetList;
 
 use strict;
 use warnings;
-use PVE::Firewall;
+use PVE::JSONSchema qw(get_standard_option);
 use PVE::Exception qw(raise_param_exc);
+use PVE::Firewall;
 
 use base qw(PVE::RESTHandler);
 
@@ -316,10 +314,7 @@ sub register_index {
 	    items => {
 		type => "object",
 		properties => { 
-		    name => {
-			description => "IPSet name.",
-			type => 'string',
-		    },
+		    name => get_standard_option('ipset-name'),
 		},
 	    },
 	    links => [ { rel => 'child', href => "{name}" } ],
@@ -350,16 +345,11 @@ sub register_create {
 	parameters => {
 	    additionalProperties => 0,
 	    properties => { 
-		name => {
-		    # fixme: verify format
-		    description => "IP set name.",
-		    type => 'string',
-		},
-		rename => {
+		name => get_standard_option('ipset-name'),
+		rename => get_standard_option('ipset-name', {
 		    description => "Rename an existing IPSet.",
-		    type => 'string',
 		    optional => 1,
-		},
+		}),
 	    }
 	},
 	returns => { type => 'null' },
@@ -400,11 +390,7 @@ sub register_delete {
 	parameters => {
 	    additionalProperties => 0,
 	    properties => { 
-		name => {
-		    # fixme: verify format
-		    description => "IP set name.",
-		    type => 'string',
-		},
+		name => get_standard_option('ipset-name'),
 	    }
 	},
 	returns => { type => 'null' },
