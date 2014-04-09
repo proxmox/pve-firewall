@@ -302,14 +302,11 @@ package PVE::API2::Firewall::GroupRules;
 
 use strict;
 use warnings;
+use PVE::JSONSchema qw(get_standard_option);
 
 use base qw(PVE::API2::Firewall::RulesBase);
 
-__PACKAGE__->additional_parameters({ group => {
-    description => "Security group name.",
-    type => 'string',
-    maxLength => 20, # fixme: what length?
-}});
+__PACKAGE__->additional_parameters({ group => get_standard_option('pve-security-group-name') });
 
 sub allow_groups {
     return 0;

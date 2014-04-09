@@ -52,8 +52,16 @@ PVE::JSONSchema::register_standard_option('ipset-name', {
     description => "IP set name.",
     type => 'string',
     pattern => '[A-Za-z][A-Za-z0-9\-\_]+',
-    minLength => 2, 
-    maxLength => 20,	  					  
+    minLength => 2,
+    maxLength => 20,			  
+});
+
+PVE::JSONSchema::register_standard_option('pve-security-group-name', {
+    description => "Security Group name.",
+    type => 'string',
+    pattern => '[A-Za-z][A-Za-z0-9\-\_]+',
+    minLength => 2,
+    maxLength => 20,				  
 });
 
 my $feature_ipset_nomatch = 0;

@@ -24,10 +24,7 @@ __PACKAGE__->register_method({
 	items => {
 	    type => "object",
 	    properties => { 
-		name => {
-		    description => "Security group name.",
-		    type => 'string',
-		},
+		name => get_standard_option('pve-security-group-name'),
 	    },
 	},
 	links => [ { rel => 'child', href => "{name}" } ],
@@ -44,6 +41,7 @@ __PACKAGE__->register_method({
 
 	return $res;
     }});
+
 
 __PACKAGE__->register_method ({
     subclass => "PVE::API2::Firewall::GroupRules",  
