@@ -56,10 +56,12 @@ PVE::JSONSchema::register_standard_option('ipset-name', {
     maxLength => 20,			  
 });
 
+my $security_group_pattern = '[A-Za-z][A-Za-z0-9\-\_]+';
+
 PVE::JSONSchema::register_standard_option('pve-security-group-name', {
     description => "Security Group name.",
     type => 'string',
-    pattern => '[A-Za-z][A-Za-z0-9\-\_]+',
+    pattern => $security_group_pattern,
     minLength => 2,
     maxLength => 20,				  
 });
@@ -801,9 +803,12 @@ my $rule_properties = {
 	enum => ['in', 'out', 'group'],
     },
     action => {
+	description => "Rule action ('ACCEPT', 'DROP', 'REJECT') or security group name.",
 	type => 'string',
 	optional => 1,
-	enum => ['ACCEPT', 'DROP', 'REJECT'],
+	pattern => $security_group_pattern,
+	maxLength => 20,
+	minLength => 2,
     },
     macro => {
 	type => 'string',
@@ -950,7 +955,7 @@ sub verify_rule {
 	raise_param_exc({ type => "security groups not allowed"}) 
 	    if !$allow_groups;
 	raise_param_exc({ action => "invalid characters in security group name"}) 
-	    if $rule->{action} !~ m/^[A-Za-z0-9_\-]+$/;
+	    if $rule->{action} !~ m/^${security_group_pattern}$/;
     } else {
 	raise_param_exc({ type => "unknown rule type '$type'"});
     }
@@ -1748,7 +1753,7 @@ sub parse_fw_rule {
 	die "wrong number of rule elements\n" if scalar(@data) != 3;
 	die "groups disabled\n" if !$allow_groups;
 
-	die "invalid characters in group name\n" if $action !~ m/^[A-Za-z0-9_\-]+$/;
+	die "invalid characters in group name\n" if $action !~ m/^${security_group_pattern}$/;
     } else {
 	die "unknown rule type '$type'\n";
     }
@@ -2130,7 +2135,7 @@ my $format_rules = sub {
     my $raw = '';
 
     foreach my $rule (@$rules) {
-	if ($rule->{type} eq  'in' || $rule->{type} eq 'out') {
+	if ($rule->{type} eq  'in' || $rule->{type} eq 'out' || $rule->{type} eq 'group') {
 	    $raw .= '|' if defined($rule->{enable}) && !$rule->{enable};
 	    $raw .= uc($rule->{type});
 	    if ($rule->{macro}) {
@@ -2139,16 +2144,20 @@ my $format_rules = sub {
 		$raw .= " " . $rule->{action};
 	    }
 	    $raw .= " " . ($rule->{iface} || '-') if $need_iface;
-	    $raw .= " " . ($rule->{source} || '-');
-	    $raw .= " " . ($rule->{dest} || '-');
-	    $raw .= " " . ($rule->{proto} || '-');
-	    $raw .= " " . ($rule->{dport} || '-');
-	    $raw .= " " . ($rule->{sport} || '-');
+
+	    if ($rule->{type} ne  'group')  {
+		$raw .= " " . ($rule->{source} || '-');
+		$raw .= " " . ($rule->{dest} || '-');
+		$raw .= " " . ($rule->{proto} || '-');
+		$raw .= " " . ($rule->{dport} || '-');
+		$raw .= " " . ($rule->{sport} || '-');
+	    }
+
 	    $raw .= " # " . encode('utf8', $rule->{comment})
 		if $rule->{comment} && $rule->{comment} !~ m/^\s*$/;
 	    $raw .= "\n";
 	} else {
-	    die "implement me '$rule->{type}'";
+	    die "unknown rule type '$rule->{type}'";
 	}
     }
 
