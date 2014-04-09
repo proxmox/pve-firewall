@@ -402,7 +402,7 @@ sub register_delete {
 
 	    return undef if !$fw_conf->{ipset}->{$param->{name}};
 
-	    die "IPSet '$param->{name}' is not empty" 
+	    die "IPSet '$param->{name}' is not empty\n" 
 		if scalar(@{$fw_conf->{ipset}->{$param->{name}}});
 
 	    delete $fw_conf->{ipset}->{$param->{name}};
