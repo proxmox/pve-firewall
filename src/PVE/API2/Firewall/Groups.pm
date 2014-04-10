@@ -26,6 +26,7 @@ __PACKAGE__->register_method({
 	    type => "object",
 	    properties => { 
 		name => get_standard_option('pve-security-group-name'),
+		digest => get_standard_option('pve-config-digest', { optional => 0} ),
 		comment => { 
 		    type => 'string',
 		    optional => 1,
@@ -39,10 +40,13 @@ __PACKAGE__->register_method({
 
 	my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
 
+	my $digest = $cluster_conf->{digest};
+
 	my $res = [];
 	foreach my $group (keys %{$cluster_conf->{groups}}) {
 	    my $data = { 
 		name => $group,
+		digest => $digest,
 		count => scalar(@{$cluster_conf->{groups}->{$group}}) 
 	    };
 	    if (my $comment = $cluster_conf->{group_comments}->{$group}) {
@@ -72,6 +76,7 @@ __PACKAGE__->register_method({
 		description => "Rename/update an existing security group. You can set 'rename' to the same value as 'name' to update the 'comment' of an existing group.",
 		optional => 1,
 	    }),
+	    digest => get_standard_option('pve-config-digest'),
 	},
     },
     returns => { type => 'null' },
@@ -79,6 +84,10 @@ __PACKAGE__->register_method({
 	my ($param) = @_;
 
 	my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
+
+	my $digest = $cluster_conf->{digest};
+
+	PVE::Tools::assert_if_modified($digest, $param->{digest});
 
 	foreach my $name (keys %{$cluster_conf->{groups}}) {
 	    raise_param_exc({ name => "Security group '$name' already exists" }) 
@@ -114,6 +123,7 @@ __PACKAGE__->register_method({
 	additionalProperties => 0,
 	properties => { 
 	    name => get_standard_option('pve-security-group-name'),
+	    digest => get_standard_option('pve-config-digest'),
 	}
     },
     returns => { type => 'null' },
@@ -121,6 +131,8 @@ __PACKAGE__->register_method({
 	my ($param) = @_;
 	    
 	my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
+
+	PVE::Tools::assert_if_modified($cluster_conf->{digest}, $param->{digest});
 
 	return undef if !$cluster_conf->{groups}->{$param->{name}};
 
