@@ -89,9 +89,11 @@ __PACKAGE__->register_method({
 
 	PVE::Tools::assert_if_modified($digest, $param->{digest});
 
-	foreach my $name (keys %{$cluster_conf->{groups}}) {
-	    raise_param_exc({ name => "Security group '$name' already exists" }) 
-		if !$param->{rename} && $name eq $param->{name};
+	if (!$param->{rename}) {	
+	    foreach my $name (keys %{$cluster_conf->{groups}}) {
+		raise_param_exc({ name => "Security group '$name' already exists" }) 
+		    if $name eq $param->{name};
+	    }
 	}
 
 	if ($param->{rename}) {
@@ -124,7 +126,7 @@ __PACKAGE__->register_method({
 	properties => { 
 	    name => get_standard_option('pve-security-group-name'),
 	    digest => get_standard_option('pve-config-digest'),
-	}
+	},
     },
     returns => { type => 'null' },
     code => sub {

@@ -86,7 +86,8 @@ sub register_get_ipset {
 		    nomatch => {
 			type => 'boolean',
 			optional => 1,
-		    },			
+		    },
+		    digest => get_standard_option('pve-config-digest', { optional => 0} ),	
 		},
 	    },
 	    links => [ { rel => 'child', href => "{cidr}" } ],
@@ -96,7 +97,18 @@ sub register_get_ipset {
 
 	    my ($fw_conf, $ipset) = $class->load_config($param);
 
-	    return $ipset;
+	    my $digest = $fw_conf->{digest};
+
+	    my $res = [];
+	    foreach my $entry (@$ipset) {
+		my $data = {digest => $digest};
+		foreach my $k (qw(cidr comment nomatch)) {
+		    $data->{$k} = $entry->{$k} if $entry->{$k};
+		}
+		push @$res, $data;
+	    }
+
+	    return $res;
 	}});
 }
 
@@ -109,7 +121,7 @@ sub register_create_ip {
     $properties->{cidr} = $api_properties->{cidr};
     $properties->{nomatch} = $api_properties->{nomatch};
     $properties->{comment} = $api_properties->{comment};
-    
+
     $class->register_method({
 	name => 'create_ip',
 	path => '',
@@ -168,9 +180,13 @@ sub register_read_ip {
 	    my ($param) = @_;
 
 	    my ($fw_conf, $ipset) = $class->load_config($param);
+	    my $digest = $fw_conf->{digest};
 
 	    foreach my $entry (@$ipset) {
-		return $entry if $entry->{cidr} eq $param->{cidr};
+		if ($entry->{cidr} eq $param->{cidr}) {
+		    $entry->{digest} = $digest;
+		    return $entry;
+		}
 	    }
 
 	    raise_param_exc({ cidr => "no such IP/Network" });
@@ -186,7 +202,8 @@ sub register_update_ip {
     $properties->{cidr} = $api_properties->{cidr};
     $properties->{nomatch} = $api_properties->{nomatch};
     $properties->{comment} = $api_properties->{comment};
-    
+    $properties->{digest} = get_standard_option('pve-config-digest');
+
     $class->register_method({
 	name => 'update_ip',
 	path => '{cidr}',
@@ -202,6 +219,8 @@ sub register_update_ip {
 	    my ($param) = @_;
 
 	    my ($fw_conf, $ipset) = $class->load_config($param);
+
+	    PVE::Tools::assert_if_modified($fw_conf->{digest}, $param->{digest});
 
 	    foreach my $entry (@$ipset) {
 		if($entry->{cidr} eq $param->{cidr}) {
@@ -223,7 +242,8 @@ sub register_delete_ip {
 
     $properties->{name} = $api_properties->{name};
     $properties->{cidr} = $api_properties->{cidr};
-    
+    $properties->{digest} = get_standard_option('pve-config-digest');
+
     $class->register_method({
 	name => 'remove_ip',
 	path => '{cidr}',
@@ -239,6 +259,8 @@ sub register_delete_ip {
 	    my ($param) = @_;
 
 	    my ($fw_conf, $ipset) = $class->load_config($param);
+
+	    PVE::Tools::assert_if_modified($fw_conf->{digest}, $param->{digest});
 
 	    my $new = [];
    
@@ -315,6 +337,11 @@ sub register_index {
 		type => "object",
 		properties => { 
 		    name => get_standard_option('ipset-name'),
+		    digest => get_standard_option('pve-config-digest', { optional => 0} ),
+		    comment => { 
+			type => 'string',
+			optional => 1,
+		    }
 		},
 	    },
 	    links => [ { rel => 'child', href => "{name}" } ],
@@ -324,9 +351,19 @@ sub register_index {
 	    
 	    my $fw_conf = $class->load_config();
 
+	    my $digest = $fw_conf->{digest};
+
 	    my $res = [];
 	    foreach my $name (keys %{$fw_conf->{ipset}}) {
-		push @$res, { name => $name, count => scalar(@{$fw_conf->{ipset}->{$name}}) };
+		my $data = { 
+		    name => $name,
+		    digest => $digest,
+		    count => scalar(@{$fw_conf->{ipset}->{$name}}) 
+		};
+		if (my $comment = $fw_conf->{ipset_comments}->{$name}) {
+		    $data->{comment} = $comment;
+		}
+		push @$res, $data;
 	    }
 
 	    return $res;
@@ -346,10 +383,15 @@ sub register_create {
 	    additionalProperties => 0,
 	    properties => { 
 		name => get_standard_option('ipset-name'),
+		comment => {
+		    type => 'string',
+		    optional => 1,
+		},
 		rename => get_standard_option('ipset-name', {
-		    description => "Rename an existing IPSet.",
+		    description => "Rename an existing IPSet. You can set 'rename' to the same value as 'name' to update the 'comment' of an existing IPSet.",
 		    optional => 1,
 		}),
+		digest => get_standard_option('pve-config-digest'),
 	    }
 	},
 	returns => { type => 'null' },
@@ -358,9 +400,15 @@ sub register_create {
 	    
 	    my $fw_conf = $class->load_config();
 
-	    foreach my $name (keys %{$fw_conf->{ipset}}) {
-		raise_param_exc({ name => "IPSet '$name' already exists" }) 
-		    if $name eq $param->{name};
+	    my $digest = $fw_conf->{digest};
+
+	    PVE::Tools::assert_if_modified($digest, $param->{digest});
+
+	    if (!$param->{rename}) {
+		foreach my $name (keys %{$fw_conf->{ipset}}) {
+		    raise_param_exc({ name => "IPSet '$name' already exists" }) 
+			if $name eq $param->{name};
+		}
 	    }
 
 	    if ($param->{rename}) {
@@ -368,8 +416,13 @@ sub register_create {
 		    if !$fw_conf->{ipset}->{$param->{rename}};
 		my $data = delete $fw_conf->{ipset}->{$param->{rename}};
 		$fw_conf->{ipset}->{$param->{name}} = $data;
+		if (my $comment = delete $fw_conf->{ipset_comments}->{$param->{rename}}) {
+		    $fw_conf->{ipset_comments}->{$param->{name}} = $comment;
+		}
+		$fw_conf->{ipset_comments}->{$param->{name}} = $param->{comment} if defined($param->{comment});
 	    } else {
 		$fw_conf->{ipset}->{$param->{name}} = [];
+		$fw_conf->{ipset_comments}->{$param->{name}} = $param->{comment} if defined($param->{comment});
 	    }
 
 	    $class->save_config($fw_conf);
@@ -391,13 +444,16 @@ sub register_delete {
 	    additionalProperties => 0,
 	    properties => { 
 		name => get_standard_option('ipset-name'),
-	    }
+		digest => get_standard_option('pve-config-digest'),
+	    },
 	},
 	returns => { type => 'null' },
 	code => sub {
 	    my ($param) = @_;
 	    
 	    my $fw_conf = $class->load_config();
+
+	    PVE::Tools::assert_if_modified($fw_conf->{digest}, $param->{digest});
 
 	    return undef if !$fw_conf->{ipset}->{$param->{name}};
 

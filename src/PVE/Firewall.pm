@@ -1960,7 +1960,7 @@ sub parse_host_fw_rules {
 	push @{$res->{$section}}, $rule;
     }
 
-$res->{digest} = $digest->b64digest;
+    $res->{digest} = $digest->b64digest;
 
     return $res;
 }
@@ -1976,7 +1976,8 @@ sub parse_cluster_fw_rules {
 	options => {}, 
 	groups => {}, 
 	group_comments => {}, 
-	ipset => {} 
+	ipset => {} ,
+	ipset_comments => {}, 
     };
 
     my $digest = Digest::SHA->new('sha1');
@@ -2009,10 +2010,12 @@ sub parse_cluster_fw_rules {
 	    next;
 	}
 
-	if ($line =~ m/^\[ipset\s+(\S+)\]\s*$/i) {
+	if ($line =~ m/^\[ipset\s+(\S+)\]\s*(?:#\s*(.*?)\s*)?$/i) {
 	    $section = 'ipset';
 	    $group = lc($1);
+	    my $comment = $2;
 	    $res->{$section}->{$group} = [];
+	    $res->{ipset_comments}->{$group} = $comment if $comment;
 	    next;
 	}
 
@@ -2403,7 +2406,11 @@ sub save_clusterfw_conf {
     $raw .= &$format_options($options) if scalar(keys %$options);
 
     foreach my $ipset (sort keys %{$cluster_conf->{ipset}}) {
-	$raw .= "[IPSET $ipset]\n\n";
+	if (my $comment = $cluster_conf->{ipset_comments}->{$ipset}) {
+	    $raw .= "[IPSET $ipset] # $comment\n\n";
+	} else {
+	    $raw .= "[IPSET $ipset]\n\n";
+	}
 	my $options = $cluster_conf->{ipset}->{$ipset};
 	$raw .= &$format_ipset($options);
 	$raw .= "\n";
