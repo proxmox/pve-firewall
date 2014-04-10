@@ -2001,7 +2001,8 @@ sub parse_cluster_fw_rules {
 	    $group = lc($1);
 	    my $comment = $2;
 	    $res->{$section}->{$group} = [];
-	    $res->{group_comments}->{$group} = $comment if $comment;
+	    $res->{group_comments}->{$group} =  decode('utf8', $comment)
+		if $comment;
 	    next;
 	}
 
@@ -2015,7 +2016,8 @@ sub parse_cluster_fw_rules {
 	    $group = lc($1);
 	    my $comment = $2;
 	    $res->{$section}->{$group} = [];
-	    $res->{ipset_comments}->{$group} = $comment if $comment;
+	    $res->{ipset_comments}->{$group} = decode('utf8', $comment) 
+		if $comment;
 	    next;
 	}
 
@@ -2407,7 +2409,8 @@ sub save_clusterfw_conf {
 
     foreach my $ipset (sort keys %{$cluster_conf->{ipset}}) {
 	if (my $comment = $cluster_conf->{ipset_comments}->{$ipset}) {
-	    $raw .= "[IPSET $ipset] # $comment\n\n";
+	    my $utf8comment = encode('utf8', $comment);
+	    $raw .= "[IPSET $ipset] # $utf8comment\n\n";
 	} else {
 	    $raw .= "[IPSET $ipset]\n\n";
 	}
@@ -2426,7 +2429,8 @@ sub save_clusterfw_conf {
     foreach my $group (sort keys %{$cluster_conf->{groups}}) {
 	my $rules = $cluster_conf->{groups}->{$group};
 	if (my $comment = $cluster_conf->{group_comments}->{$group}) {
-	    $raw .= "[group $group] # $comment\n\n";
+	    my $utf8comment = encode('utf8', $comment);
+	    $raw .= "[group $group] # $utf8comment\n\n";
 	} else {
 	    $raw .= "[group $group]\n\n";
 	}
