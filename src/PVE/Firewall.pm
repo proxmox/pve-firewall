@@ -56,6 +56,14 @@ PVE::JSONSchema::register_standard_option('ipset-name', {
     maxLength => 20,			  
 });
 
+PVE::JSONSchema::register_standard_option('pve-config-digest', {
+    description => "This digest/signature can be used to prevent updates when the original configuration was changed by somebody else.",
+    type => 'string',
+    optional => 1,
+    maxLength => 27,
+    minLength => 27,					  
+});
+
 my $security_group_pattern = '[A-Za-z][A-Za-z0-9\-\_]+';
 
 PVE::JSONSchema::register_standard_option('pve-security-group-name', {
@@ -791,12 +799,7 @@ my $rule_properties = {
 	minimum => 0,
 	optional => 1,
     },
-    digest => {
-	type => 'string',
-	optional => 1,
-	maxLength => 27,
-	minLength => 27,
-    },
+    digest => get_standard_option('pve-config-digest'),
     type => {
 	type => 'string',
 	optional => 1,
