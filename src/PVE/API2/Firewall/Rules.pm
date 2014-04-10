@@ -125,7 +125,6 @@ sub register_get_rule {
 	    my ($fw_conf, $rules) = $class->load_config($param);
 
 	    my $digest = $fw_conf->{digest};
-	    # fixme: check digest
 	
 	    die "no rule at position $param->{pos}\n" if $param->{pos} >= scalar(@$rules);
 	
@@ -159,8 +158,6 @@ sub register_create_rule {
 	    my ($param) = @_;
 
 	    my ($fw_conf, $rules) = $class->load_config($param);
-
-	    my $digest = $fw_conf->{digest};
 
 	    my $rule = {};
 
@@ -215,9 +212,8 @@ sub register_update_rule {
 
 	    my ($fw_conf, $rules) = $class->load_config($param);
 
-	    my $digest = $fw_conf->{digest};
-	    # fixme: check digest
-	
+	    PVE::Tools::assert_if_modified($fw_conf->{digest}, $param->{digest});
+
 	    die "no rule at position $param->{pos}\n" if $param->{pos} >= scalar(@$rules);
 	
 	    my $rule = $rules->[$param->{pos}];
@@ -259,6 +255,8 @@ sub register_delete_rule {
     my $properties = $class->additional_parameters();
 
     $properties->{pos} = $api_properties->{pos};
+
+    $properties->{digest} = get_standard_option('pve-config-digest');
     
     $class->register_method({
 	name => 'delete_rule',
@@ -276,8 +274,7 @@ sub register_delete_rule {
 
 	    my ($fw_conf, $rules) = $class->load_config($param);
 
-	    my $digest = $fw_conf->{digest};
-	    # fixme: check digest
+	    PVE::Tools::assert_if_modified($fw_conf->{digest}, $param->{digest});
 	
 	    die "no rule at position $param->{pos}\n" if $param->{pos} >= scalar(@$rules);
 	
