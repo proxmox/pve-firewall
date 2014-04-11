@@ -792,6 +792,7 @@ sub copy_opject_with_digest {
     my $res = {};
     foreach my $k (sort keys %$object) {
 	my $v = $object->{$k};
+	next if !defined($v);
 	$res->{$k} = $v;
 	$sha->add($k, ':', $v, "\n");
     }
@@ -813,6 +814,7 @@ sub copy_list_with_digest {
 	my $data = {};
 	foreach my $k (sort keys %$entry) {
 	    my $v = $entry->{$k};
+	    next if !defined($v);
 	    $data->{$k} = $v;
 	    $sha->add($k, ':', $v, "\n");
 	}
