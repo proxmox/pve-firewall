@@ -85,9 +85,7 @@ __PACKAGE__->register_method({
 
 	my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
 
-	my $options = $cluster_conf->{options};
-
-	return $options;
+	return PVE::Firewall::copy_opject_with_digest($cluster_conf->{options});
     }});
 
 my $option_properties = {
@@ -121,6 +119,7 @@ __PACKAGE__->register_method({
 		description => "A list of settings you want to delete.",
 		optional => 1,
 	    },
+	    digest => get_standard_option('pve-config-digest'),
 	}),
     },
     returns => { type => "null" },
@@ -128,6 +127,9 @@ __PACKAGE__->register_method({
 	my ($param) = @_;
 
 	my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
+
+	my (undef, $digest) = PVE::Firewall::copy_opject_with_digest($cluster_conf->{options});
+	PVE::Tools::assert_if_modified($digest, $param->{digest});
 
 	if ($param->{delete}) {
 	    foreach my $opt (PVE::Tools::split_list($param->{delete})) {

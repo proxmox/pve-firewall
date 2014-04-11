@@ -12,6 +12,25 @@ use Data::Dumper; # fixme: remove
 
 use base qw(PVE::RESTHandler);
 
+my $get_security_group_list = sub {
+    my ($cluster_conf) = @_;
+
+    my $res = [];
+    foreach my $group (keys %{$cluster_conf->{groups}}) {
+	my $data = { 
+	    name => $group,
+	};
+	if (my $comment = $cluster_conf->{group_comments}->{$group}) {
+	    $data->{comment} = $comment;
+	}
+	push @$res, $data;
+    }
+
+    my ($list, $digest) = PVE::Firewall::copy_list_with_digest($res);
+
+    return wantarray ? ($list, $digest) : $list;
+};
+
 __PACKAGE__->register_method({
     name => 'list_security_groups',
     path => '',
@@ -40,22 +59,7 @@ __PACKAGE__->register_method({
 
 	my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
 
-	my $digest = $cluster_conf->{digest};
-
-	my $res = [];
-	foreach my $group (keys %{$cluster_conf->{groups}}) {
-	    my $data = { 
-		name => $group,
-		digest => $digest,
-		count => scalar(@{$cluster_conf->{groups}->{$group}}) 
-	    };
-	    if (my $comment = $cluster_conf->{group_comments}->{$group}) {
-		$data->{comment} = $comment;
-	    }
-	    push @$res, $data;
-	}
-
-	return $res;
+	return &$get_security_group_list($cluster_conf);
     }});
 
 __PACKAGE__->register_method({
@@ -85,20 +89,13 @@ __PACKAGE__->register_method({
 
 	my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
 
-	my $digest = $cluster_conf->{digest};
-
-	PVE::Tools::assert_if_modified($digest, $param->{digest});
-
-	if (!$param->{rename}) {	
-	    foreach my $name (keys %{$cluster_conf->{groups}}) {
-		raise_param_exc({ name => "Security group '$name' already exists" }) 
-		    if $name eq $param->{name};
-	    }
-	}
-
 	if ($param->{rename}) {
+	    my (undef, $digest) = &$get_security_group_list($cluster_conf);
+	    PVE::Tools::assert_if_modified($digest, $param->{digest});
+
 	    raise_param_exc({ name => "Security group '$param->{rename}' does not exists" }) 
 		if !$cluster_conf->{groups}->{$param->{rename}};
+
 	    my $data = delete $cluster_conf->{groups}->{$param->{rename}};
 	    $cluster_conf->{groups}->{$param->{name}} = $data;
 	    if (my $comment = delete $cluster_conf->{group_comments}->{$param->{rename}}) {
@@ -106,6 +103,11 @@ __PACKAGE__->register_method({
 	    }
 	    $cluster_conf->{group_comments}->{$param->{name}} = $param->{comment} if defined($param->{comment});
 	} else {
+	    foreach my $name (keys %{$cluster_conf->{groups}}) {
+		raise_param_exc({ name => "Security group '$name' already exists" }) 
+		    if $name eq $param->{name};
+	    }
+
 	    $cluster_conf->{groups}->{$param->{name}} = [];
 	    $cluster_conf->{group_comments}->{$param->{name}} = $param->{comment} if defined($param->{comment});
 	}
@@ -134,9 +136,10 @@ __PACKAGE__->register_method({
 	    
 	my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
 
-	PVE::Tools::assert_if_modified($cluster_conf->{digest}, $param->{digest});
-
 	return undef if !$cluster_conf->{groups}->{$param->{name}};
+
+	my (undef, $digest) = &$get_security_group_list($cluster_conf);
+	PVE::Tools::assert_if_modified($digest, $param->{digest});
 
 	die "Security group '$param->{name}' is not empty\n" 
 	    if scalar(@{$cluster_conf->{groups}->{$param->{name}}});

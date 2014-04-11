@@ -82,16 +82,14 @@ sub register_get_rules {
 
 	    my ($fw_conf, $rules) = $class->load_config($param);
 
-	    my $digest = $fw_conf->{digest};
-
-	    my $res = [];
+	    my ($list, $digest) = PVE::Firewall::copy_list_with_digest($rules);
 
 	    my $ind = 0;
-	    foreach my $rule (@$rules) {
-		push @$res, PVE::Firewall::cleanup_fw_rule($rule, $digest, $ind++);
+	    foreach my $rule (@$list) {
+		$rule->{pos} = $ind++;
 	    }
 
-	    return $res;
+	    return $list;
 	}});
 }
 
@@ -124,13 +122,14 @@ sub register_get_rule {
 
 	    my ($fw_conf, $rules) = $class->load_config($param);
 
-	    my $digest = $fw_conf->{digest};
+	    my ($list, $digest) = PVE::Firewall::copy_list_with_digest($rules);
 	
-	    die "no rule at position $param->{pos}\n" if $param->{pos} >= scalar(@$rules);
+	    die "no rule at position $param->{pos}\n" if $param->{pos} >= scalar(@$list);
 	
-	    my $rule = $rules->[$param->{pos}];
-	    
-	    return PVE::Firewall::cleanup_fw_rule($rule, $digest, $param->{pos});
+	    my $rule = $list->[$param->{pos}];
+	    $rule->{pos} = $param->{pos};
+
+	    return $rule;
 	}});
 }
 
@@ -212,7 +211,8 @@ sub register_update_rule {
 
 	    my ($fw_conf, $rules) = $class->load_config($param);
 
-	    PVE::Tools::assert_if_modified($fw_conf->{digest}, $param->{digest});
+	    my (undef, $digest) = PVE::Firewall::copy_list_with_digest($rules);
+	    PVE::Tools::assert_if_modified($digest, $param->{digest});
 
 	    die "no rule at position $param->{pos}\n" if $param->{pos} >= scalar(@$rules);
 	
@@ -274,7 +274,8 @@ sub register_delete_rule {
 
 	    my ($fw_conf, $rules) = $class->load_config($param);
 
-	    PVE::Tools::assert_if_modified($fw_conf->{digest}, $param->{digest});
+	    my (undef, $digest) = PVE::Firewall::copy_list_with_digest($rules);
+	    PVE::Tools::assert_if_modified($digest, $param->{digest});
 	
 	    die "no rule at position $param->{pos}\n" if $param->{pos} >= scalar(@$rules);
 	

@@ -784,6 +784,50 @@ sub pve_fw_verify_protocol_spec {
 
 # helper function for API
 
+sub copy_opject_with_digest {
+    my ($object) = @_;
+
+    my $sha = Digest::SHA->new('sha1');
+
+    my $res = {};
+    foreach my $k (sort keys %$object) {
+	my $v = $object->{$k};
+	$res->{$k} = $v;
+	$sha->add($k, ':', $v, "\n");
+    }
+
+    my $digest = $sha->b64digest;
+
+    $res->{digest} = $digest;
+
+    return wantarray ? ($res, $digest) : $res;
+}
+
+sub copy_list_with_digest {
+    my ($list) = @_;
+
+    my $sha = Digest::SHA->new('sha1');
+
+    my $res = [];
+    foreach my $entry (@$list) {
+	my $data = {};
+	foreach my $k (sort keys %$entry) {
+	    my $v = $entry->{$k};
+	    $data->{$k} = $v;
+	    $sha->add($k, ':', $v, "\n");
+	}
+	push @$res, $data;
+    }
+
+    my $digest = $sha->b64digest;
+
+    foreach my $entry (@$res) {
+	$entry->{digest} = $digest;
+    }
+
+    return wantarray ? ($res, $digest) : $res;
+}
+
 my $rule_properties = {
     pos => {
 	description => "Update rule at position <pos>.",
@@ -840,23 +884,6 @@ my $rule_properties = {
 	optional => 1,
     },
 };
-
-sub cleanup_fw_rule {
-    my ($rule, $digest, $pos) = @_;
-
-    my $r = {};
-
-    foreach my $k (keys %$rule) {
-	next if !$rule_properties->{$k};
-	my $v = $rule->{$k};
-	next if !defined($v);
-	$r->{$k} = $v;
-	$r->{digest} = $digest;
-	$r->{pos} = $pos;
-    }
-
-    return $r;
-}
 
 sub add_rule_properties {
     my ($properties) = @_;
@@ -1864,11 +1891,7 @@ sub parse_vm_fw_rules {
 
     my $section;
 
-    my $digest = Digest::SHA->new('sha1');
-
     while (defined(my $line = <$fh>)) {
-	$digest->add($line);
-
 	next if $line =~ m/^#/;
 	next if $line =~ m/^\s*$/;
 
@@ -1906,8 +1929,6 @@ sub parse_vm_fw_rules {
 	push @{$res->{$section}}, $rule;
     }
 
-    $res->{digest} = $digest->b64digest;
-
     return $res;
 }
 
@@ -1918,11 +1939,7 @@ sub parse_host_fw_rules {
 
     my $section;
 
-    my $digest = Digest::SHA->new('sha1');
-
     while (defined(my $line = <$fh>)) {
-	$digest->add($line);
-
 	next if $line =~ m/^#/;
 	next if $line =~ m/^\s*$/;
 
@@ -1960,8 +1977,6 @@ sub parse_host_fw_rules {
 	push @{$res->{$section}}, $rule;
     }
 
-    $res->{digest} = $digest->b64digest;
-
     return $res;
 }
 
@@ -1980,11 +1995,7 @@ sub parse_cluster_fw_rules {
 	ipset_comments => {}, 
     };
 
-    my $digest = Digest::SHA->new('sha1');
-
     while (defined(my $line = <$fh>)) {
-	$digest->add($line);
-
 	next if $line =~ m/^#/;
 	next if $line =~ m/^\s*$/;
 
@@ -2072,7 +2083,6 @@ sub parse_cluster_fw_rules {
 	}
     }
 
-    $res->{digest} = $digest->b64digest;
     return $res;
 }
 

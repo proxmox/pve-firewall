@@ -68,13 +68,7 @@ __PACKAGE__->register_method({
 
 	my $hostfw_conf = PVE::Firewall::load_hostfw_conf();
 
-	my $options = $hostfw_conf->{options} || {};
-
-	my $digest = $hostfw_conf->{digest};
-
-	$options->{digest} = $digest;
-
-	return $options;
+	return PVE::Firewall::copy_opject_with_digest($hostfw_conf->{options});
     }});
 
 1;

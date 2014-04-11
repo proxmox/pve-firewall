@@ -77,13 +77,8 @@ __PACKAGE__->register_method({
 
 	my $vmfw_conf = PVE::Firewall::load_vmfw_conf($vmid);
 
-	my $options = $vmfw_conf->{options} || {};
+	return PVE::Firewall::copy_opject_with_digest($vmfw_conf->{options});
 
-	my $digest = $vmfw_conf->{digest};
-
-	$options->{digest} = $digest;
-
-	return $options;
     }});
 
 1;

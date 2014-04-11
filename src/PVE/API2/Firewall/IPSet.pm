@@ -97,18 +97,7 @@ sub register_get_ipset {
 
 	    my ($fw_conf, $ipset) = $class->load_config($param);
 
-	    my $digest = $fw_conf->{digest};
-
-	    my $res = [];
-	    foreach my $entry (@$ipset) {
-		my $data = {digest => $digest};
-		foreach my $k (qw(cidr comment nomatch)) {
-		    $data->{$k} = $entry->{$k} if $entry->{$k};
-		}
-		push @$res, $data;
-	    }
-
-	    return $res;
+	    return PVE::Firewall::copy_list_with_digest($ipset);
 	}});
 }
 
@@ -180,11 +169,11 @@ sub register_read_ip {
 	    my ($param) = @_;
 
 	    my ($fw_conf, $ipset) = $class->load_config($param);
-	    my $digest = $fw_conf->{digest};
 
-	    foreach my $entry (@$ipset) {
+	    my $list = PVE::Firewall::copy_list_with_digest($ipset);
+
+	    foreach my $entry (@$list) {
 		if ($entry->{cidr} eq $param->{cidr}) {
-		    $entry->{digest} = $digest;
 		    return $entry;
 		}
 	    }
@@ -220,7 +209,9 @@ sub register_update_ip {
 
 	    my ($fw_conf, $ipset) = $class->load_config($param);
 
-	    PVE::Tools::assert_if_modified($fw_conf->{digest}, $param->{digest});
+	    my (undef, $digest) = PVE::Firewall::copy_list_with_digest($ipset);
+	    PVE::Tools::assert_if_modified($digest, $param->{digest});
+	    warn "TEST:$digest:$param->{digest}:\n";
 
 	    foreach my $entry (@$ipset) {
 		if($entry->{cidr} eq $param->{cidr}) {
@@ -260,7 +251,8 @@ sub register_delete_ip {
 
 	    my ($fw_conf, $ipset) = $class->load_config($param);
 
-	    PVE::Tools::assert_if_modified($fw_conf->{digest}, $param->{digest});
+	    my (undef, $digest) = PVE::Firewall::copy_list_with_digest($ipset);
+	    PVE::Tools::assert_if_modified($digest, $param->{digest});
 
 	    my $new = [];
    
@@ -320,6 +312,25 @@ use PVE::Firewall;
 
 use base qw(PVE::RESTHandler);
 
+my $get_ipset_list = sub {
+    my ($fw_conf) = @_;
+
+    my $res = [];
+    foreach my $name (keys %{$fw_conf->{ipset}}) {
+	my $data = { 
+	    name => $name,
+	};
+	if (my $comment = $fw_conf->{ipset_comments}->{$name}) {
+	    $data->{comment} = $comment;
+	}
+	push @$res, $data;
+    }
+
+    my ($list, $digest) = PVE::Firewall::copy_list_with_digest($res);
+
+    return wantarray ? ($list, $digest) : $list;
+};
+
 sub register_index {
     my ($class) = @_;
 
@@ -351,22 +362,7 @@ sub register_index {
 	    
 	    my $fw_conf = $class->load_config();
 
-	    my $digest = $fw_conf->{digest};
-
-	    my $res = [];
-	    foreach my $name (keys %{$fw_conf->{ipset}}) {
-		my $data = { 
-		    name => $name,
-		    digest => $digest,
-		    count => scalar(@{$fw_conf->{ipset}->{$name}}) 
-		};
-		if (my $comment = $fw_conf->{ipset_comments}->{$name}) {
-		    $data->{comment} = $comment;
-		}
-		push @$res, $data;
-	    }
-
-	    return $res;
+	    return &$get_ipset_list($fw_conf); 
 	}});
 }
 
@@ -400,27 +396,25 @@ sub register_create {
 	    
 	    my $fw_conf = $class->load_config();
 
-	    my $digest = $fw_conf->{digest};
-
-	    PVE::Tools::assert_if_modified($digest, $param->{digest});
-
-	    if (!$param->{rename}) {
-		foreach my $name (keys %{$fw_conf->{ipset}}) {
-		    raise_param_exc({ name => "IPSet '$name' already exists" }) 
-			if $name eq $param->{name};
-		}
-	    }
-
 	    if ($param->{rename}) {
+		my (undef, $digest) = &$get_ipset_list($fw_conf);
+		PVE::Tools::assert_if_modified($digest, $param->{digest});
+
 		raise_param_exc({ name => "IPSet '$param->{rename}' does not exists" }) 
 		    if !$fw_conf->{ipset}->{$param->{rename}};
+
 		my $data = delete $fw_conf->{ipset}->{$param->{rename}};
 		$fw_conf->{ipset}->{$param->{name}} = $data;
 		if (my $comment = delete $fw_conf->{ipset_comments}->{$param->{rename}}) {
 		    $fw_conf->{ipset_comments}->{$param->{name}} = $comment;
 		}
 		$fw_conf->{ipset_comments}->{$param->{name}} = $param->{comment} if defined($param->{comment});
-	    } else {
+	    } else { 
+		foreach my $name (keys %{$fw_conf->{ipset}}) {
+		    raise_param_exc({ name => "IPSet '$name' already exists" }) 
+			if $name eq $param->{name};
+		}
+
 		$fw_conf->{ipset}->{$param->{name}} = [];
 		$fw_conf->{ipset_comments}->{$param->{name}} = $param->{comment} if defined($param->{comment});
 	    }
@@ -453,9 +447,10 @@ sub register_delete {
 	    
 	    my $fw_conf = $class->load_config();
 
-	    PVE::Tools::assert_if_modified($fw_conf->{digest}, $param->{digest});
-
 	    return undef if !$fw_conf->{ipset}->{$param->{name}};
+
+	    my (undef, $digest) = &$get_ipset_list($fw_conf);
+	    PVE::Tools::assert_if_modified($digest, $param->{digest});
 
 	    die "IPSet '$param->{name}' is not empty\n" 
 		if scalar(@{$fw_conf->{ipset}->{$param->{name}}});
