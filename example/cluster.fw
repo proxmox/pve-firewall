@@ -2,6 +2,10 @@
 
 enable: 1
 
+# default policy for host rules
+policy_in: DROP
+policy_out: ACCEPT
+
 [RULES]
 
 IN  SSH(ACCEPT) vmbr0

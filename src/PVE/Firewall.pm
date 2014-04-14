@@ -1632,6 +1632,7 @@ sub enable_host_firewall {
     # fixme: allow security groups
 
     my $options = $hostfw_conf->{options};
+    my $cluster_options = $cluster_conf->{options};
     my $rules = $hostfw_conf->{rules};
 
     # host inbound firewall
@@ -1664,7 +1665,7 @@ sub enable_host_firewall {
     }
 
     # implement input policy
-    my $policy = $options->{policy_in} || 'DROP'; # allow nothing by default
+    my $policy = $cluster_options->{policy_in} || 'DROP'; # allow nothing by default
     ruleset_add_chain_policy($ruleset, $chain, 0, $policy, $loglevel, $accept_action);
 
     # host outbound firewall
@@ -1689,7 +1690,7 @@ sub enable_host_firewall {
     }
 
     # implement output policy
-    $policy = $options->{policy_out} || 'ACCEPT'; # allow everything by default
+    $policy = $cluster_options->{policy_out} || 'ACCEPT'; # allow everything by default
     ruleset_add_chain_policy($ruleset, $chain, 0, $policy, $loglevel, $accept_action);
 
     ruleset_addrule($ruleset, "PVEFW-OUTPUT", "-j PVEFW-HOST-OUT");
@@ -1856,9 +1857,6 @@ sub parse_hostfw_option {
     } elsif ($line =~ m/^(log_level_in|log_level_out|tcp_flags_log_level|smurf_log_level):\s*(($loglevels)\s*)?$/i) {
 	$opt = lc($1);
 	$value = $2 ? lc($3) : '';
-    } elsif ($line =~ m/^(policy_(in|out)):\s*(ACCEPT|DROP|REJECT)\s*$/i) {
-	$opt = lc($1);
-	$value = uc($3);
     } elsif ($line =~ m/^(nf_conntrack_max|nf_conntrack_tcp_timeout_established):\s*(\d+)\s*$/i) {
 	$opt = lc($1);
 	$value = int($2);
@@ -1878,6 +1876,9 @@ sub parse_clusterfw_option {
     if ($line =~ m/^(enable):\s*(0|1)\s*$/i) {
 	$opt = lc($1);
 	$value = int($2);
+    } elsif ($line =~ m/^(policy_(in|out)):\s*(ACCEPT|DROP|REJECT)\s*$/i) {
+	$opt = lc($1);
+	$value = uc($3);
     } else {
 	chomp $line;
 	die "can't parse option '$line'\n"
