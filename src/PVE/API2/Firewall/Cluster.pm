@@ -62,36 +62,22 @@ __PACKAGE__->register_method({
 	return $result;
     }});
 
-__PACKAGE__->register_method({
-    name => 'get_options',
-    path => 'options',
-    method => 'GET',
-    description => "Get Firewall options.",
-    parameters => {
-    	additionalProperties => 0,
-    },
-    returns => {
-	type => "object",
-    	#additionalProperties => 1,
-	properties => {
-	    enable => {
-		type => 'boolean',
-		optional => 1,
-	    },
-	},
-    },
-    code => sub {
-	my ($param) = @_;
-
-	my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
-
-	return PVE::Firewall::copy_opject_with_digest($cluster_conf->{options});
-    }});
-
 my $option_properties = {
     enable => {
 	type => 'boolean',
 	optional => 1,
+    },
+    policy_in => {
+	description => "Input policy.",
+	type => 'string',
+	optional => 1,
+	enum => ['ACCEPT', 'REJECT', 'DROP'],
+    },
+    policy_out => { 
+	description => "Output policy.",
+	type => 'string',
+	optional => 1,
+	enum => ['ACCEPT', 'REJECT', 'DROP'],
     },
 };
 
@@ -104,6 +90,29 @@ my $add_option_properties = sub {
     
     return $properties;
 };
+
+
+__PACKAGE__->register_method({
+    name => 'get_options',
+    path => 'options',
+    method => 'GET',
+    description => "Get Firewall options.",
+    parameters => {
+    	additionalProperties => 0,
+    },
+    returns => {
+	type => "object",
+    	#additionalProperties => 1,
+	properties => $option_properties,
+    },
+    code => sub {
+	my ($param) = @_;
+
+	my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
+
+	return PVE::Firewall::copy_opject_with_digest($cluster_conf->{options});
+    }});
+
 
 __PACKAGE__->register_method({
     name => 'set_options',
@@ -140,7 +149,12 @@ __PACKAGE__->register_method({
 	}
 
 	if (defined($param->{enable})) {
-	    $cluster_conf->{options}->{enable} = $param->{enable} ? 1 : 0;
+	    $param->{enable} = $param->{enable} ? 1 : 0;
+	}
+
+	foreach my $k (keys %$option_properties) {
+	    next if !defined($param->{$k});
+	    $cluster_conf->{options}->{$k} = $param->{$k}; 
 	}
 
 	PVE::Firewall::save_clusterfw_conf($cluster_conf);
