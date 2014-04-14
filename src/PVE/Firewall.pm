@@ -1859,7 +1859,7 @@ sub parse_hostfw_option {
     } elsif ($line =~ m/^(policy_(in|out)):\s*(ACCEPT|DROP|REJECT)\s*$/i) {
 	$opt = lc($1);
 	$value = uc($3);
-    } elsif ($line =~ m/^(nf_conntrack_max):\s*(\d+)\s*$/i) {
+    } elsif ($line =~ m/^(nf_conntrack_max|nf_conntrack_tcp_timeout_established):\s*(\d+)\s*$/i) {
 	$opt = lc($1);
 	$value = int($2);
     } else {
@@ -2764,6 +2764,8 @@ sub apply_ruleset {
 
     update_nf_conntrack_max($hostfw_conf);
 
+    update_nf_conntrack_tcp_timeout_established($hostfw_conf);
+
     my ($ipset_create_cmdlist, $ipset_delete_cmdlist, $ipset_changes) =
 	get_ipset_cmdlist($ipset_ruleset, undef, $verbose);
 
@@ -2826,6 +2828,16 @@ sub update_nf_conntrack_max {
 	PVE::ProcFSTools::write_proc_entry($filename_hashsize, $hashsize);
 	PVE::ProcFSTools::write_proc_entry($filename_nf_conntrack_max, $max);
     }
+}
+
+sub update_nf_conntrack_tcp_timeout_established {
+    my ($hostfw_conf) = @_;
+
+    my $options = $hostfw_conf->{options} || {};
+
+    my $value = defined($options->{nf_conntrack_tcp_timeout_established}) ? $options->{nf_conntrack_tcp_timeout_established} : 432000;
+
+    PVE::ProcFSTools::write_proc_entry("/proc/sys/net/netfilter/nf_conntrack_tcp_timeout_established", $value);
 }
 
 sub remove_pvefw_chains {
