@@ -1503,7 +1503,7 @@ sub generate_nfqueue {
 		$action .= " --queue-num $1";
 	    }
 	}
-	$action .= " --queue-bypass";
+	$action .= " --queue-bypass" if $feature_ipset_nomatch; #need kernel 3.10
     }else{
 	$action = "ACCEPT";
     }
