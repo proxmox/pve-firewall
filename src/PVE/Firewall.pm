@@ -2882,11 +2882,7 @@ sub update {
 	die "Firewall is disabled - cannot start\n" if !$enable && $start;
 
 	if (!$enable) {
-	    if ($status ne 'stopped') {
-		print "trying to stop firewall (firewall is disabled)\n" if $verbose;
-		PVE::Firewall::remove_pvefw_chains();
-		PVE::Firewall::save_pvefw_status('stopped');
-	    }
+	    PVE::Firewall::remove_pvefw_chains();
 	    print "Firewall disabled\n" if $verbose;
 	    return;
 	}
