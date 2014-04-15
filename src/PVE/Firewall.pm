@@ -56,6 +56,13 @@ PVE::JSONSchema::register_standard_option('ipset-name', {
     maxLength => 20,			  
 });
 
+PVE::JSONSchema::register_standard_option('pve-fw-loglevel' => {
+    description => "Log level.",
+    type => 'string', 
+    enum => ['emerg', 'alert', 'crit', 'err', 'warning', 'notice', 'info', 'debug', 'nolog'],
+    optional => 1,
+});
+
 my $security_group_pattern = '[A-Za-z][A-Za-z0-9\-\_]+';
 
 PVE::JSONSchema::register_standard_option('pve-security-group-name', {

@@ -49,6 +49,65 @@ __PACKAGE__->register_method({
 	return $result;
     }});
 
+my $option_properties = {
+    enable => {
+	description => "Enable host firewall rules.",
+	type => 'boolean',
+	optional => 1,
+    },
+    log_level_in =>  get_standard_option('pve-fw-loglevel', {
+	description => "Log level for incoming traffic." }),
+    log_level_out =>  get_standard_option('pve-fw-loglevel', {
+	description => "Log level for outgoing traffic." }),
+    tcp_flags_log_level =>  get_standard_option('pve-fw-loglevel', {
+	description => "Log level for illegal tcp flags filter." }),
+    smurf_log_level =>  get_standard_option('pve-fw-loglevel', {
+	description => "Log level for SMURFS filter." }),
+    nosmurfs => {
+	description => "Enable SMURFS filter.",
+	type => 'boolean',
+	optional => 1,
+    },
+    tcpflags => {
+	description => "Filter illegal combinations of TCP flags.",
+	type => 'boolean',
+	optional => 1,
+    },
+    allow_bridge_route => {
+	description => "Enable firewall when bridges contains IP address. The firewall is not fully functional in that case, so you need to enable that explicitly",
+	type => 'boolean',
+	optional => 1,
+    },
+    optimize => {
+	description => "Allow rules processing speed optimizations.",
+	type => 'boolean',
+	optional => 1,
+    },
+    nf_conntrack_max => {
+	description => "Maximum number of tracked connections.",
+	type => 'integer',
+	optional => 1,
+	minimum => 32768,
+    },
+    nf_conntrack_tcp_timeout_established => {
+ 	description => "Conntrack established timeout.",
+	type => 'integer',
+	optional => 1,
+	minimum => 7875,
+    }
+};
+
+my $add_option_properties = sub {
+    my ($properties) = @_;
+
+    foreach my $k (keys %$option_properties) {
+	$properties->{$k} = $option_properties->{$k};
+    }
+    
+    return $properties;
+};
+
+
 __PACKAGE__->register_method({
     name => 'get_options',
     path => 'options',
@@ -63,7 +122,8 @@ __PACKAGE__->register_method({
     },
     returns => {
 	type => "object",
-	properties => {},
+    	#additionalProperties => 1,
+	properties => $option_properties,
     },
     code => sub {
 	my ($param) = @_;
@@ -71,6 +131,56 @@ __PACKAGE__->register_method({
 	my $hostfw_conf = PVE::Firewall::load_hostfw_conf();
 
 	return PVE::Firewall::copy_opject_with_digest($hostfw_conf->{options});
+    }});
+
+__PACKAGE__->register_method({
+    name => 'set_options',
+    path => 'options',
+    method => 'PUT',
+    description => "Set Firewall options.",
+    protected => 1,
+    proxyto => 'node',
+    parameters => {
+    	additionalProperties => 0,
+	properties => &$add_option_properties({
+	    node => get_standard_option('pve-node'),
+	    delete => {
+		type => 'string', format => 'pve-configid-list',
+		description => "A list of settings you want to delete.",
+		optional => 1,
+	    },
+	    digest => get_standard_option('pve-config-digest'),
+	}),
+    },
+    returns => { type => "null" },
+    code => sub {
+	my ($param) = @_;
+
+	my $hostfw_conf = PVE::Firewall::load_hostfw_conf();
+
+	my (undef, $digest) = PVE::Firewall::copy_opject_with_digest($hostfw_conf->{options});
+	PVE::Tools::assert_if_modified($digest, $param->{digest});
+
+	if ($param->{delete}) {
+	    foreach my $opt (PVE::Tools::split_list($param->{delete})) {
+		raise_param_exc({ delete => "no such option '$opt'" }) 
+		    if !$option_properties->{$opt};
+		delete $hostfw_conf->{options}->{$opt};
+	    }
+	}
+
+	if (defined($param->{enable})) {
+	    $param->{enable} = $param->{enable} ? 1 : 0;
+	}
+
+	foreach my $k (keys %$option_properties) {
+	    next if !defined($param->{$k});
+	    $hostfw_conf->{options}->{$k} = $param->{$k}; 
+	}
+
+	PVE::Firewall::save_hostfw_conf($hostfw_conf);
+
+	return undef;
     }});
 
 __PACKAGE__->register_method({
