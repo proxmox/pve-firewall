@@ -2277,6 +2277,7 @@ sub generate_std_chains {
 
     # same as shorewall smurflog.
     my $chain = 'PVEFW-smurflog';
+    $pve_std_chains->{$chain} = [];
 
     push @{$pve_std_chains->{$chain}}, get_log_rule_base($chain, 0, "DROP: ", $loglevel) if $loglevel;
     push @{$pve_std_chains->{$chain}}, "-j DROP";
@@ -2284,6 +2285,8 @@ sub generate_std_chains {
     # same as shorewall logflags action.
     $loglevel = get_option_log_level($options, 'tcp_flags_log_level');
     $chain = 'PVEFW-logflags';
+    $pve_std_chains->{$chain} = [];
+
     # fixme: is this correctly logged by pvewf-logger? (ther is no --log-ip-options for NFLOG)
     push @{$pve_std_chains->{$chain}}, get_log_rule_base($chain, 0, "DROP: ", $loglevel) if $loglevel;
     push @{$pve_std_chains->{$chain}}, "-j DROP";
@@ -2492,7 +2495,6 @@ sub compile {
     my $vmfw_configs = read_vm_firewall_configs($vmdata);
 
     my $routing_table = read_proc_net_route();
-
 
     my $ipset_ruleset = {};
     generate_ipset_chains($ipset_ruleset, $cluster_conf);
