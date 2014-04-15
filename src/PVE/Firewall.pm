@@ -2483,12 +2483,16 @@ sub save_hostfw_conf {
 }
 
 sub compile {
+    my ($cluster_conf, $hostfw_conf) = @_;
+
+    $cluster_conf = load_clusterfw_conf() if !$cluster_conf;
+    $hostfw_conf = load_hostfw_conf() if !$hostfw_conf;
+
     my $vmdata = read_local_vm_config();
     my $vmfw_configs = read_vm_firewall_configs($vmdata);
 
     my $routing_table = read_proc_net_route();
 
-    my $cluster_conf = load_clusterfw_conf();
 
     my $ipset_ruleset = {};
     generate_ipset_chains($ipset_ruleset, $cluster_conf);
@@ -2500,7 +2504,6 @@ sub compile {
 
     ruleset_create_chain($ruleset, "PVEFW-FORWARD");
 
-    my $hostfw_conf = load_hostfw_conf();
     my $hostfw_options = $hostfw_conf->{options} || {};
 
     generate_std_chains($ruleset, $hostfw_options);
@@ -2596,7 +2599,7 @@ sub compile {
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o vmbr+ -j DROP");
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i vmbr+ -j DROP");
 
-    return wantarray ? ($ruleset, $hostfw_conf, $ipset_ruleset) : $ruleset;
+    return ($ruleset, $ipset_ruleset);
 }
 
 sub get_ruleset_status {
@@ -2868,9 +2871,29 @@ sub update {
     my ($start, $verbose) = @_;
 
     my $code = sub {
+
+	my $cluster_conf = load_clusterfw_conf();
+	my $cluster_options = $cluster_conf->{options};
+
+	my $enable = !(defined($cluster_options->{enable}) && ($cluster_options->{enable} == 0));
+
 	my $status = read_pvefw_status();
 
-	my ($ruleset, $hostfw_conf, $ipset_ruleset) = compile();
+	die "Firewall is disabled - cannot start\n" if !$enable && $start;
+
+	if (!$enable) {
+	    if ($status ne 'stopped') {
+		print "trying to stop firewall (firewall is disabled)\n" if $verbose;
+		PVE::Firewall::remove_pvefw_chains();
+		PVE::Firewall::save_pvefw_status('stopped');
+	    }
+	    print "Firewall disabled\n" if $verbose;
+	    return;
+	}
+
+	my $hostfw_conf = load_hostfw_conf();
+
+	my ($ruleset, $ipset_ruleset) = compile($cluster_conf, $hostfw_conf);
 
 	if ($start || $status eq 'active') {
 
