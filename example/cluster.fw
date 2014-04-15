@@ -1,5 +1,6 @@
 [OPTIONS]
 
+# enable firewall (cluster wide setting, default is disabled) 
 enable: 1
 
 # default policy for host rules

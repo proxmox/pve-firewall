@@ -2875,7 +2875,7 @@ sub update {
 	my $cluster_conf = load_clusterfw_conf();
 	my $cluster_options = $cluster_conf->{options};
 
-	my $enable = !(defined($cluster_options->{enable}) && ($cluster_options->{enable} == 0));
+	my $enable = $cluster_options->{enable};
 
 	my $status = read_pvefw_status();
 
