@@ -6,6 +6,6 @@
 %:
 	dh $@ 
 
-override_dh_auto_install:
-	dh_auto_install
+override_dh_installinit:
+	dh_installinit -R -p pve-firewall
 	dh_installinit --name pvefw-logger

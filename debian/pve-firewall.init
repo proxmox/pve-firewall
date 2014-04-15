@@ -1,0 +1,48 @@
+#!/bin/sh
+
+### BEGIN INIT INFO
+# Provides:        pve-firewall
+# Required-Start:  $remote_fs $network pvefw-logger pve-cluster
+# Required-Stop:   $remote_fs $network pvefw-logger pve-cluster
+# Default-Start:   2 3 4 5
+# Default-Stop:    0 1 6
+# Short-Description: PVE firewall
+### END INIT INFO
+
+. /lib/lsb/init-functions
+
+PATH=/sbin:/bin:/usr/bin:/usr/sbin
+PVEFW=/usr/sbin/pvefw
+NAME=pvefw
+DESC="PVE firewall"
+PIDFILE=/var/run/pvefw-logger.pid
+
+test -f $PVEFW || exit 0
+
+# avoid warnings about uninstalled locales
+export LC_ALL="C"
+
+case "$1" in
+	start)
+		log_daemon_msg "Starting $DESC" "$NAME"
+		$PVEFW start
+ 		log_end_msg $?
+  		;;
+	stop)
+		log_daemon_msg "Stopping $DESC" "$NAME"
+		$PVEFW stop
+		log_end_msg $?
+  		;;
+	reload|restart|force-reload)
+		log_daemon_msg "Restarting $DESC" "$NAME"
+		$PVEFW update
+  		log_end_msg $?
+  		;;
+	*)
+	        N=/etc/init.d/$NAME
+  		echo "Usage: $N {start|stop|restart|force-reload}"
+  		exit 1
+		;;
+esac
+
+exit 0
