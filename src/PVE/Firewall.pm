@@ -1225,7 +1225,7 @@ sub ruleset_generate_cmdstr {
 	    push @cmd, "-m iprange --dst-range $dest";
 
 	} else {
-	    push @cmd, "-s $dest";
+	    push @cmd, "-d $dest";
         }
     }
 
