@@ -5,11 +5,17 @@ Experimental software, only used for testing!
 Quick Intro
 ===========
 
-VM firewall rules are read from /etc/pve/firewall/<VMID>.fw
+VM firewall rules are read from:
 
-Security group rules are read from /etc/pve/firewall/groups.fw
+ /etc/pve/firewall/<VMID>.fw
 
-Host firewall rules are read from /etc/pve/local/host.fw
+Cluster wide rules and security group are read from:
+ 
+ /etc/pve/firewall/cluster.fw
+
+Host firewall rules are read from:
+
+  /etc/pve/local/host.fw
 
 You can find examples in the example/ dir
 
