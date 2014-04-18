@@ -54,6 +54,16 @@ my $option_properties = {
 	type => 'boolean',
 	optional => 1,
     },
+    macfilter => {
+	description => "Enable/disable MAC address filter.",
+	type => 'boolean',
+	optional => 1,
+    },
+    dhcp => {
+	description => "Enable DHCP.",
+	type => 'boolean',
+	optional => 1,
+    },
     policy_in => {
 	description => "Input policy.",
 	type => 'string',
@@ -66,6 +76,11 @@ my $option_properties = {
 	optional => 1,
 	enum => ['ACCEPT', 'REJECT', 'DROP'],
     },
+    log_level_in =>  get_standard_option('pve-fw-loglevel', {
+	description => "Log level for incoming traffic." }),
+    log_level_out =>  get_standard_option('pve-fw-loglevel', {
+	description => "Log level for outgoing traffic." }),
+
 };
 
 my $add_option_properties = sub {
