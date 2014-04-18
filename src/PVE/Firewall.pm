@@ -1641,6 +1641,7 @@ sub enable_host_firewall {
     my $options = $hostfw_conf->{options};
     my $cluster_options = $cluster_conf->{options};
     my $rules = $hostfw_conf->{rules};
+    my $cluster_rules = $cluster_conf->{rules};
 
     # host inbound firewall
     my $chain = "PVEFW-HOST-IN";
@@ -1666,7 +1667,8 @@ sub enable_host_firewall {
     # we use RETURN because we need to check also tap rules
     my $accept_action = 'RETURN';
 
-    foreach my $rule (@$rules) {
+    # add host rules first, so that cluster wide rules can be overwritten
+    foreach my $rule (@$rules, @$cluster_rules) {
 	next if $rule->{type} ne 'in';
 	ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" }, undef, $cluster_conf);
     }
@@ -1691,7 +1693,8 @@ sub enable_host_firewall {
     # we use RETURN because we may want to check other thigs later
     $accept_action = 'RETURN';
 
-    foreach my $rule (@$rules) {
+    # add host rules first, so that cluster wide rules can be overwritten
+    foreach my $rule (@$rules, @$cluster_rules) {
 	next if $rule->{type} ne 'out';
 	ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" }, undef, $cluster_conf);
     }
