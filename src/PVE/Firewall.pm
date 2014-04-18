@@ -1425,12 +1425,12 @@ sub ruleset_add_chain_policy {
 }
 
 sub ruleset_create_vm_chain {
-    my ($ruleset, $chain, $options, $macaddr, $direction) = @_;
+    my ($ruleset, $chain, $options, $host_options, $macaddr, $direction) = @_;
 
     ruleset_create_chain($ruleset, $chain);
     my $accept = generate_nfqueue($options);
 
-    if (!(defined($options->{nosmurfs}) && $options->{nosmurfs} == 0)) {
+    if (!(defined($host_options->{nosmurfs}) && $host_options->{nosmurfs} == 0)) {
 	ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate INVALID,NEW -j PVEFW-smurfs");
     }
 
@@ -1444,7 +1444,7 @@ sub ruleset_create_vm_chain {
 	}
     }
 
-    if ($options->{tcpflags}) {
+    if ($host_options->{tcpflags}) {
 	ruleset_addrule($ruleset, $chain, "-p tcp -j PVEFW-tcpflags");
     }
 
@@ -1538,7 +1538,7 @@ sub ruleset_generate_vm_ipsrules {
 }
 
 sub generate_venet_rules_direction {
-    my ($ruleset, $cluster_conf, $vmfw_conf, $vmid, $ip, $direction) = @_;
+    my ($ruleset, $cluster_conf, $hostfw_conf, $vmfw_conf, $vmid, $ip, $direction) = @_;
 
     parse_address_list($ip); # make sure we have a valid $ip list
 
@@ -1547,11 +1547,12 @@ sub generate_venet_rules_direction {
     my $rules = $vmfw_conf->{rules};
 
     my $options = $vmfw_conf->{options};
+    my $hostfw_options = $vmfw_conf->{options};
     my $loglevel = get_option_log_level($options, "log_level_${lc_direction}");
 
     my $chain = "venet0-$vmid-$direction";
 
-    ruleset_create_vm_chain($ruleset, $chain, $options, undef, $direction);
+    ruleset_create_vm_chain($ruleset, $chain, $options, $hostfw_options, undef, $direction);
 
     ruleset_generate_vm_rules($ruleset, $rules, $cluster_conf, $chain, 'venet', $direction);
 
@@ -1593,18 +1594,19 @@ sub generate_venet_rules_direction {
 }
 
 sub generate_tap_rules_direction {
-    my ($ruleset, $cluster_conf, $iface, $netid, $macaddr, $vmfw_conf, $vmid, $bridge, $direction) = @_;
+    my ($ruleset, $cluster_conf, $hostfw_conf, $iface, $netid, $macaddr, $vmfw_conf, $vmid, $bridge, $direction) = @_;
 
     my $lc_direction = lc($direction);
 
     my $rules = $vmfw_conf->{rules};
 
     my $options = $vmfw_conf->{options};
+    my $hostfw_options = $hostfw_conf->{options};
     my $loglevel = get_option_log_level($options, "log_level_${lc_direction}");
 
     my $tapchain = "$iface-$direction";
 
-    ruleset_create_vm_chain($ruleset, $tapchain, $options, $macaddr, $direction);
+    ruleset_create_vm_chain($ruleset, $tapchain, $options, $hostfw_options, $macaddr, $direction);
 
     ruleset_generate_vm_rules($ruleset, $rules, $cluster_conf, $tapchain, $netid, $direction, $options);
 
@@ -1635,8 +1637,6 @@ sub generate_tap_rules_direction {
 
 sub enable_host_firewall {
     my ($ruleset, $hostfw_conf, $cluster_conf) = @_;
-
-    # fixme: allow security groups
 
     my $options = $hostfw_conf->{options};
     my $cluster_options = $cluster_conf->{options};
@@ -1834,7 +1834,7 @@ sub parse_vmfw_option {
 
     my $loglevels = "emerg|alert|crit|err|warning|notice|info|debug|nolog";
 
-    if ($line =~ m/^(enable|dhcp|macfilter|nosmurfs|tcpflags|ips):\s*(0|1)\s*$/i) {
+    if ($line =~ m/^(enable|dhcp|macfilter|ips):\s*(0|1)\s*$/i) {
 	$opt = lc($1);
 	$value = int($2);
     } elsif ($line =~ m/^(log_level_in|log_level_out):\s*(($loglevels)\s*)?$/i) {
@@ -2545,9 +2545,9 @@ sub compile {
 	    generate_bridge_chains($ruleset, $hostfw_conf, $bridge, $routing_table);
 
 	    my $macaddr = $net->{macaddr};
-	    generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
+	    generate_tap_rules_direction($ruleset, $cluster_conf, $hostfw_conf, $iface, $netid, $macaddr,
 					 $vmfw_conf, $vmid, $bridge, 'IN');
-	    generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
+	    generate_tap_rules_direction($ruleset, $cluster_conf, $hostfw_conf, $iface, $netid, $macaddr,
 					 $vmfw_conf, $vmid, $bridge, 'OUT');
 	}
     }
@@ -2562,8 +2562,8 @@ sub compile {
 
 	if ($conf->{ip_address} && $conf->{ip_address}->{value}) {
 	    my $ip = $conf->{ip_address}->{value};
-	    generate_venet_rules_direction($ruleset, $cluster_conf, $vmfw_conf, $vmid, $ip, 'IN');
-	    generate_venet_rules_direction($ruleset, $cluster_conf, $vmfw_conf, $vmid, $ip, 'OUT');
+	    generate_venet_rules_direction($ruleset, $cluster_conf, $hostfw_conf, $vmfw_conf, $vmid, $ip, 'IN');
+	    generate_venet_rules_direction($ruleset, $cluster_conf, $hostfw_conf, $vmfw_conf, $vmid, $ip, 'OUT');
 	}
 
 	if ($conf->{netif} && $conf->{netif}->{value}) {
@@ -2580,9 +2580,9 @@ sub compile {
 
 		my $macaddr = $d->{mac};
 		my $iface = $d->{host_ifname};
-		generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
+		generate_tap_rules_direction($ruleset, $cluster_conf, $hostfw_conf, $iface, $netid, $macaddr,
 					     $vmfw_conf, $vmid, $bridge, 'IN');
-		generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
+		generate_tap_rules_direction($ruleset, $cluster_conf, $hostfw_conf, $iface, $netid, $macaddr,
 					     $vmfw_conf, $vmid, $bridge, 'OUT');
 	    }
 	}

@@ -19,12 +19,6 @@ log_level_in: info
 # disable log for outgoing connections
 log_level_out: nolog
 
-# disable SMURFS filter
-nosmurfs: 0
-
-# filter illegal combinations of TCP flags
-tcpflags: 1
-
 # enable DHCP
 dhcp: 1
 
