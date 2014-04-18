@@ -1,1 +1,3 @@
 debian/SOURCE
+debian/example/
+debian/README
