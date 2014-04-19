@@ -712,6 +712,7 @@ sub parse_address_list {
     my ($str) = @_;
 
     return if $str =~ m/^(\+)(\S+)$/; # ipset ref
+    return if $str =~ m/^${security_group_pattern}$/; # aliases
 
     my $count = 0;
     my $iprange = 0;
@@ -1208,6 +1209,10 @@ sub ruleset_generate_cmdstr {
 	    die "no such ipset $2" if !$cluster_conf->{ipset}->{$2};
 	    push @cmd, "-m set --match-set PVEFW-$2 src";
 
+	} elsif ($source =~ m/^${security_group_pattern}$/){
+	    die "no such alias $source" if !$cluster_conf->{aliases}->{$source};
+	    push @cmd, "-s $cluster_conf->{aliases}->{$source}";
+
         } elsif ($source =~ m/\-/){
 	    push @cmd, "-m iprange --src-range $source";
 
@@ -1220,6 +1225,10 @@ sub ruleset_generate_cmdstr {
         if ($dest =~ m/^(\+)(\S+)$/) {
 	    die "no such ipset $2" if !$cluster_conf->{ipset}->{$2};
 	    push @cmd, "-m set --match-set PVEFW-$2 dst";
+
+	} elsif ($dest =~ m/^${security_group_pattern}$/){
+	    die "no such alias $dest" if !$cluster_conf->{aliases}->{$dest};
+	    push @cmd, "-d $cluster_conf->{aliases}->{$dest}";
 
         } elsif ($dest =~ m/^(\d+)\.(\d+).(\d+).(\d+)\-(\d+)\.(\d+).(\d+).(\d+)$/){
 	    push @cmd, "-m iprange --dst-range $dest";
@@ -1897,6 +1906,25 @@ sub parse_clusterfw_option {
     return ($opt, $value);
 }
 
+sub parse_clusterfw_alias {
+    my ($line) = @_;
+
+    my ($opt, $value);
+    if ($line =~ m/^(\S+)\s(\S+)$/) {
+	$opt = lc($1);
+	if($2){
+	    $2 =~ s|/32$||;
+	    pve_verify_ipv4_or_cidr($2) if $2;
+	    $value = $2;
+	}
+    } else {
+	chomp $line;
+	die "can't parse option '$line'\n";
+    }
+
+    return ($opt, $value);
+}
+
 sub parse_vm_fw_rules {
     my ($filename, $fh) = @_;
 
@@ -2020,6 +2048,11 @@ sub parse_cluster_fw_rules {
 	    next;
 	}
 
+	if ($line =~ m/^\[aliases\]$/i) {
+	    $section = 'aliases';
+	    next;
+	}
+
 	if ($line =~ m/^\[group\s+(\S+)\]\s*(?:#\s*(.*?)\s*)?$/i) {
 	    $section = 'groups';
 	    $group = lc($1);
@@ -2056,6 +2089,12 @@ sub parse_cluster_fw_rules {
 		$res->{options}->{$opt} = $value;
 	    };
 	    warn "$prefix: $@" if $@;
+	} elsif ($section eq 'aliases') {
+	    eval {
+		my ($opt, $value) = parse_clusterfw_alias($line);
+		$res->{aliases}->{$opt} = $value;
+	    };
+	    warn "$prefix: $@" if $@;
 	} elsif ($section eq 'rules') {
 	    my $rule;
 	    eval { $rule = parse_fw_rule($line, 1, 1); };
@@ -2080,12 +2119,14 @@ sub parse_cluster_fw_rules {
 	    my $nomatch = $1;
 	    my $cidr = $2;
 
-	    $cidr =~ s|/32$||;
+	    if($cidr !~ m/^${security_group_pattern}$/) {
+		$cidr =~ s|/32$||;
 	    
-	    eval { pve_verify_ipv4_or_cidr($cidr); };
-	    if (my $err = $@) {
-		warn "$prefix: $cidr - $err";
-		next;
+		eval { pve_verify_ipv4_or_cidr($cidr); };
+		if (my $err = $@) {
+		    warn "$prefix: $cidr - $err";
+		    next;
+		}
 	    }
 
 	    my $entry = { cidr => $cidr }; 
@@ -2317,12 +2358,12 @@ sub generate_ipset_chains {
     my ($ipset_ruleset, $fw_conf) = @_;
 
     foreach my $ipset (keys %{$fw_conf->{ipset}}) {
-	generate_ipset($ipset_ruleset, "PVEFW-$ipset", $fw_conf->{ipset}->{$ipset});
+	generate_ipset($ipset_ruleset, "PVEFW-$ipset", $fw_conf->{ipset}->{$ipset}, $fw_conf->{aliases});
     }
 }
 
 sub generate_ipset {
-    my ($ipset_ruleset, $name, $options) = @_;
+    my ($ipset_ruleset, $name, $options, $aliases) = @_;
 
     my $hashsize = scalar(@$options);
     if ($hashsize <= 64) {
@@ -2336,6 +2377,12 @@ sub generate_ipset {
     # remove duplicates
     my $nethash = {};
     foreach my $entry (@$options) {
+	my $cidr = $entry->{cidr};
+	#check aliases
+	if ($cidr =~ m/^${security_group_pattern}$/){
+	    die "no such alias $cidr" if !$aliases->{$cidr};
+	    $entry->{cidr} = $aliases->{$cidr};
+	}
 	$nethash->{$entry->{cidr}} = $entry;
     }
 
