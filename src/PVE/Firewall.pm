@@ -2462,11 +2462,13 @@ sub generate_ipset {
 	    my $alias = lc($cidr);
 	    if ($aliases->{$alias}) {
 		$entry->{cidr} = $aliases->{$alias}->{cidr};
+		$nethash->{$entry->{cidr}} = $entry;
 	    } else {
 		warn "no such alias '$cidr'\n" if !$aliases->{$alias};
 	    }
+	} else {
+	    $nethash->{$entry->{cidr}} = $entry;
 	}
-	$nethash->{$entry->{cidr}} = $entry;
     }
 
     foreach my $cidr (sort keys %$nethash) {

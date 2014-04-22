@@ -209,7 +209,6 @@ sub register_update_ip {
 
 	    my (undef, $digest) = PVE::Firewall::copy_list_with_digest($ipset);
 	    PVE::Tools::assert_if_modified($digest, $param->{digest});
-	    warn "TEST:$digest:$param->{digest}:\n";
 
 	    foreach my $entry (@$ipset) {
 		if($entry->{cidr} eq $param->{cidr}) {
