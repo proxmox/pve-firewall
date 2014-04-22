@@ -1505,6 +1505,8 @@ sub ruleset_generate_vm_rules {
 
     my $lc_direction = lc($direction);
 
+    my $in_accept = generate_nfqueue($options);
+
     foreach my $rule (@$rules) {
 	next if $rule->{iface} && $rule->{iface} ne $netid;
 	next if !$rule->{enable};
@@ -1527,8 +1529,7 @@ sub ruleset_generate_vm_rules {
 		ruleset_generate_rule($ruleset, $chain, $rule,
 				      { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" }, undef, $cluster_conf);
 	    } else {
-		my $accept = generate_nfqueue($options);
-		ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept , REJECT => "PVEFW-reject" }, undef, $cluster_conf);
+		ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $in_accept , REJECT => "PVEFW-reject" }, undef, $cluster_conf);
 	    }
 	}
     }
