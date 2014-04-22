@@ -2863,10 +2863,6 @@ sub apply_ruleset {
 
     enable_bridge_firewall();
 
-    update_nf_conntrack_max($hostfw_conf);
-
-    update_nf_conntrack_tcp_timeout_established($hostfw_conf);
-
     my ($ipset_create_cmdlist, $ipset_delete_cmdlist, $ipset_changes) =
 	get_ipset_cmdlist($ipset_ruleset, undef, $verbose);
 
@@ -2905,6 +2901,11 @@ sub apply_ruleset {
     }
 
     die "unable to apply firewall changes\n" if $errors;
+
+    update_nf_conntrack_max($hostfw_conf);
+
+    update_nf_conntrack_tcp_timeout_established($hostfw_conf);
+
 }
 
 sub update_nf_conntrack_max {
