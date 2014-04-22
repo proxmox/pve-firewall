@@ -1398,7 +1398,7 @@ sub ruleset_addlog {
 
     $logrule = "$rule $logrule" if defined($rule);
 
-    ruleset_addrule($ruleset, $chain, $logrule)
+    ruleset_addrule($ruleset, $chain, $logrule);
 }
 
 sub generate_bridge_chains {
@@ -2655,6 +2655,21 @@ sub compile {
 
     my $hostfw_options = $hostfw_conf->{options} || {};
 
+    # fixme: what log level should we use here?
+    my $loglevel = get_option_log_level($hostfw_options, "log_level_out");
+
+    if($hostfw_options->{optimize}){
+
+	my $accept = ruleset_chain_exist($ruleset, "PVEFW-IPS") ? "PVEFW-IPS" : "ACCEPT";
+	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m conntrack --ctstate INVALID -j DROP");
+	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m conntrack --ctstate RELATED,ESTABLISHED -j $accept");
+    }
+
+    if ($cluster_conf->{ipset}->{blacklist}){
+	ruleset_addlog($ruleset, "PVEFW-FORWARD", 0, "DROP: ", $loglevel, "-m set --match-set PVEFW-blacklist src");
+	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m set --match-set PVEFW-blacklist src -j DROP");
+    }
+
     generate_std_chains($ruleset, $hostfw_options);
 
     my $hostfw_enable = !(defined($hostfw_options->{enable}) && ($hostfw_options->{enable} == 0));
@@ -2724,16 +2739,6 @@ sub compile {
 	    }
 	}
     }
-
-    if($hostfw_options->{optimize}){
-
-	my $accept = ruleset_chain_exist($ruleset, "PVEFW-IPS") ? "PVEFW-IPS" : "ACCEPT";
-	ruleset_insertrule($ruleset, "PVEFW-FORWARD", "-m conntrack --ctstate RELATED,ESTABLISHED -j $accept");
-	ruleset_insertrule($ruleset, "PVEFW-FORWARD", "-m conntrack --ctstate INVALID -j DROP");
-    }
-
-    # fixme: what log level should we use here?
-    my $loglevel = get_option_log_level($hostfw_options, "log_level_out");
 
     # fixme: should we really block inter-bridge traffic?
 
