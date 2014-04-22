@@ -15,7 +15,7 @@ use File::Basename;
 use File::Path;
 use IO::File;
 use Net::IP;
-use PVE::Tools qw(run_command lock_file);
+use PVE::Tools qw(run_command lock_file dir_glob_foreach);
 use Encode;
 
 my $hostfw_conf_filename = "/etc/pve/local/host.fw";
@@ -1378,7 +1378,7 @@ sub ruleset_addlog {
 }
 
 sub generate_bridge_chains {
-    my ($ruleset, $hostfw_conf, $bridge, $routing_table) = @_;
+    my ($ruleset, $hostfw_conf, $bridge, $routing_table, $bridges_config) = @_;
 
     my $options = $hostfw_conf->{options} || {};
 
@@ -1393,12 +1393,26 @@ sub generate_bridge_chains {
 
     if (!ruleset_chain_exist($ruleset, "$bridge-OUT")) {
 	ruleset_create_chain($ruleset, "$bridge-OUT");
+
+	if($options->{optimize}){
+	    foreach my $interface (@{$bridges_config->{$bridge}}) {
+		ruleset_addrule($ruleset, "$bridge-OUT", "-m physdev --physdev-is-bridged --physdev-in $interface -g PVEFW-SET-ACCEPT-MARK");
+	    }
+	}
+
 	ruleset_addrule($ruleset, "$bridge-FW", "-m physdev --physdev-is-in -j $bridge-OUT");
 	ruleset_insertrule($ruleset, "PVEFW-INPUT", "-i $bridge -m physdev --physdev-is-in -j $bridge-OUT");
     }
 
     if (!ruleset_chain_exist($ruleset, "$bridge-IN")) {
 	ruleset_create_chain($ruleset, "$bridge-IN");
+
+	if($options->{optimize}){
+	    foreach my $interface (@{$bridges_config->{$bridge}}) {
+		ruleset_addrule($ruleset, "$bridge-IN", "-m physdev --physdev-is-bridged --physdev-out $interface -j ACCEPT");
+	    }
+	}
+
 	ruleset_addrule($ruleset, "$bridge-FW", "-m physdev --physdev-is-out -j $bridge-IN");
 	ruleset_addrule($ruleset, "$bridge-FW", "-m mark --mark 1 -j ACCEPT");
 	# accept traffic to unmanaged bridge ports
@@ -1636,10 +1650,10 @@ sub generate_tap_rules_direction {
 
     # plug the tap chain to bridge chain
     if ($direction eq 'IN') {
-	ruleset_insertrule($ruleset, "$bridge-IN",
+	ruleset_addrule($ruleset, "$bridge-IN",
 			   "-m physdev --physdev-is-bridged --physdev-out $iface -j $tapchain");
     } else {
-	ruleset_insertrule($ruleset, "$bridge-OUT",
+	ruleset_addrule($ruleset, "$bridge-OUT",
 			   "-m physdev --physdev-in $iface -j $tapchain");
     }
 }
@@ -2188,6 +2202,22 @@ sub read_local_vm_config {
     return $vmdata;
 };
 
+sub read_bridges_config {
+
+    my $bridgehash = {};
+
+    dir_glob_foreach('/sys/class/net', 'vmbr(\d+)', sub {
+        my ($bridge) = @_;
+
+	dir_glob_foreach("/sys/class/net/$bridge/brif", '((eth|bond)(\d+)(\.(\d+))?)', sub {
+	    my ($interface) = @_;
+	    push @{$bridgehash->{$bridge}}, $interface;
+	});
+    });
+
+    return $bridgehash;
+};
+
 sub load_vmfw_conf {
     my ($vmid) = @_;
 
@@ -2552,6 +2582,8 @@ sub compile {
     my $vmfw_configs = read_vm_firewall_configs($vmdata);
 
     my $routing_table = read_proc_net_route();
+    
+    my $bridges_config = read_bridges_config();
 
     my $ipset_ruleset = {};
     generate_ipset_chains($ipset_ruleset, $cluster_conf);
@@ -2589,7 +2621,7 @@ sub compile {
 
 	    $bridge .= "v$net->{tag}" if $net->{tag};
 
-	    generate_bridge_chains($ruleset, $hostfw_conf, $bridge, $routing_table);
+	    generate_bridge_chains($ruleset, $hostfw_conf, $bridge, $routing_table, $bridges_config);
 
 	    my $macaddr = $net->{macaddr};
 	    generate_tap_rules_direction($ruleset, $cluster_conf, $hostfw_conf, $iface, $netid, $macaddr,
@@ -2623,7 +2655,7 @@ sub compile {
 		    next; # fixme?
 		}
 
-		generate_bridge_chains($ruleset, $hostfw_conf, $bridge, $routing_table);
+		generate_bridge_chains($ruleset, $hostfw_conf, $bridge, $routing_table, $bridges_config);
 
 		my $macaddr = $d->{mac};
 		my $iface = $d->{host_ifname};
