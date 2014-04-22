@@ -1537,22 +1537,20 @@ sub ruleset_generate_vm_rules {
 sub generate_nfqueue {
     my ($options) = @_;
 
-    my $action = "";
-    if($options->{ips}){
-	$action = "NFQUEUE";
-	if($options->{ips_queues} && $options->{ips_queues} =~ m/^(\d+)(:(\d+))?$/) {
-	    if(defined($3) && defined($1)) {
+    if ($options->{ips}) {
+	my $action = "NFQUEUE";
+	if ($options->{ips_queues} && $options->{ips_queues} =~ m/^(\d+)(:(\d+))?$/) {
+	    if (defined($3) && defined($1)) {
 		$action .= " --queue-balance $1:$3";
-	    }elsif (defined($1)) {
+	    } elsif (defined($1)) {
 		$action .= " --queue-num $1";
 	    }
 	}
 	$action .= " --queue-bypass" if $feature_ipset_nomatch; #need kernel 3.10
-    }else{
-	$action = "ACCEPT";
+	return $action;
+    } else {
+	return "ACCEPT";
     }
-
-    return $action;
 }
 
 sub ruleset_generate_vm_ipsrules {
