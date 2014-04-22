@@ -15,10 +15,14 @@ my $api_properties = {
 	type => 'string', format => 'IPv4orCIDR',
     },
     name => get_standard_option('pve-fw-alias'),
+    rename => get_standard_option('pve-fw-alias', {
+	description => "Rename an existing alias.",
+	optional => 1,
+    }),
     comment => {
 	type => 'string',
 	optional => 1,
-    }
+    },
 };
 
 sub load_config {
@@ -149,7 +153,6 @@ sub register_read_alias {
     my $properties = $class->additional_parameters();
 
     $properties->{name} = $api_properties->{name};
-    $properties->{cidr} = $api_properties->{cidr};
     
     $class->register_method({
 	name => 'read_alias',
@@ -181,6 +184,7 @@ sub register_update_alias {
     my $properties = $class->additional_parameters();
 
     $properties->{name} = $api_properties->{name};
+    $properties->{rename} = $api_properties->{rename};
     $properties->{cidr} = $api_properties->{cidr};
     $properties->{comment} = $api_properties->{comment};
     $properties->{digest} = get_standard_option('pve-config-digest');
@@ -216,7 +220,19 @@ sub register_update_alias {
 
 	    $aliases->{$name} = $data;
 
+	    my $rename = lc($param->{rename});
+
+	    if ($rename && ($name ne $rename)) {
+		raise_param_exc({ name => "alias '$param->{rename}' already exists" }) 
+		    if defined($aliases->{$rename});
+		$aliases->{$name}->{name} = $param->{rename};
+		$aliases->{$rename} = $aliases->{$name};
+		delete $aliases->{$name};
+	    }
+
 	    $class->save_aliases($param, $fw_conf, $aliases);
+
+	    return undef;
 	}});
 }
 
