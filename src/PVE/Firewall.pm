@@ -1309,10 +1309,17 @@ sub ruleset_generate_rule {
 	$rules = [ $rule ];
     }
 
+    # update all or nothing
+
+    my @cmds = ();
     foreach my $tmp (@$rules) {
 	if (my $cmdstr = ruleset_generate_cmdstr($ruleset, $chain, $tmp, $actions, $goto, $cluster_conf)) {
-	    ruleset_addrule($ruleset, $chain, $cmdstr);
+	    push @cmds, $cmdstr;
 	}
+    }
+
+    foreach my $cmdstr (@cmds) {
+	ruleset_addrule($ruleset, $chain, $cmdstr);
     }
 }
 
@@ -2415,9 +2422,12 @@ sub generate_ipset {
     my $nethash = {};
     foreach my $entry (@$options) {
 	my $cidr = $entry->{cidr};
-	if ($cidr =~ m/^${ip_alias_pattern}$/){
-	    die "no such alias $cidr" if !$aliases->{$cidr};
-	    $entry->{cidr} = $aliases->{$cidr};
+	if ($cidr =~ m/^${ip_alias_pattern}$/) {
+	    if ($aliases->{$cidr}) {
+		$entry->{cidr} = $aliases->{$cidr};
+	    } else {
+		warn "no such alias '$cidr'\n" if !$aliases->{$cidr};
+	    }
 	}
 	$nethash->{$entry->{cidr}} = $entry;
     }
