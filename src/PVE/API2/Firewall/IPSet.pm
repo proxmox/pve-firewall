@@ -29,11 +29,9 @@ sub load_config {
     my ($class, $param) = @_;
 
     die "implement this in subclass";
-
-    #return ($fw_conf, $rules);
 }
 
-sub save_rules {
+sub save_ipset {
     my ($class, $param, $fw_conf, $rules) = @_;
 
     die "implement this in subclass";
