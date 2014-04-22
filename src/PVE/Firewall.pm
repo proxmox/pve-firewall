@@ -2299,6 +2299,20 @@ my $format_options = sub {
     return $raw;
 };
 
+my $format_aliases = sub {
+    my ($aliases) = @_;
+
+    my $raw = '';
+
+    $raw .= "[ALIASES]\n\n";
+    foreach my $k (keys %$aliases) {
+	$raw .= "$k $aliases->{$k}\n";
+    }
+    $raw .= "\n";
+
+    return $raw;
+};
+
 my $format_ipset = sub {
     my ($options) = @_;
 
@@ -2531,6 +2545,9 @@ sub save_clusterfw_conf {
     my $options = $cluster_conf->{options};
     $raw .= &$format_options($options) if scalar(keys %$options);
 
+    my $aliases = $cluster_conf->{aliases};
+    $raw .= &$format_aliases($aliases) if scalar(keys %$aliases);
+ 
     foreach my $ipset (sort keys %{$cluster_conf->{ipset}}) {
 	if (my $comment = $cluster_conf->{ipset_comments}->{$ipset}) {
 	    my $utf8comment = encode('utf8', $comment);
