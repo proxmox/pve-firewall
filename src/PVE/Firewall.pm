@@ -1525,12 +1525,18 @@ sub ruleset_generate_vm_rules {
 
 	} else {
 	    next if $rule->{type} ne $lc_direction;
-	    if ($direction eq 'OUT') {
-		ruleset_generate_rule($ruleset, $chain, $rule,
-				      { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" }, undef, $cluster_conf);
-	    } else {
-		ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $in_accept , REJECT => "PVEFW-reject" }, undef, $cluster_conf);
-	    }
+	    eval {
+		if ($direction eq 'OUT') {
+		    ruleset_generate_rule($ruleset, $chain, $rule,
+					  { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" }, 
+					  undef, $cluster_conf);
+		} else {
+		    ruleset_generate_rule($ruleset, $chain, $rule, 
+					  { ACCEPT => $in_accept , REJECT => "PVEFW-reject" }, 
+					  undef, $cluster_conf);
+		}
+	    };
+	    warn $@ if $@;
 	}
     }
 }
