@@ -63,12 +63,13 @@ PVE::JSONSchema::register_standard_option('pve-fw-loglevel' => {
     optional => 1,
 });
 
-my $security_group_pattern = '[A-Za-z][A-Za-z0-9\-\_]+';
+my $security_group_name_pattern = '[A-Za-z][A-Za-z0-9\-\_]+';
+my $ip_alias_pattern = '[A-Za-z][A-Za-z0-9\-\_]+';
 
 PVE::JSONSchema::register_standard_option('pve-security-group-name', {
     description => "Security Group name.",
     type => 'string',
-    pattern => $security_group_pattern,
+    pattern => $security_group_name_pattern,
     minLength => 2,
     maxLength => 20,				  
 });
@@ -712,7 +713,7 @@ sub parse_address_list {
     my ($str) = @_;
 
     return if $str =~ m/^(\+)(\S+)$/; # ipset ref
-    return if $str =~ m/^${security_group_pattern}$/; # aliases
+    return if $str =~ m/^${ip_alias_pattern}$/;
 
     my $count = 0;
     my $iprange = 0;
@@ -855,7 +856,7 @@ my $rule_properties = {
 	description => "Rule action ('ACCEPT', 'DROP', 'REJECT') or security group name.",
 	type => 'string',
 	optional => 1,
-	pattern => $security_group_pattern,
+	pattern => $security_group_name_pattern,
 	maxLength => 20,
 	minLength => 2,
     },
@@ -987,7 +988,7 @@ sub verify_rule {
 	raise_param_exc({ type => "security groups not allowed"}) 
 	    if !$allow_groups;
 	raise_param_exc({ action => "invalid characters in security group name"}) 
-	    if $rule->{action} !~ m/^${security_group_pattern}$/;
+	    if $rule->{action} !~ m/^${security_group_name_pattern}$/;
     } else {
 	raise_param_exc({ type => "unknown rule type '$type'"});
     }
@@ -1205,12 +1206,15 @@ sub ruleset_generate_cmdstr {
     my $dest = $rule->{dest};
 
     if ($source) {
-        if ($source =~ m/^(\+)(\S+)$/) {
-	    die "no such ipset $2" if !$cluster_conf->{ipset}->{$2};
-	    push @cmd, "-m set --match-set PVEFW-$2 src";
-
-	} elsif ($source =~ m/^${security_group_pattern}$/){
-	    die "no such alias $source" if !$cluster_conf->{aliases}->{$source};
+        if ($source =~ m/^\+/) {
+	    if ($source =~ m/^\+(${security_group_name_pattern})$/) {
+		die "no such ipset '$1'\n" if !$cluster_conf->{ipset}->{$1};
+		push @cmd, "-m set --match-set PVEFW-$1 src";
+	    } else {
+		die "invalid security group name '$source'\n";
+	    }
+	} elsif ($source =~ m/^${ip_alias_pattern}$/){
+	    die "no such alias $source\n" if !$cluster_conf->{aliases}->{$source};
 	    push @cmd, "-s $cluster_conf->{aliases}->{$source}";
 
         } elsif ($source =~ m/\-/){
@@ -1222,11 +1226,14 @@ sub ruleset_generate_cmdstr {
     }
 
     if ($dest) {
-        if ($dest =~ m/^(\+)(\S+)$/) {
-	    die "no such ipset $2" if !$cluster_conf->{ipset}->{$2};
-	    push @cmd, "-m set --match-set PVEFW-$2 dst";
-
-	} elsif ($dest =~ m/^${security_group_pattern}$/){
+        if ($dest =~ m/^\+/) {
+	    if ($dest =~ m/^\+(${security_group_name_pattern})$/) {
+		die "no such ipset '$1'\n" if !$cluster_conf->{ipset}->{$1};
+		push @cmd, "-m set --match-set PVEFW-$1 dst";
+	    } else {
+		die "invalid security group name '$dest'\n";
+	    }
+	} elsif ($dest =~ m/^${ip_alias_pattern}$/){
 	    die "no such alias $dest" if !$cluster_conf->{aliases}->{$dest};
 	    push @cmd, "-d $cluster_conf->{aliases}->{$dest}";
 
@@ -1811,7 +1818,7 @@ sub parse_fw_rule {
 	die "wrong number of rule elements\n" if scalar(@data) != 3;
 	die "groups disabled\n" if !$allow_groups;
 
-	die "invalid characters in group name\n" if $action !~ m/^${security_group_pattern}$/;
+	die "invalid characters in group name\n" if $action !~ m/^${security_group_name_pattern}$/;
     } else {
 	die "unknown rule type '$type'\n";
     }
@@ -2133,7 +2140,7 @@ sub parse_cluster_fw_rules {
 	    my $nomatch = $1;
 	    my $cidr = $2;
 
-	    if($cidr !~ m/^${security_group_pattern}$/) {
+	    if($cidr !~ m/^${ip_alias_pattern}$/) {
 		$cidr =~ s|/32$||;
 	    
 		eval { pve_verify_ipv4_or_cidr($cidr); };
@@ -2408,8 +2415,7 @@ sub generate_ipset {
     my $nethash = {};
     foreach my $entry (@$options) {
 	my $cidr = $entry->{cidr};
-	#check aliases
-	if ($cidr =~ m/^${security_group_pattern}$/){
+	if ($cidr =~ m/^${ip_alias_pattern}$/){
 	    die "no such alias $cidr" if !$aliases->{$cidr};
 	    $entry->{cidr} = $aliases->{$cidr};
 	}

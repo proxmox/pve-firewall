@@ -40,7 +40,7 @@ IN SSH(ACCEPT) net0 192.168.2.192  # only allow SSH from  192.168.2.192
 IN SSH(ACCEPT) net0 10.0.0.1-10.0.0.10 #accept SSH for ip in range 10.0.0.1 to 10.0.0.10
 IN SSH(ACCEPT) net0 10.0.0.1,10.0.0.2,10.0.0.3 #accept ssh for 10.0.0.1 or 10.0.0.2 or 10.0.0.3
 IN SSH(ACCEPT) net0 +mynetgroup   #accept ssh for netgroup mynetgroup
-IN SSH(ACCEPT) net0 +myserveralias   #accept ssh for alias myserveralias
+IN SSH(ACCEPT) net0 myserveralias   #accept ssh for alias myserveralias
 
 |IN SSH(ACCEPT) net0 # disabled rule
 
