@@ -1093,7 +1093,7 @@ sub iptables_get_chains {
 
 	return 1 if $name =~ m/^venet0-\d+-(:?IN|OUT)$/;
 
-	return 1 if $name =~ m/^vmbr\d+-(:?FW|IN|OUT|IPS)$/;
+	return 1 if $name =~ m/^vmbr\d+(v\d+)?-(:?FW|IN|OUT|IPS)$/;
 	return 1 if $name =~ m/^GROUP-(:?[^\s\-]+)-(:?IN|OUT)$/;
 
 	return undef;
