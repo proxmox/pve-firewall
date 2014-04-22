@@ -1,4 +1,5 @@
 LIB_SOURCES=			\
+	Aliases.pm		\
 	IPSet.pm		\
 	Rules.pm		\
 	Cluster.pm		\

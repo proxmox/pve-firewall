@@ -56,6 +56,14 @@ PVE::JSONSchema::register_standard_option('ipset-name', {
     maxLength => 20,			  
 });
 
+PVE::JSONSchema::register_standard_option('pve-fw-alias', {
+    description => "Alias name.",
+    type => 'string',
+    pattern => '[A-Za-z][A-Za-z0-9\-\_]+',
+    minLength => 2,
+    maxLength => 20,			  
+});
+
 PVE::JSONSchema::register_standard_option('pve-fw-loglevel' => {
     description => "Log level.",
     type => 'string', 
@@ -1214,9 +1222,10 @@ sub ruleset_generate_cmdstr {
 		die "invalid security group name '$source'\n";
 	    }
 	} elsif ($source =~ m/^${ip_alias_pattern}$/){
-	    die "no such alias $source\n" if !$cluster_conf->{aliases}->{$source};
-	    push @cmd, "-s $cluster_conf->{aliases}->{$source}";
-
+	    my $alias = lc($source);
+	    my $e = $cluster_conf->{aliases}->{$alias};
+	    die "no such alias $source\n" if !$e;
+	    push @cmd, "-s $e->{cidr}";
         } elsif ($source =~ m/\-/){
 	    push @cmd, "-m iprange --src-range $source";
 
@@ -1234,9 +1243,10 @@ sub ruleset_generate_cmdstr {
 		die "invalid security group name '$dest'\n";
 	    }
 	} elsif ($dest =~ m/^${ip_alias_pattern}$/){
-	    die "no such alias $dest" if !$cluster_conf->{aliases}->{$dest};
-	    push @cmd, "-d $cluster_conf->{aliases}->{$dest}";
-
+	    my $alias = lc($source);
+	    my $e = $cluster_conf->{aliases}->{$alias};
+	    die "no such alias $dest" if !$e;
+	    push @cmd, "-d $e->{cidr}";
         } elsif ($dest =~ m/^(\d+)\.(\d+).(\d+).(\d+)\-(\d+)\.(\d+).(\d+).(\d+)$/){
 	    push @cmd, "-m iprange --dst-range $dest";
 
@@ -1942,20 +1952,22 @@ sub parse_clusterfw_option {
 sub parse_clusterfw_alias {
     my ($line) = @_;
 
-    my ($opt, $value);
+    # we can add single line comments to the end of the line
+    my $comment = decode('utf8', $1) if $line =~ s/\s*#\s*(.*?)\s*$//;
+
     if ($line =~ m/^(\S+)\s(\S+)$/) {
-	$opt = lc($1);
-	if($2){
-	    $2 =~ s|/32$||;
-	    pve_verify_ipv4_or_cidr($2) if $2;
-	    $value = $2;
-	}
-    } else {
-	chomp $line;
-	die "can't parse option '$line'\n";
+	my ($name, $cidr) = ($1, $2);
+	$cidr =~ s|/32$||;
+	pve_verify_ipv4_or_cidr($cidr);
+	my $data = {
+	    name => $name,
+	    cidr => $cidr,
+	};
+	$data->{comment} = $comment  if $comment;
+	return $data;
     }
 
-    return ($opt, $value);
+    return undef;
 }
 
 sub parse_vm_fw_rules {
@@ -2063,6 +2075,7 @@ sub parse_cluster_fw_rules {
     my $res = { 
 	rules => [], 
 	options => {}, 
+	aliases => {}, 
 	groups => {}, 
 	group_comments => {}, 
 	ipset => {} ,
@@ -2124,8 +2137,8 @@ sub parse_cluster_fw_rules {
 	    warn "$prefix: $@" if $@;
 	} elsif ($section eq 'aliases') {
 	    eval {
-		my ($opt, $value) = parse_clusterfw_alias($line);
-		$res->{aliases}->{$opt} = $value;
+		my $data = parse_clusterfw_alias($line);
+		$res->{aliases}->{lc($data->{name})} = $data;
 	    };
 	    warn "$prefix: $@" if $@;
 	} elsif ($section eq 'rules') {
@@ -2306,7 +2319,11 @@ my $format_aliases = sub {
 
     $raw .= "[ALIASES]\n\n";
     foreach my $k (keys %$aliases) {
-	$raw .= "$k $aliases->{$k}\n";
+	my $e = $aliases->{$k};
+	$raw .= "$e->{name} $e->{cidr}";
+	$raw .= " # " . encode('utf8', $e->{comment})
+	    if $e->{comment} && $e->{comment} !~ m/^\s*$/;
+	$raw .= "\n";
     }
     $raw .= "\n";
 
@@ -2442,10 +2459,11 @@ sub generate_ipset {
     foreach my $entry (@$options) {
 	my $cidr = $entry->{cidr};
 	if ($cidr =~ m/^${ip_alias_pattern}$/) {
-	    if ($aliases->{$cidr}) {
-		$entry->{cidr} = $aliases->{$cidr};
+	    my $alias = lc($cidr);
+	    if ($aliases->{$alias}) {
+		$entry->{cidr} = $aliases->{$alias}->{cidr};
 	    } else {
-		warn "no such alias '$cidr'\n" if !$aliases->{$cidr};
+		warn "no such alias '$cidr'\n" if !$aliases->{$alias};
 	    }
 	}
 	$nethash->{$entry->{cidr}} = $entry;

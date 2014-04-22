@@ -6,6 +6,7 @@ use PVE::Exception qw(raise raise_param_exc raise_perm_exc);
 use PVE::JSONSchema qw(get_standard_option);
 
 use PVE::Firewall;
+use PVE::API2::Firewall::Aliases;
 use PVE::API2::Firewall::Rules;
 use PVE::API2::Firewall::Groups;
 use PVE::API2::Firewall::IPSet;
@@ -31,6 +32,12 @@ __PACKAGE__->register_method ({
     path => 'ipset',
 });
 
+__PACKAGE__->register_method ({
+    subclass => "PVE::API2::Firewall::ClusterAliases",  
+    path => 'aliases',
+});
+
+
 __PACKAGE__->register_method({
     name => 'index',
     path => '',
@@ -52,6 +59,7 @@ __PACKAGE__->register_method({
 	my ($param) = @_;
 
 	my $result = [
+	    { name => 'aliases' },
 	    { name => 'rules' },
 	    { name => 'options' },
 	    { name => 'groups' },
