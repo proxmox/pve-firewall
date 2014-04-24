@@ -18,7 +18,7 @@ my $get_security_group_list = sub {
     my $res = [];
     foreach my $group (keys %{$cluster_conf->{groups}}) {
 	my $data = { 
-	    name => $group,
+	    group => $group,
 	};
 	if (my $comment = $cluster_conf->{group_comments}->{$group}) {
 	    $data->{comment} = $comment;
@@ -44,7 +44,7 @@ __PACKAGE__->register_method({
 	items => {
 	    type => "object",
 	    properties => { 
-		name => get_standard_option('pve-security-group-name'),
+		group => get_standard_option('pve-security-group-name'),
 		digest => get_standard_option('pve-config-digest', { optional => 0} ),
 		comment => { 
 		    type => 'string',
@@ -52,7 +52,7 @@ __PACKAGE__->register_method({
 		}
 	    },
 	},
-	links => [ { rel => 'child', href => "{name}" } ],
+	links => [ { rel => 'child', href => "{group}" } ],
     },
     code => sub {
 	my ($param) = @_;
@@ -71,7 +71,7 @@ __PACKAGE__->register_method({
     parameters => {
 	additionalProperties => 0,
 	properties => { 
-	    name => get_standard_option('pve-security-group-name'),
+	    group => get_standard_option('pve-security-group-name'),
 	    comment => {
 		type => 'string',
 		optional => 1,
@@ -93,23 +93,23 @@ __PACKAGE__->register_method({
 	    my (undef, $digest) = &$get_security_group_list($cluster_conf);
 	    PVE::Tools::assert_if_modified($digest, $param->{digest});
 
-	    raise_param_exc({ name => "Security group '$param->{rename}' does not exists" }) 
+	    raise_param_exc({ group => "Security group '$param->{rename}' does not exists" }) 
 		if !$cluster_conf->{groups}->{$param->{rename}};
 
 	    my $data = delete $cluster_conf->{groups}->{$param->{rename}};
-	    $cluster_conf->{groups}->{$param->{name}} = $data;
+	    $cluster_conf->{groups}->{$param->{group}} = $data;
 	    if (my $comment = delete $cluster_conf->{group_comments}->{$param->{rename}}) {
-		$cluster_conf->{group_comments}->{$param->{name}} = $comment;
+		$cluster_conf->{group_comments}->{$param->{group}} = $comment;
 	    }
-	    $cluster_conf->{group_comments}->{$param->{name}} = $param->{comment} if defined($param->{comment});
+	    $cluster_conf->{group_comments}->{$param->{group}} = $param->{comment} if defined($param->{comment});
 	} else {
 	    foreach my $name (keys %{$cluster_conf->{groups}}) {
-		raise_param_exc({ name => "Security group '$name' already exists" }) 
-		    if $name eq $param->{name};
+		raise_param_exc({ group => "Security group '$name' already exists" }) 
+		    if $name eq $param->{group};
 	    }
 
-	    $cluster_conf->{groups}->{$param->{name}} = [];
-	    $cluster_conf->{group_comments}->{$param->{name}} = $param->{comment} if defined($param->{comment});
+	    $cluster_conf->{groups}->{$param->{group}} = [];
+	    $cluster_conf->{group_comments}->{$param->{group}} = $param->{comment} if defined($param->{comment});
 	}
 
 	PVE::Firewall::save_clusterfw_conf($cluster_conf);
@@ -119,14 +119,14 @@ __PACKAGE__->register_method({
 
 __PACKAGE__->register_method({
     name => 'delete_security_group',
-    path => '{name}',
+    path => '{group}',
     method => 'DELETE',
     description => "Delete security group.",
     protected => 1,
     parameters => {
 	additionalProperties => 0,
 	properties => { 
-	    name => get_standard_option('pve-security-group-name'),
+	    group => get_standard_option('pve-security-group-name'),
 	    digest => get_standard_option('pve-config-digest'),
 	},
     },
@@ -136,15 +136,15 @@ __PACKAGE__->register_method({
 	    
 	my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
 
-	return undef if !$cluster_conf->{groups}->{$param->{name}};
+	return undef if !$cluster_conf->{groups}->{$param->{group}};
 
 	my (undef, $digest) = &$get_security_group_list($cluster_conf);
 	PVE::Tools::assert_if_modified($digest, $param->{digest});
 
-	die "Security group '$param->{name}' is not empty\n" 
-	    if scalar(@{$cluster_conf->{groups}->{$param->{name}}});
+	die "Security group '$param->{group}' is not empty\n" 
+	    if scalar(@{$cluster_conf->{groups}->{$param->{group}}});
 
-	delete $cluster_conf->{groups}->{$param->{name}};
+	delete $cluster_conf->{groups}->{$param->{group}};
 
 	PVE::Firewall::save_clusterfw_conf($cluster_conf);
 
