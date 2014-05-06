@@ -1402,12 +1402,9 @@ sub ruleset_addlog {
 }
 
 sub generate_bridge_chains {
-    my ($ruleset, $hostfw_conf, $bridge, $routing_table, $bridges_config) = @_;
+    my ($ruleset, $hostfw_conf, $bridge, $bridges_config) = @_;
 
     my $options = $hostfw_conf->{options} || {};
-
-    die "error: detected direct route to bridge '$bridge'\n"
-	if !$options->{allow_bridge_route} && $routing_table->{$bridge};
 
     if (!ruleset_chain_exist($ruleset, "$bridge-FW")) {
 	ruleset_create_chain($ruleset, "$bridge-FW");
@@ -1913,7 +1910,7 @@ sub parse_hostfw_option {
 
     my $loglevels = "emerg|alert|crit|err|warning|notice|info|debug|nolog";
 
-    if ($line =~ m/^(enable|nosmurfs|tcpflags|allow_bridge_route|optimize):\s*(0|1)\s*$/i) {
+    if ($line =~ m/^(enable|nosmurfs|tcpflags|optimize):\s*(0|1)\s*$/i) {
 	$opt = lc($1);
 	$value = int($2);
     } elsif ($line =~ m/^(log_level_in|log_level_out|tcp_flags_log_level|smurf_log_level):\s*(($loglevels)\s*)?$/i) {
@@ -2519,34 +2516,6 @@ sub read_pvefw_status {
     return $status;
 }
 
-# fixme: move to pve-common PVE::ProcFSTools
-sub read_proc_net_route {
-    my $filename = "/proc/net/route";
-
-    my $res = {};
-
-    my $fh = IO::File->new ($filename, "r");
-    return $res if !$fh;
-
-    my $int_to_quad = sub {
-	return join '.' => map { ($_[0] >> 8*(3-$_)) % 256 } (3, 2, 1, 0);
-    };
-
-    while (defined(my $line = <$fh>)) {
-	next if $line =~/^Iface\s+Destination/; # skip head
-	my ($iface, $dest, $gateway, $metric, $mask, $mtu) = (split(/\s+/, $line))[0,1,2,6,7,8];
-	push @{$res->{$iface}}, {
-	    dest => &$int_to_quad(hex($dest)),
-	    gateway => &$int_to_quad(hex($gateway)),
-	    mask => &$int_to_quad(hex($mask)),
-	    metric => $metric,
-	    mtu => $mtu,
-	};
-    }
-
-    return $res;
-}
-
 sub load_clusterfw_conf {
 
     my $cluster_conf = {};
@@ -2639,8 +2608,6 @@ sub compile {
     my $vmdata = read_local_vm_config();
     my $vmfw_configs = read_vm_firewall_configs($vmdata);
 
-    my $routing_table = read_proc_net_route();
-    
     my $bridges_config = read_bridges_config();
 
     my $ipset_ruleset = {};
@@ -2694,7 +2661,7 @@ sub compile {
 
 	    $bridge .= "v$net->{tag}" if $net->{tag};
 
-	    generate_bridge_chains($ruleset, $hostfw_conf, $bridge, $routing_table, $bridges_config);
+	    generate_bridge_chains($ruleset, $hostfw_conf, $bridge, $bridges_config);
 
 	    my $macaddr = $net->{macaddr};
 	    generate_tap_rules_direction($ruleset, $cluster_conf, $hostfw_conf, $iface, $netid, $macaddr,
@@ -2728,7 +2695,7 @@ sub compile {
 		    next; # fixme?
 		}
 
-		generate_bridge_chains($ruleset, $hostfw_conf, $bridge, $routing_table, $bridges_config);
+		generate_bridge_chains($ruleset, $hostfw_conf, $bridge, $bridges_config);
 
 		my $macaddr = $d->{mac};
 		my $iface = $d->{host_ifname};

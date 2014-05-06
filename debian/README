@@ -84,51 +84,13 @@ There are a number of restrictions when using iptables to filter
 bridged traffic. The physdev match feature does not work correctly
 when traffic is routed from host to bridge:
 
-  * when a packet being sent through a bridge entered the firewall on another interface 
-    and was being forwarded to the bridge.
+  * when a packet being sent through a bridge entered the firewall on 
+    another interface and was being forwarded to the bridge.
 
-  * when a packet originating on the firewall itself is being sent through a bridge.
+  * when a packet originating on the firewall itself is being sent through 
+    a bridge.
 
-So we disable the firewall if we detect such case (bridge with assigned IP address).
-You can enable it again (if you do not care) by setting "allow_bridge_route: 1" in "host.fw".
+We use a second bridge for each interface to avoid above problem.
 
-The correct workaround is to remove the IP address from the bridge device, and
-use a veth device which is plugged into the bridge:
-
----/etc/network/interfaces----
-
-...
-
-auto vmbr0
-iface vmbr0 inet manual
-	bridge_ports bond0
-	bridge_stp off
-	bridge_fd 0
-
-# this create the veth device and plug it into vmbr0
-auto pm0
-iface pm0 inet static
-	address  192.168.10.10
-	netmask  255.255.255.0
-	gateway  192.168.10.1
-	VETH_BRIDGETO vmbr0
-
-auto vmbr1
-iface vmbr1 inet manual
-      bridge_ports none
-      bridge_stp off
-      bridge_fd 0
-
-# setup masqueraded bridge port vmbr1/pm1 using pm0
-# NOTE: this needs kernel 3.10.0 or newer (for conntrack --zone) 
-auto pm1
-iface pm1 inet static
-       address 10.10.10.1
-       netmask 255.255.255.0
-       VETH_BRIDGETO vmbr1
-       VETH_MASQUERADE pm0
-
-...
-
---------------------------------
-
+eth0-->vmbr0<--tapXiY (non firewalled tap)
+            <--linkXiY-->linkXiYp-->fwbrXiY-->tapXiY (firewalled tap)
