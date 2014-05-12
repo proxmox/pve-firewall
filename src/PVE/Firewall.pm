@@ -1577,24 +1577,13 @@ sub generate_venet_rules_direction {
     my $accept_action = $direction eq 'OUT' ? "PVEFW-SET-ACCEPT-MARK" : $accept;
     ruleset_add_chain_policy($ruleset, $chain, $vmid, $policy, $loglevel, $accept_action);
 
-    # plug into FORWARD, INPUT and OUTPUT chain
     if ($direction eq 'OUT') {
 	ruleset_generate_rule_insert($ruleset, "PVEFW-VENET-OUT", {
 	    action => $chain,
 	    source => $ip,
 	    iface_in => 'venet0'});
-
-	ruleset_generate_rule_insert($ruleset, "PVEFW-INPUT", {
-	    action => $chain,
-	    source => $ip,
-	    iface_in => 'venet0'});
     } else {
 	ruleset_generate_rule($ruleset, "PVEFW-VENET-IN", {
-	    action => $chain,
-	    dest => $ip,
-	    iface_out => 'venet0'});
-
-	ruleset_generate_rule($ruleset, "PVEFW-OUTPUT", {
 	    action => $chain,
 	    dest => $ip,
 	    iface_out => 'venet0'});
@@ -2564,8 +2553,6 @@ sub compile {
     my $accept = ruleset_chain_exist($ruleset, "PVEFW-IPS") ? "PVEFW-IPS" : "ACCEPT";
     ruleset_chain_add_conn_filters($ruleset, "PVEFW-FORWARD", $accept);
 
-    #ruleset_chain_add_conn_filters($ruleset, "PVEFW-FORWARD", $hostfw_options, $accept);
-
     if ($cluster_conf->{ipset}->{blacklist}){
 	ruleset_addlog($ruleset, "PVEFW-FORWARD", 0, "DROP: ", $loglevel, "-m set --match-set PVEFW-blacklist src");
 	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m set --match-set PVEFW-blacklist src -j DROP");
@@ -2573,6 +2560,7 @@ sub compile {
 
     ruleset_create_chain($ruleset, "PVEFW-VENET-OUT");
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i venet0 -j PVEFW-VENET-OUT");
+    ruleset_addrule($ruleset, "PVEFW-INPUT", "-i venet0 -j PVEFW-VENET-OUT");
 
     ruleset_create_chain($ruleset, "PVEFW-FWBR-IN");
     ruleset_chain_add_input_filters($ruleset, "PVEFW-FWBR-IN", $hostfw_options);
@@ -2592,6 +2580,8 @@ sub compile {
     my $hostfw_enable = !(defined($hostfw_options->{enable}) && ($hostfw_options->{enable} == 0));
 
     enable_host_firewall($ruleset, $hostfw_conf, $cluster_conf) if $hostfw_enable;
+
+    ruleset_addrule($ruleset, "PVEFW-OUTPUT", "-o venet0 -j PVEFW-VENET-IN");
 
     # generate firewall rules for QEMU VMs
     foreach my $vmid (keys %{$vmdata->{qemu}}) {
