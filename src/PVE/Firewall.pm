@@ -2576,8 +2576,7 @@ sub compile {
     # fixme: what log level should we use here?
     my $loglevel = get_option_log_level($hostfw_options, "log_level_out");
 
-    my $accept = ruleset_chain_exist($ruleset, "PVEFW-IPS") ? "PVEFW-IPS" : "ACCEPT";
-    ruleset_chain_add_conn_filters($ruleset, "PVEFW-FORWARD", $accept);
+    ruleset_chain_add_conn_filters($ruleset, "PVEFW-FORWARD", "ACCEPT");
 
     if ($cluster_conf->{ipset}->{blacklist}){
 	ruleset_addlog($ruleset, "PVEFW-FORWARD", 0, "DROP: ", $loglevel, "-m set --match-set PVEFW-blacklist src");
@@ -2657,6 +2656,10 @@ sub compile {
 					     $vmfw_conf, $vmid, 'OUT');
 	    }
 	}
+    }
+
+    if(ruleset_chain_exist($ruleset, "PVEFW-IPS")){
+	ruleset_insertrule($ruleset, "PVEFW-FORWARD", "-m conntrack --ctstate RELATED,ESTABLISHED -j PVEFW-IPS");
     }
 
     return ($ruleset, $ipset_ruleset);
