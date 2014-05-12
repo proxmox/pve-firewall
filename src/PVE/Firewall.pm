@@ -814,7 +814,7 @@ sub copy_opject_with_digest {
 	$sha->add($k, ':', $v, "\n");
     }
 
-    my $digest = $sha->b64digest;
+    my $digest = $sha->hexdigest;
 
     $res->{digest} = $digest;
 
@@ -838,7 +838,7 @@ sub copy_list_with_digest {
 	push @$res, $data;
     }
 
-    my $digest = $sha->b64digest;
+    my $digest = $sha->hexdigest;
 
     foreach my $entry (@$res) {
 	$entry->{digest} = $digest;
