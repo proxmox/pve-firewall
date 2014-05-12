@@ -1102,7 +1102,7 @@ sub iptables_get_chains {
 
 	return 1 if $name =~ m/^venet0-\d+-(:?IN|OUT)$/;
 
-	return 1 if $name =~ m/^vmbr\d+(v\d+)?-(:?FW|IN|OUT|IPS)$/;
+	return 1 if $name =~ m/^fwbr\d+(v\d+)?-(:?FW|IN|OUT|IPS)$/;
 	return 1 if $name =~ m/^GROUP-(:?[^\s\-]+)-(:?IN|OUT)$/;
 
 	return undef;
@@ -1401,46 +1401,6 @@ sub ruleset_addlog {
     ruleset_addrule($ruleset, $chain, $logrule);
 }
 
-sub generate_bridge_chains {
-    my ($ruleset, $hostfw_conf, $bridge, $bridges_config) = @_;
-
-    my $options = $hostfw_conf->{options} || {};
-
-    if (!ruleset_chain_exist($ruleset, "$bridge-FW")) {
-	ruleset_create_chain($ruleset, "$bridge-FW");
-	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o $bridge -m physdev --physdev-is-out -j $bridge-FW");
-	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i $bridge -m physdev --physdev-is-in -j $bridge-FW");
-    }
-
-    if (!ruleset_chain_exist($ruleset, "$bridge-OUT")) {
-	ruleset_create_chain($ruleset, "$bridge-OUT");
-
-	if($options->{optimize}){
-	    foreach my $interface (@{$bridges_config->{$bridge}}) {
-		ruleset_addrule($ruleset, "$bridge-OUT", "-m physdev --physdev-is-bridged --physdev-in $interface -g PVEFW-SET-ACCEPT-MARK");
-	    }
-	}
-
-	ruleset_addrule($ruleset, "$bridge-FW", "-m physdev --physdev-is-in -j $bridge-OUT");
-	ruleset_insertrule($ruleset, "PVEFW-INPUT", "-i $bridge -m physdev --physdev-is-in -j $bridge-OUT");
-    }
-
-    if (!ruleset_chain_exist($ruleset, "$bridge-IN")) {
-	ruleset_create_chain($ruleset, "$bridge-IN");
-
-	if($options->{optimize}){
-	    foreach my $interface (@{$bridges_config->{$bridge}}) {
-		ruleset_addrule($ruleset, "$bridge-IN", "-m physdev --physdev-is-bridged --physdev-out $interface -j ACCEPT");
-	    }
-	}
-
-	ruleset_addrule($ruleset, "$bridge-FW", "-m physdev --physdev-is-out -j $bridge-IN");
-	ruleset_addrule($ruleset, "$bridge-FW", "-m mark --mark 1 -j ACCEPT");
-	# accept traffic to unmanaged bridge ports
-	ruleset_addrule($ruleset, "$bridge-FW", "-m physdev --physdev-is-out -j ACCEPT ");
-    }
-}
-
 sub ruleset_add_chain_policy {
     my ($ruleset, $chain, $vmid, $policy, $loglevel, $accept_action) = @_;
 
@@ -1568,21 +1528,16 @@ sub generate_nfqueue {
 }
 
 sub ruleset_generate_vm_ipsrules {
-    my ($ruleset, $options, $direction, $iface, $bridge) = @_;
+    my ($ruleset, $options, $direction, $iface) = @_;
 
     if ($options->{ips} && $direction eq 'IN') {
 	my $nfqueue = generate_nfqueue($options);
 
-	if (!ruleset_chain_exist($ruleset, "$bridge-IPS")) {
+	if (!ruleset_chain_exist($ruleset, "PVEFW-IPS")) {
 	    ruleset_create_chain($ruleset, "PVEFW-IPS");
 	}
 
-	if (!ruleset_chain_exist($ruleset, "$bridge-IPS")) {
-	    ruleset_create_chain($ruleset, "$bridge-IPS");
-	    ruleset_insertrule($ruleset, "PVEFW-IPS", "-o $bridge -m physdev --physdev-is-out -j $bridge-IPS");
-	}
-
-        ruleset_addrule($ruleset, "$bridge-IPS", "-m physdev --physdev-out $iface --physdev-is-bridged -j $nfqueue");
+        ruleset_addrule($ruleset, "PVEFW-IPS", "-m physdev --physdev-out $iface --physdev-is-bridged -j $nfqueue");
     }
 }
 
@@ -1643,7 +1598,7 @@ sub generate_venet_rules_direction {
 }
 
 sub generate_tap_rules_direction {
-    my ($ruleset, $cluster_conf, $hostfw_conf, $iface, $netid, $macaddr, $vmfw_conf, $vmid, $bridge, $direction) = @_;
+    my ($ruleset, $cluster_conf, $hostfw_conf, $iface, $netid, $macaddr, $vmfw_conf, $vmid, $direction) = @_;
 
     my $lc_direction = lc($direction);
 
@@ -1659,7 +1614,7 @@ sub generate_tap_rules_direction {
 
     ruleset_generate_vm_rules($ruleset, $rules, $cluster_conf, $tapchain, $netid, $direction, $options);
 
-    ruleset_generate_vm_ipsrules($ruleset, $options, $direction, $iface, $bridge);
+    ruleset_generate_vm_ipsrules($ruleset, $options, $direction, $iface);
 
     # implement policy
     my $policy;
@@ -1676,11 +1631,11 @@ sub generate_tap_rules_direction {
 
     # plug the tap chain to bridge chain
     if ($direction eq 'IN') {
-	ruleset_addrule($ruleset, "$bridge-IN",
-			   "-m physdev --physdev-is-bridged --physdev-out $iface -j $tapchain");
+	ruleset_addrule($ruleset, "PVEFW-FWBR-IN",
+			"-m physdev --physdev-is-bridged --physdev-out $iface -j $tapchain");
     } else {
-	ruleset_addrule($ruleset, "$bridge-OUT",
-			   "-m physdev --physdev-in $iface -j $tapchain");
+	ruleset_addrule($ruleset, "PVEFW-FWBR-OUT",
+			"-m physdev --physdev-is-bridged --physdev-in $iface -j $tapchain");
     }
 }
 
@@ -2619,6 +2574,12 @@ sub compile {
     ruleset_create_chain($ruleset, "PVEFW-OUTPUT");
 
     ruleset_create_chain($ruleset, "PVEFW-FORWARD");
+    
+    ruleset_create_chain($ruleset, "PVEFW-FWBR-IN");
+    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m physdev --physdev-is-bridged --physdev-in link+ -j PVEFW-FWBR-IN");
+
+    ruleset_create_chain($ruleset, "PVEFW-FWBR-OUT");
+    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m physdev --physdev-is-bridged --physdev-out link+ -j PVEFW-FWBR-OUT");
 
     my $hostfw_options = $hostfw_conf->{options} || {};
 
@@ -2656,18 +2617,11 @@ sub compile {
 	    next if !$net;
 	    my $iface = "tap${vmid}i$1";
 
-	    my $bridge = $net->{bridge};
-	    next if !$bridge; # fixme: ?
-
-	    $bridge .= "v$net->{tag}" if $net->{tag};
-
-	    generate_bridge_chains($ruleset, $hostfw_conf, $bridge, $bridges_config);
-
 	    my $macaddr = $net->{macaddr};
 	    generate_tap_rules_direction($ruleset, $cluster_conf, $hostfw_conf, $iface, $netid, $macaddr,
-					 $vmfw_conf, $vmid, $bridge, 'IN');
+					 $vmfw_conf, $vmid, 'IN');
 	    generate_tap_rules_direction($ruleset, $cluster_conf, $hostfw_conf, $iface, $netid, $macaddr,
-					 $vmfw_conf, $vmid, $bridge, 'OUT');
+					 $vmfw_conf, $vmid, 'OUT');
 	}
     }
 
@@ -2689,36 +2643,16 @@ sub compile {
 	    my $netif = PVE::OpenVZ::parse_netif($conf->{netif}->{value});
 	    foreach my $netid (keys %$netif) {
 		my $d = $netif->{$netid};
-		my $bridge = $d->{bridge};
-		if (!$bridge) {
-		    warn "no bridge device for CT $vmid iface '$netid'\n";
-		    next; # fixme?
-		}
-
-		generate_bridge_chains($ruleset, $hostfw_conf, $bridge, $bridges_config);
 
 		my $macaddr = $d->{mac};
 		my $iface = $d->{host_ifname};
 		generate_tap_rules_direction($ruleset, $cluster_conf, $hostfw_conf, $iface, $netid, $macaddr,
-					     $vmfw_conf, $vmid, $bridge, 'IN');
+					     $vmfw_conf, $vmid, 'IN');
 		generate_tap_rules_direction($ruleset, $cluster_conf, $hostfw_conf, $iface, $netid, $macaddr,
-					     $vmfw_conf, $vmid, $bridge, 'OUT');
+					     $vmfw_conf, $vmid, 'OUT');
 	    }
 	}
     }
-
-    # fixme: should we really block inter-bridge traffic?
-
-    # always allow traffic from containers?
-    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i venet0 -j RETURN");
-
-    # disable interbridge routing
-    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o vmbr+ -j PVEFW-Drop");
-    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i vmbr+ -j PVEFW-Drop");
-    ruleset_addlog($ruleset, "PVEFW-FORWARD", 0, "DROP: ", $loglevel, "-o vmbr+");
-    ruleset_addlog($ruleset, "PVEFW-FORWARD", 0, "DROP: ", $loglevel, "-i vmbr+");
-    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o vmbr+ -j DROP");
-    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i vmbr+ -j DROP");
 
     return ($ruleset, $ipset_ruleset);
 }
