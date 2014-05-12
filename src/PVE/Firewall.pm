@@ -2357,7 +2357,7 @@ sub save_vmfw_conf {
     my $options = $vmfw_conf->{options};
     $raw .= &$format_options($options) if scalar(keys %$options);
 
-    my $rules = $vmfw_conf->{rules};
+    my $rules = $vmfw_conf->{rules} || [];
     if (scalar(@$rules)) {
 	$raw .= "[RULES]\n\n";
 	$raw .= &$format_rules($rules, 1);
