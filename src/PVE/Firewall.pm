@@ -1428,15 +1428,30 @@ sub ruleset_add_chain_policy {
     }
 }
 
+sub ruleset_chain_add_conn_filters {
+    my ($ruleset, $chain, $accept) = @_;
+
+    ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate INVALID -j DROP");
+    ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate RELATED,ESTABLISHED -j $accept");
+}
+
+sub ruleset_chain_add_input_filters {
+    my ($ruleset, $chain, $options) = @_;
+
+    if (!(defined($options->{nosmurfs}) && $options->{nosmurfs} == 0)) {
+	ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate INVALID,NEW -j PVEFW-smurfs");
+    }
+
+    if ($options->{tcpflags}) {
+	ruleset_addrule($ruleset, $chain, "-p tcp -j PVEFW-tcpflags");
+    }
+}
+
 sub ruleset_create_vm_chain {
     my ($ruleset, $chain, $options, $host_options, $macaddr, $direction) = @_;
 
     ruleset_create_chain($ruleset, $chain);
     my $accept = generate_nfqueue($options);
-
-    if (!(defined($host_options->{nosmurfs}) && $host_options->{nosmurfs} == 0)) {
-	ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate INVALID,NEW -j PVEFW-smurfs");
-    }
 
     if (!(defined($options->{dhcp}) && $options->{dhcp} == 0)) {
 	if ($direction eq 'OUT') {
@@ -1446,17 +1461,6 @@ sub ruleset_create_vm_chain {
 	    ruleset_generate_rule($ruleset, $chain, { action => 'ACCEPT',
 						      proto => 'udp', sport => 67, dport => 68 });
 	}
-    }
-
-    if ($host_options->{tcpflags}) {
-	ruleset_addrule($ruleset, $chain, "-p tcp -j PVEFW-tcpflags");
-    }
-
-    ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate INVALID -j DROP");
-    if ($direction eq 'OUT') {
-	ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate RELATED,ESTABLISHED -g PVEFW-SET-ACCEPT-MARK");
-    } else {
-	ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate RELATED,ESTABLISHED -j $accept");
     }
 
     if ($direction eq 'OUT') {
@@ -1653,17 +1657,11 @@ sub enable_host_firewall {
 
     my $loglevel = get_option_log_level($options, "log_level_in");
 
-    if (!(defined($options->{nosmurfs}) && $options->{nosmurfs} == 0)) {
-	ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate INVALID,NEW -j PVEFW-smurfs");
-    }
-
-    if ($options->{tcpflags}) {
-	ruleset_addrule($ruleset, $chain, "-p tcp -j PVEFW-tcpflags");
-    }
-
-    ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate INVALID -j DROP");
-    ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
     ruleset_addrule($ruleset, $chain, "-i lo -j ACCEPT");
+
+    ruleset_chain_add_conn_filters($ruleset, $chain, 'ACCEPT');
+    ruleset_chain_add_input_filters($ruleset, $chain, $options);
+
     ruleset_addrule($ruleset, $chain, "-m addrtype --dst-type MULTICAST -j ACCEPT");
     ruleset_addrule($ruleset, $chain, "-p udp -m conntrack --ctstate NEW --dport 5404:5405 -j ACCEPT");
     ruleset_addrule($ruleset, $chain, "-p udp -m udp --dport 9000 -j ACCEPT");  #corosync
@@ -1687,9 +1685,10 @@ sub enable_host_firewall {
 
     $loglevel = get_option_log_level($options, "log_level_out");
 
-    ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate INVALID -j DROP");
-    ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT");
     ruleset_addrule($ruleset, $chain, "-o lo -j ACCEPT");
+
+    ruleset_chain_add_conn_filters($ruleset, $chain, 'ACCEPT');
+
     ruleset_addrule($ruleset, $chain, "-m addrtype --dst-type MULTICAST -j ACCEPT");
     ruleset_addrule($ruleset, $chain, "-p udp -m conntrack --ctstate NEW --dport 5404:5405 -j ACCEPT");
     ruleset_addrule($ruleset, $chain, "-p udp -m udp --dport 9000 -j ACCEPT"); #corosync
@@ -2557,34 +2556,36 @@ sub compile {
 
     ruleset_create_chain($ruleset, "PVEFW-FORWARD");
     
+    my $hostfw_options = $hostfw_conf->{options} || {};
+
+    # fixme: what log level should we use here?
+    my $loglevel = get_option_log_level($hostfw_options, "log_level_out");
+
+    my $accept = ruleset_chain_exist($ruleset, "PVEFW-IPS") ? "PVEFW-IPS" : "ACCEPT";
+    ruleset_chain_add_conn_filters($ruleset, "PVEFW-FORWARD", $accept);
+
+    #ruleset_chain_add_conn_filters($ruleset, "PVEFW-FORWARD", $hostfw_options, $accept);
+
+    if ($cluster_conf->{ipset}->{blacklist}){
+	ruleset_addlog($ruleset, "PVEFW-FORWARD", 0, "DROP: ", $loglevel, "-m set --match-set PVEFW-blacklist src");
+	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m set --match-set PVEFW-blacklist src -j DROP");
+    }
+
     ruleset_create_chain($ruleset, "PVEFW-VENET-OUT");
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i venet0 -j PVEFW-VENET-OUT");
 
     ruleset_create_chain($ruleset, "PVEFW-FWBR-IN");
+    ruleset_chain_add_input_filters($ruleset, "PVEFW-FWBR-IN", $hostfw_options);
+
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m physdev --physdev-is-bridged --physdev-in link+ -j PVEFW-FWBR-IN");
 
     ruleset_create_chain($ruleset, "PVEFW-FWBR-OUT");
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m physdev --physdev-is-bridged --physdev-out link+ -j PVEFW-FWBR-OUT");
 
     ruleset_create_chain($ruleset, "PVEFW-VENET-IN");
+    ruleset_chain_add_input_filters($ruleset, "PVEFW-VENET-IN", $hostfw_options);
+
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o venet0 -j PVEFW-VENET-IN");
-
-    my $hostfw_options = $hostfw_conf->{options} || {};
-
-    # fixme: what log level should we use here?
-    my $loglevel = get_option_log_level($hostfw_options, "log_level_out");
-
-    if($hostfw_options->{optimize}){
-
-	my $accept = ruleset_chain_exist($ruleset, "PVEFW-IPS") ? "PVEFW-IPS" : "ACCEPT";
-	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m conntrack --ctstate INVALID -j DROP");
-	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m conntrack --ctstate RELATED,ESTABLISHED -j $accept");
-    }
-
-    if ($cluster_conf->{ipset}->{blacklist}){
-	ruleset_addlog($ruleset, "PVEFW-FORWARD", 0, "DROP: ", $loglevel, "-m set --match-set PVEFW-blacklist src");
-	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m set --match-set PVEFW-blacklist src -j DROP");
-    }
 
     generate_std_chains($ruleset, $hostfw_options);
 
