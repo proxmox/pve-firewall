@@ -2186,22 +2186,6 @@ sub read_local_vm_config {
     return $vmdata;
 };
 
-sub read_bridges_config {
-
-    my $bridgehash = {};
-
-    dir_glob_foreach('/sys/class/net', 'vmbr(\d+)', sub {
-        my ($bridge) = @_;
-
-	dir_glob_foreach("/sys/class/net/$bridge/brif", '((eth|bond)(\d+)(\.(\d+))?)', sub {
-	    my ($interface) = @_;
-	    push @{$bridgehash->{$bridge}}, $interface;
-	});
-    });
-
-    return $bridgehash;
-};
-
 sub load_vmfw_conf {
     my ($vmid) = @_;
 
@@ -2562,8 +2546,6 @@ sub compile {
 
     my $vmdata = read_local_vm_config();
     my $vmfw_configs = read_vm_firewall_configs($vmdata);
-
-    my $bridges_config = read_bridges_config();
 
     my $ipset_ruleset = {};
     generate_ipset_chains($ipset_ruleset, $cluster_conf);
