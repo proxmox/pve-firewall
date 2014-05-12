@@ -1575,7 +1575,7 @@ sub generate_venet_rules_direction {
 
     # plug into FORWARD, INPUT and OUTPUT chain
     if ($direction eq 'OUT') {
-	ruleset_generate_rule_insert($ruleset, "PVEFW-FORWARD", {
+	ruleset_generate_rule_insert($ruleset, "PVEFW-VENET-OUT", {
 	    action => $chain,
 	    source => $ip,
 	    iface_in => 'venet0'});
@@ -1585,7 +1585,7 @@ sub generate_venet_rules_direction {
 	    source => $ip,
 	    iface_in => 'venet0'});
     } else {
-	ruleset_generate_rule($ruleset, "PVEFW-FORWARD", {
+	ruleset_generate_rule($ruleset, "PVEFW-VENET-IN", {
 	    action => $chain,
 	    dest => $ip,
 	    iface_out => 'venet0'});
@@ -2575,11 +2575,17 @@ sub compile {
 
     ruleset_create_chain($ruleset, "PVEFW-FORWARD");
     
+    ruleset_create_chain($ruleset, "PVEFW-VENET-OUT");
+    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i venet0 -j PVEFW-VENET-OUT");
+
     ruleset_create_chain($ruleset, "PVEFW-FWBR-IN");
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m physdev --physdev-is-bridged --physdev-in link+ -j PVEFW-FWBR-IN");
 
     ruleset_create_chain($ruleset, "PVEFW-FWBR-OUT");
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m physdev --physdev-is-bridged --physdev-out link+ -j PVEFW-FWBR-OUT");
+
+    ruleset_create_chain($ruleset, "PVEFW-VENET-IN");
+    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o venet0 -j PVEFW-VENET-IN");
 
     my $hostfw_options = $hostfw_conf->{options} || {};
 
