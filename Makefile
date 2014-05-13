@@ -26,7 +26,7 @@ dinstall: deb
 
 
 .PHONY: deb
-deb ${DEB}:
+deb ${DEB}: check
 	rm -rf build
 	rsync -a src/ build
 	rsync -a debian/ build/debian
@@ -35,9 +35,14 @@ deb ${DEB}:
 	cd build; dpkg-buildpackage -rfakeroot -b -us -uc
 	lintian ${DEB}
 
+.PHONY: check
+check: 
+	make -C test check
+
 .PHONY: clean
 clean: 	
 	make -C src clean
+	make -C test clean
 	rm -rf *~ debian/*~ example/*~ *.deb *.changes build ${PACKAGE}-*.tar.gz
 
 .PHONY: distclean
