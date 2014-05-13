@@ -1,0 +1,16 @@
+# example test rules
+
+{ from => 'ct200', to => 'host', dport => 22, action => 'ACCEPT' }
+{ from => 'ct200', to => 'host', dport => 23, action => 'DROP' }
+
+{ from => 'vm100', to => 'host', dport => 22, action => 'ACCEPT' }
+
+{ from => 'host' , to => 'ct200', dport => 80, action => 'DROP' }
+{ from => 'host' , to => 'ct200', dport => 22, action => 'ACCEPT' }
+
+{ from => 'host' , to => 'vm100', dport => 80, action => 'DROP' }
+
+{ from => 'ct200' , to => 'vm100', dport => 80, action => 'DROP' }
+
+{ from => 'vm100' , to => 'ct200', dport => 22, action => 'ACCEPT' }
+

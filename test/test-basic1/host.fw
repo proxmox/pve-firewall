@@ -1,0 +1,8 @@
+[OPTIONS]
+
+enable: 1
+
+[RULES]
+
+#IN ACCEPT tesitif - - tcp 22
+IN ACCEPT - - - tcp 22
