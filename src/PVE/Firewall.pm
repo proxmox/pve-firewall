@@ -2175,11 +2175,13 @@ sub read_local_vm_config {
 };
 
 sub load_vmfw_conf {
-    my ($vmid) = @_;
+    my ($vmid, $dir) = @_;
 
     my $vmfw_conf = {};
 
-    my $filename = "/etc/pve/firewall/$vmid.fw";
+    $dir = "/etc/pve/firewall" if !defined($dir);
+
+    my $filename = "$dir/$vmid.fw";
     if (my $fh = IO::File->new($filename, O_RDONLY)) {
 	$vmfw_conf = parse_vm_fw_rules($filename, $fh);
     }
@@ -2296,11 +2298,12 @@ sub save_vmfw_conf {
 }
 
 sub read_vm_firewall_configs {
-    my ($vmdata) = @_;
+    my ($vmdata, $dir) = @_;
+
     my $vmfw_configs = {};
 
     foreach my $vmid (keys %{$vmdata->{qemu}}, keys %{$vmdata->{openvz}}) {
-	my $vmfw_conf = load_vmfw_conf($vmid);
+	my $vmfw_conf = load_vmfw_conf($vmid, $dir);
 	next if !$vmfw_conf->{options}; # skip if file does not exists
 	$vmfw_configs->{$vmid} = $vmfw_conf;
     }
@@ -2444,10 +2447,13 @@ sub read_pvefw_status {
 }
 
 sub load_clusterfw_conf {
+    my ($filename) = @_;
+
+    $filename = $clusterfw_conf_filename if !defined($filename);
 
     my $cluster_conf = {};
-     if (my $fh = IO::File->new($clusterfw_conf_filename, O_RDONLY)) {
-	$cluster_conf = parse_cluster_fw_rules($clusterfw_conf_filename, $fh);
+    if (my $fh = IO::File->new($filename, O_RDONLY)) {
+	$cluster_conf = parse_cluster_fw_rules($filename, $fh);
     }
 
     return $cluster_conf;
@@ -2500,10 +2506,13 @@ sub save_clusterfw_conf {
 }
 
 sub load_hostfw_conf {
+    my ($filename) = @_;
+
+    $filename = $hostfw_conf_filename if !defined($filename);
 
     my $hostfw_conf = {};
-    if (my $fh = IO::File->new($hostfw_conf_filename, O_RDONLY)) {
-	$hostfw_conf = parse_host_fw_rules($hostfw_conf_filename, $fh);
+    if (my $fh = IO::File->new($filename, O_RDONLY)) {
+	$hostfw_conf = parse_host_fw_rules($filename, $fh);
     }
     return $hostfw_conf;
 }
@@ -2527,13 +2536,30 @@ sub save_hostfw_conf {
 }
 
 sub compile {
-    my ($cluster_conf, $hostfw_conf) = @_;
+    my ($cluster_conf, $hostfw_conf, $vmdata) = @_;
 
-    $cluster_conf = load_clusterfw_conf() if !$cluster_conf;
-    $hostfw_conf = load_hostfw_conf() if !$hostfw_conf;
+    my $vmfw_configs;
 
-    my $vmdata = read_local_vm_config();
-    my $vmfw_configs = read_vm_firewall_configs($vmdata);
+    if ($vmdata) { # test mode
+	my $testdir = $vmdata->{testdir} || die "no test directory specified";
+	my $filename = "$testdir/cluster.fw";
+	die "missing test file '$filename'\n" if ! -f $filename;
+	$cluster_conf = load_clusterfw_conf($filename);
+
+	$filename = "$testdir/host.fw";
+	die "missing test file '$filename'\n" if ! -f $filename;
+	$hostfw_conf = load_hostfw_conf($filename);
+
+	$vmfw_configs = read_vm_firewall_configs($vmdata, $testdir);
+    } else { # normal operation
+	$cluster_conf = load_clusterfw_conf() if !$cluster_conf;
+
+	$hostfw_conf = load_hostfw_conf() if !$hostfw_conf;
+
+	$vmdata = read_local_vm_config();
+	$vmfw_configs = read_vm_firewall_configs($vmdata);
+    }
+
 
     my $ipset_ruleset = {};
     generate_ipset_chains($ipset_ruleset, $cluster_conf);
