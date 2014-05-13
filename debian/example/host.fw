@@ -22,5 +22,5 @@ tcpflags: 1
 
 [RULES]
 
-IN  SSH(ACCEPT) net0
-OUT SSH(ACCEPT) net0
+IN  SSH(ACCEPT) -
+OUT SSH(ACCEPT) -

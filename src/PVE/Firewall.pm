@@ -1666,6 +1666,7 @@ sub enable_host_firewall {
     # add host rules first, so that cluster wide rules can be overwritten
     foreach my $rule (@$rules, @$cluster_rules) {
 	next if $rule->{type} ne 'in';
+	$rule->{iface_in} = $rule->{iface} if $rule->{iface};
 	ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" }, undef, $cluster_conf);
     }
 
@@ -1693,6 +1694,7 @@ sub enable_host_firewall {
     # add host rules first, so that cluster wide rules can be overwritten
     foreach my $rule (@$rules, @$cluster_rules) {
 	next if $rule->{type} ne 'out';
+	$rule->{iface_out} = $rule->{iface} if $rule->{iface};
 	ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" }, undef, $cluster_conf);
     }
 
