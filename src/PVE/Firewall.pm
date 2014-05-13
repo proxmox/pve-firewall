@@ -2639,6 +2639,7 @@ sub compile {
 
 	if ($conf->{ip_address} && $conf->{ip_address}->{value}) {
 	    my $ip = $conf->{ip_address}->{value};
+	    $ip =~ s/\s/,/g;  
 	    generate_venet_rules_direction($ruleset, $cluster_conf, $hostfw_conf, $vmfw_conf, $vmid, $ip, 'IN');
 	    generate_venet_rules_direction($ruleset, $cluster_conf, $hostfw_conf, $vmfw_conf, $vmid, $ip, 'OUT');
 	}
