@@ -1,0 +1,49 @@
+=A simple simulator to test our iptables rules=
+
+==Invovation==
+
+ # ./fwtester.pl
+
+This scans for subdirectory named test-* an invokes fwtester.pl 
+for each subdirectory with:
+
+ # ./fwtester.pl test-<name>/tests 
+
+==Test directory contents==
+
+Each test directory can contain the following files:
+
+*cluster.fw  Cluster wide firewall config
+  
+*host.fw     Host firewall config
+
+*<VMID>.fw   Firewall config for VMs     
+
+*tests	     Test descriptions
+
+==Test description==
+
+The test description file can contain one or more tests using
+the following syntax:
+
+ { from => '<zone>' , to => '<zone>', action => '<DROP|RECECT|ACCEPT>', [ source => '<ip>',] [ dest => '<ip>',] [ proto => '<tcp|udp>',] [ dport => <port>,], [ sport => <port>,] }
+
+The following <zone> definition exist currently:
+
+* host:     The host itself
+
+* outside:  The outside world (vmbr0 port eth0)
+
+* vm<ID>:   A qemu virtual machine
+
+* ct<ID>:   An openvz container
+
+==Test examples==
+
+ { from => 'outside', to => 'ct200', dport => 22, action => 'ACCEPT' }
+ { from => 'vm101', to => 'vm100', dport => 443, action => 'ACCEPT', id => 'vm2vm'}
+
+You can assign an 'id' to each test, so that you can run them separately:
+
+ ./fwtester.pl -d test-basic1/tests vm2vm
+

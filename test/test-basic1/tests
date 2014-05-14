@@ -1,5 +1,3 @@
-# example test rules
-
 { from => 'ct200', to => 'host', dport => 22, action => 'ACCEPT' }
 { from => 'ct200', to => 'host', dport => 23, action => 'DROP' }
 
