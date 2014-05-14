@@ -7,3 +7,5 @@ enable: 1
 OUT REJECT - - - tcp 81
 #IN ACCEPT tesitif - - tcp 22
 IN ACCEPT - - - tcp 22
+IN REJECT vmbr0 - - tcp 100
+IN REJECT vmbr1 - - tcp 101

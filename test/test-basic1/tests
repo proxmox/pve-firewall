@@ -37,4 +37,6 @@
 { from => 'ct200' , to => 'outside', dport => 80, action => 'ACCEPT' }
 { from => 'ct200' , to => 'outside', dport => 81, action => 'REJECT' }
 
+{ from => 'outside', to => 'host', dport => 100, action => 'REJECT' }
+{ from => 'outside', to => 'host', dport => 101, action => 'DROP' }
 
