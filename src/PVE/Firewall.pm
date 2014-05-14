@@ -1853,7 +1853,7 @@ sub parse_hostfw_option {
 
     my $loglevels = "emerg|alert|crit|err|warning|notice|info|debug|nolog";
 
-    if ($line =~ m/^(enable|nosmurfs|tcpflags|optimize):\s*(0|1)\s*$/i) {
+    if ($line =~ m/^(enable|nosmurfs|tcpflags):\s*(0|1)\s*$/i) {
 	$opt = lc($1);
 	$value = int($2);
     } elsif ($line =~ m/^(log_level_in|log_level_out|tcp_flags_log_level|smurf_log_level):\s*(($loglevels)\s*)?$/i) {

@@ -20,9 +20,6 @@ nosmurfs: 0
 # filter illegal combinations of TCP flags
 tcpflags: 1
 
-# rules processing speed optimizations 
-optimize : 1
-
 [RULES]
 
 IN  SSH(ACCEPT) net0
