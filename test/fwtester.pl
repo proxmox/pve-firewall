@@ -5,6 +5,8 @@ use strict;
 use warnings;
 use Data::Dumper;
 use PVE::Firewall;
+use Getopt::Long;
+use File::Basename;
 
 my $mark;
 my $trace;
@@ -13,6 +15,17 @@ my $outside_iface = 'eth0';
 my $outside_bridge = 'vmbr0';
 
 my $debug = 0;
+
+sub print_usage_and_exit {
+    die "usage: $0 [--debug] [testfile [testid]]\n";
+}
+
+if (!GetOptions ('debug' => \$debug)) {
+    print_usage_and_exit();
+}
+
+my $testfilename = shift;
+my $testid = shift;
 
 sub add_trace {
     my ($text) = @_;
@@ -459,25 +472,30 @@ sub simulate_firewall {
 }
 
 sub run_tests {
-    my ($vmdata, $testdir) = @_;
+    my ($vmdata, $testdir, $testfile, $testid) = @_;
+
+    $testfile = 'tests' if !$testfile;
 
     $vmdata->{testdir} = $testdir;
 
     my ($ruleset, $ipset_ruleset) = 
 	PVE::Firewall::compile(undef, undef, $vmdata);
 
-    my $testfile = "$testdir/tests";
-    my $fh = IO::File->new($testfile) ||
-	die "unable to open '$testfile' - $!\n";
+    my $filename = "$testdir/$testfile";
+    my $fh = IO::File->new($filename) ||
+	die "unable to open '$filename' - $!\n";
 
+    my $testcount = 0;
     while (defined(my $line = <$fh>)) {
 	next if $line =~ m/^\s*$/;
 	next if $line =~ m/^#.*$/;
 	if ($line =~ m/^\{.*\}\s*$/) {
 	    my $test = eval $line;
 	    die $@ if $@;
+	    next if defined($testid) && (!defined($test->{id}) || ($testid ne $test->{id}));
 	    $trace = '';
 	    print Dumper($ruleset) if $debug;
+	    $testcount++;
 	    eval { simulate_firewall($ruleset, $ipset_ruleset, $vmdata, $test); };
 	    if (my $err = $@) {
 
@@ -485,7 +503,7 @@ sub run_tests {
 
 		print "$trace\n" if !$debug;
 
-		print "$testfile line $.: $line";
+		print "$filename line $.: $line";
 
 		print "test failed: $err\n";
 
@@ -496,7 +514,9 @@ sub run_tests {
 	}
     }
 
-    print "PASS: $testfile\n";
+    die "no tests found\n" if $testcount <= 0;
+
+    print "PASS: $filename\n";
 
     return undef;
 }
@@ -524,9 +544,26 @@ my $vmdata = {
     },
 };
 
-foreach my $dir (<test-*>) {
-    next if ! -d $dir;
-    run_tests($vmdata, $dir);
+if ($testfilename) {
+    my $testfile;
+    my $dir;
+
+    if (-d $testfilename) {
+	$dir = $testfilename;
+    } elsif (-f $testfilename) {
+	$dir = dirname($testfilename);
+	$testfile = basename($testfilename);
+    } else {
+	die "no such file/dir '$testfilename'\n"; 
+    }
+
+    run_tests($vmdata, $dir, $testfile, $testid);
+
+} else { 
+    foreach my $dir (<test-*>) {
+	next if ! -d $dir;
+	run_tests($vmdata, $dir);
+    }
 }
 
 print "OK - all tests passed\n";
