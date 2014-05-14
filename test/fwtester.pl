@@ -37,6 +37,13 @@ sub add_trace {
     }
 }
 
+sub nf_dev_match {
+    my ($devre, $dev) = @_;
+
+    $devre =~ s/\+$/\.\*/;
+    return  ($dev =~ m/^${devre}$/) ? 1 : 0;
+}
+
 sub rule_match {
     my ($chain, $rule, $pkg) = @_;
 
@@ -51,12 +58,14 @@ sub rule_match {
     }
 
     if ($rule =~ s/^-i (\S+)\s*//) {
+	my $devre = $1;
 	die "missing iface_in" if !$pkg->{iface_in};
-	return undef if $pkg->{iface_in} ne $1; # no match
+	return undef if !nf_dev_match($devre, $pkg->{iface_in});
     }
     if ($rule =~ s/^-o (\S+)\s*//) {
+	my $devre = $1;
 	die "missing iface_out" if !$pkg->{iface_out};
-	return undef if $pkg->{iface_out} ne $1; # no match
+	return undef if !nf_dev_match($devre, $pkg->{iface_out});
     }
 
     if ($rule =~ s/^-p (tcp|udp)\s*//) {
@@ -91,16 +100,14 @@ sub rule_match {
 
     if ($rule =~ s/^-m physdev --physdev-is-bridged --physdev-in (\S+)\s*//) {
 	my $devre = $1;
-	$devre =~ s/\+/\.\*/;
 	return undef if !$pkg->{physdev_in};
-	return undef if $pkg->{physdev_in} !~ m/^${devre}$/;
+	return undef if !nf_dev_match($devre, $pkg->{physdev_in});
     }
 
     if ($rule =~ s/^-m physdev --physdev-is-bridged --physdev-out (\S+)\s*//) {
 	my $devre = $1;
-	$devre =~ s/\+/\.\*/;
 	return undef if !$pkg->{physdev_out};
-	return undef if $pkg->{physdev_out} !~ m/^${devre}$/;
+	return undef if !nf_dev_match($devre, $pkg->{physdev_out});
     }
 
     if ($rule =~ s/^-j MARK --set-mark (\d+)\s*$//) {
