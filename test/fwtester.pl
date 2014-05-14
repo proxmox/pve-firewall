@@ -131,7 +131,7 @@ sub ruleset_simulate_chain {
 
     add_trace("ENTER chain $chain\n");
     
-    my $counter = 2; # ENTER + LEAVE = 2
+    my $counter = 0;
 
     if ($chain eq 'PVEFW-Drop') {
 	add_trace("LEAVE chain $chain\n");
