@@ -4,5 +4,6 @@ enable: 1
 
 [RULES]
 
+OUT REJECT - - - tcp 81
 #IN ACCEPT tesitif - - tcp 22
 IN ACCEPT - - - tcp 22

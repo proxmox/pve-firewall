@@ -23,4 +23,18 @@
 { from => 'vm110', to => 'vm100', dport => 22, action => 'DROP' }
 { from => 'vm110', to => 'vm100', dport => 443, action => 'ACCEPT' }
 
+{ from => 'outside', to => 'ct200', dport => 22, action => 'ACCEPT' }
+{ from => 'outside', to => 'ct200', dport => 23, action => 'DROP' }
+{ from => 'outside', to => 'vm100', dport => 22, action => 'DROP' }
+{ from => 'outside', to => 'vm100', dport => 443, action => 'ACCEPT' }
+{ from => 'outside', to => 'host', dport => 22, action => 'ACCEPT' }
+{ from => 'outside', to => 'host', dport => 23, action => 'DROP' }
+
+{ from => 'host' , to => 'outside', dport => 80, action => 'ACCEPT' }
+{ from => 'host' , to => 'outside', dport => 81, action => 'REJECT' }
+{ from => 'vm100' , to => 'outside', dport => 80, action => 'ACCEPT' }
+{ from => 'vm100' , to => 'outside', dport => 81, action => 'REJECT' }
+{ from => 'ct200' , to => 'outside', dport => 80, action => 'ACCEPT' }
+{ from => 'ct200' , to => 'outside', dport => 81, action => 'REJECT' }
+
 

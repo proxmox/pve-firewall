@@ -5,3 +5,4 @@ enable: 1
 [RULES]
 
 IN ACCEPT - - - tcp 443
+OUT REJECT - - - tcp 81
