@@ -38,3 +38,16 @@
 { from => 'outside', to => 'host', dport => 100, action => 'REJECT' }
 { from => 'outside', to => 'host', dport => 101, action => 'DROP' }
 
+{ from => 'nfvm', to => 'host', dport => 22, action => 'ACCEPT' }
+{ from => 'nfvm', to => 'host', dport => 80, action => 'DROP' }
+{ from => 'nfvm', to => 'outside', dport => 22, action => 'ACCEPT' }
+{ from => 'nfvm', to => 'outside', dport => 80, action => 'ACCEPT' }
+{ from => 'nfvm', to => 'vm100', dport => 443, action => 'ACCEPT', id => 'nfw2vm'}
+{ from => 'nfvm', to => 'vm100', dport => 80, action => 'DROP' }
+{ from => 'nfvm', to => 'ct200', dport => 22, action => 'ACCEPT' }
+{ from => 'nfvm', to => 'ct200', dport => 80, action => 'DROP' }
+
+{ from => 'ct200', to => 'nfvm', dport => 80, action => 'ACCEPT' }
+{ from => 'vm100', to => 'nfvm', dport => 80, action => 'ACCEPT' }
+{ from => 'outside', to => 'nfvm', dport => 80, action => 'ACCEPT' }
+{ from => 'host', to => 'nfvm', dport => 80, action => 'ACCEPT' }
