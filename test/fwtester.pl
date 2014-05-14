@@ -9,6 +9,18 @@ use PVE::Firewall;
 my $mark;
 my $trace;
 
+my $debug = 0;
+
+sub add_trace {
+    my ($text) = @_;
+
+    if ($debug) {
+	print $text;
+    } else {
+	$trace .= $text;
+    }
+}
+
 sub rule_match {
     my ($chain, $rule, $pkg) = @_;
 
@@ -94,19 +106,19 @@ sub rule_match {
 sub ruleset_simulate_chain {
     my ($ruleset, $chain, $pkg) = @_;
 
-    $trace .= "ENTER chain $chain\n";
+    add_trace("ENTER chain $chain\n");
     
     if ($chain eq 'PVEFW-Drop') {
-	$trace .= "LEAVE chain $chain\n";
+	add_trace("LEAVE chain $chain\n");
 	return 'DROP';
     }
     if ($chain eq 'PVEFW-reject') {
-	$trace .= "LEAVE chain $chain\n";
+	add_trace("LEAVE chain $chain\n");
 	return 'REJECT';
     }
 
     if ($chain eq 'PVEFW-tcpflags') {
-	$trace .= "LEAVE chain $chain\n";
+	add_trace("LEAVE chain $chain\n");
 	return undef;
     }
 
@@ -116,20 +128,20 @@ sub ruleset_simulate_chain {
     foreach my $rule (@$rules) {
 	my ($goto, $action) = rule_match($chain, $rule, $pkg);
 	if (!defined($action)) {
-	    $trace .= "SKIP: $rule\n";
+	    add_trace("SKIP: $rule\n");
 	    next;
 	}
-	$trace .= "MATCH: $rule\n";
+	add_trace("MATCH: $rule\n");
 	
 	if ($action eq 'ACCEPT' || $action eq 'DROP' || $action eq 'REJECT') {
-	    $trace .= "TERMINATE chain $chain: $action\n";
+	    add_trace("TERMINATE chain $chain: $action\n");
 	    return $action;
 	} elsif ($action eq 'RETURN') {
-	    $trace .= "RETURN FROM chain $chain\n";
+	    add_trace("RETURN FROM chain $chain\n");
 	    last;
 	} else {
 	    if ($goto) {
-		$trace .= "LEAVE chain $chain - goto $action\n";
+		add_trace("LEAVE chain $chain - goto $action\n");
 		return ruleset_simulate_chain($ruleset, $action, $pkg)
 		#$chain = $action;
 		#$rules = $ruleset->{$chain} || die "no such chain '$chain'";
@@ -137,12 +149,12 @@ sub ruleset_simulate_chain {
 		if ($action = ruleset_simulate_chain($ruleset, $action, $pkg)) {
 		    return $action;
 		}
-		$trace .= "CONTINUE chain $chain\n";
+		add_trace("CONTINUE chain $chain\n");
 	    }
 	}
     }
 
-    $trace .= "LEAVE chain $chain\n";
+    add_trace("LEAVE chain $chain\n");
     if ($chain =~ m/^PVEFW-(INPUT|OUTPUT|FORWARD)$/) {
 	return 'ACCEPT'; # default policy
     }
@@ -162,6 +174,175 @@ sub copy_packet {
     return $res;
 }
 
+# Try to simulate packet traversal inside kernel. This invokes iptable
+# checks several times.
+sub route_packet {
+    my ($ruleset, $ipset_ruleset, $pkg, $from_info, $target, $start_state) = @_;
+
+    my $route_state = $start_state;
+
+    my $physdev_in;
+
+    while ($route_state ne $target->{iface}) {
+
+	my $chain;
+	my $next_route_state;
+	my $next_physdev_in;
+
+	$pkg->{iface_in} = $pkg->{iface_out} = undef;
+	$pkg->{physdev_in} = $pkg->{physdev_out} = undef;
+
+	if ($route_state eq 'host') {
+
+	    if ($target->{type} eq 'ct') {
+		$pkg->{iface_in} = 'lo';
+		$pkg->{iface_out} = 'venet0';
+		$chain = 'PVEFW-OUTPUT';
+		$next_route_state = 'venet-in';
+	    } elsif ($target->{type} eq 'vm') {
+		$pkg->{iface_in} = 'lo';
+		$pkg->{iface_out} = $target->{bridge} || die 'internal error';
+		$chain = 'PVEFW-OUTPUT';
+		$next_route_state = 'fwbr-in';
+	    } else {
+		die "implement me";
+	    }
+
+	} elsif ($route_state eq 'venet-out') {
+
+	    if ($target->{type} eq 'host') {
+
+		$chain = 'PVEFW-INPUT';
+		$pkg->{iface_in} = 'venet0';
+		$pkg->{iface_out} = 'lo';
+		$next_route_state = 'host';
+
+	    } elsif ($target->{type} eq 'vm') {
+
+		$chain = 'PVEFW-FORWARD';
+		$pkg->{iface_in} = 'venet0';
+		$pkg->{iface_out} = $target->{bridge} || die 'internal error';
+		$next_route_state = 'fwbr-in';
+
+	    } elsif ($target->{type} eq 'ct') {
+
+		$chain = 'PVEFW-FORWARD';
+		$pkg->{iface_in} = 'venet0';
+		$pkg->{iface_out} = 'venet0';
+		$next_route_state = 'venet-in';
+
+	    } else {
+		die "implement me";
+	    }
+
+	} elsif ($route_state eq 'fwbr-out') {
+
+	    $chain = 'PVEFW-FORWARD';
+	    $next_route_state = $from_info->{bridge} || die 'internal error';
+	    $next_physdev_in = $from_info->{fwpr} || die 'internal error';
+	    $pkg->{iface_in} = $from_info->{fwbr} || die 'internal error';
+	    $pkg->{iface_out} = $from_info->{fwbr} || die 'internal error';
+	    $pkg->{physdev_in} = $from_info->{tapdev} || die 'internal error';
+	    $pkg->{physdev_out} = $from_info->{fwln} || die 'internal error';
+	
+	} elsif ($route_state eq 'fwbr-in') {
+
+	    $chain = 'PVEFW-FORWARD';
+	    $next_route_state = $target->{tapdev};
+	    $pkg->{iface_in} = $target->{fwbr} || die 'internal error';
+	    $pkg->{iface_out} = $target->{fwbr} || die 'internal error';
+	    $pkg->{physdev_in} = $target->{fwln} || die 'internal error';
+	    $pkg->{physdev_out} = $target->{tapdev} || die 'internal error';
+
+	} elsif ($route_state =~ m/^vmbr\d+$/) {
+	    
+	    die "missing physdev_in - internal error?" if !$physdev_in;
+
+	    if ($target->{type} eq 'host') {
+
+		$chain = 'PVEFW-INPUT';
+		$pkg->{iface_in} = $route_state;
+		$pkg->{iface_out} = 'lo';
+		$next_route_state = 'host';
+
+	    } elsif ($target->{type} eq 'ct') {
+
+		$chain = 'PVEFW-FORWARD';
+		$pkg->{iface_in} = $route_state;
+		$pkg->{iface_out} = 'venet0';
+		$next_route_state = 'venet-in';
+
+	    } elsif ($target->{type} eq 'vm') {
+
+		$chain = 'PVEFW-FORWARD';
+		if ($route_state eq $target->{bridge}) {
+		    $pkg->{iface_in} = $route_state;
+		    $pkg->{iface_out} = $route_state;
+		    $pkg->{physdev_in} = $physdev_in;
+		    $pkg->{physdev_out} = $target->{fwpr} || die 'internal error';
+		} else {
+		    $pkg->{iface_in} = $route_state;
+		    $pkg->{iface_out} = $route_state;
+		    $pkg->{physdev_in} = $physdev_in;
+		    # do not set physdev_out (same behavior as kernel)
+		}
+		$next_route_state = 'fwbr-in';
+
+	    } else {
+		die "implement me";
+	    }
+
+	} else {
+	    die "implement me $route_state";
+	}
+
+	die "internal error" if !defined($next_route_state);
+
+	if ($chain) {
+	    add_trace("IPT check at $route_state (chain $chain)\n");
+	    add_trace(Dumper($pkg));
+	    my $res = ruleset_simulate_chain($ruleset, $chain, $pkg);
+	    return $res if $res ne 'ACCEPT';
+	} 
+
+	$route_state = $next_route_state;
+
+	$physdev_in = $next_physdev_in;
+    }
+
+    return 'ACCEPT';
+}
+
+sub extract_ct_info {
+    my ($vmdata, $vmid) = @_;
+
+    my $info = { type => 'ct', vmid => $vmid };
+
+    my $conf = $vmdata->{openvz}->{$vmid} || die "no such CT '$vmid'";
+    if ($conf->{ip_address}) {
+	$info->{ip_address} = $conf->{ip_address}->{value};
+    } else {
+	die "implement me";
+    }
+    return $info;
+}
+
+sub extract_vm_info {
+    my ($vmdata, $vmid) = @_;
+
+    my $info = { type => 'vm', vmid => $vmid };
+
+    my $conf = $vmdata->{qemu}->{$vmid} || die "no such VM '$vmid'";
+    my $net = PVE::QemuServer::parse_net($conf->{net0});
+    $info->{macaddr} = $net->{macaddr} || die "unable to get mac address";
+    $info->{bridge} = $net->{bridge} || die "unable to get bridge";
+    $info->{fwbr} = "fwbr${vmid}i0";
+    $info->{tapdev} = "tap${vmid}i0";
+    $info->{fwln} = "fwln${vmid}i0";
+    $info->{fwpr} = "fwpr${vmid}p0";
+
+    return $info;
+}
 
 sub simulate_firewall {
     my ($ruleset, $ipset_ruleset, $vmdata, $test) = @_;
@@ -173,8 +354,6 @@ sub simulate_firewall {
     die "from/to needs to be different" if $from eq $to;
 
     my $pkg = {
-	iface_in => 'lo',
-	iface_out => 'lo',
 	proto => 'tcp',
 	sport => '1234',
 	dport => '4321',
@@ -186,87 +365,59 @@ sub simulate_firewall {
 	$pkg->{$k} = $v;
     }
 
-    my $pre_test;
+    my $from_info = {};
+
+    my $start_state;
 
     if ($from eq 'host') {
-	$pre_test = ['PVEFW-OUTPUT', $pkg];
+	$from_info->{type} = 'host';
+	$start_state = 'host';
     } elsif ($from =~ m/^ct(\d+)$/) {
 	my $vmid = $1;
-	my $conf = $vmdata->{openvz}->{$vmid} || die "no such CT '$vmid'";
-	if ($conf->{ip_address}) {
-	    $pkg->{source} = $conf->{ip_address}->{value};
-	    $pkg->{iface_in} = 'venet0';
+	$from_info = extract_ct_info($vmdata, $vmid);
+	if ($from_info->{ip_address}) {
+	    $pkg->{source} = $from_info->{ip_address};
+	    $start_state = 'venet-out';
 	} else {
 	    die "implement me";
 	}
-	$pre_test = ['PVEFW-FORWARD', $pkg];
     } elsif ($from =~ m/^vm(\d+)$/) {
 	my $vmid = $1;
-	my $conf = $vmdata->{qemu}->{$vmid} || die "no such VM '$vmid'";
-	my $net = PVE::QemuServer::parse_net($conf->{net0});
-	my $macaddr = $net->{macaddr} || die "unable to get mac address";
-	$pkg->{iface_in} = $net->{bridge} || die "unable to get bridge";
-	$pkg->{mac_source} = $macaddr;
-	my $brpkg = copy_packet($pkg);
-	$brpkg->{physdev_in} = "tap${vmid}i0";
-	$brpkg->{physdev_out} = "fwln${vmid}i0";
-	$brpkg->{iface_in} = $brpkg->{iface_out} = "fwbr${vmid}i0";
-	$pre_test = ['PVEFW-FORWARD', $brpkg];
+	$from_info = extract_vm_info($vmdata, $vmid);
+	$start_state = 'fwbr-out'; 
+	$pkg->{mac_source} = $from_info->{macaddr};
     } else {
 	die "implement me";
     }
 
-    my $post_test;
+    my $target;
+
     if ($to eq 'host') {
-	$post_test = ['PVEFW-INPUT', $pkg];
+	$target->{type} = 'host';
+	$target->{iface} = 'host';
     } elsif ($to =~ m/^ct(\d+)$/) {
 	my $vmid = $1;
-	my $conf = $vmdata->{openvz}->{$vmid} || die "no such CT '$vmid'";
-	if ($conf->{ip_address}) {
-	    $pkg->{dest} = $conf->{ip_address}->{value};
-	    $pkg->{iface_out} = 'venet0';
+	$target = extract_ct_info($vmdata, $vmid);
+	$target->{iface} = 'venet-in';
+
+	if ($target->{ip_address}) {
+	    $pkg->{dest} = $target->{ip_address};
 	} else {
 	    die "implement me";
 	}
-	$post_test = ['PVEFW-FORWARD', $pkg];
    } elsif ($to =~ m/^vm(\d+)$/) {
 	my $vmid = $1;
-	my $conf = $vmdata->{qemu}->{$vmid} || die "no such VM '$vmid'";
-	my $net = PVE::QemuServer::parse_net($conf->{net0});
-	$pkg->{iface_out} = $net->{bridge} || die "unable to get bridge";
-	my $brpkg = copy_packet($pkg);
-	$brpkg->{physdev_out} = "tap${vmid}i0";
-	$brpkg->{physdev_in} = "fwln${vmid}i0";
-	$brpkg->{iface_in} = $brpkg->{iface_out} = "fwbr${vmid}i0";
-	$post_test = ['PVEFW-FORWARD', $brpkg];
+	$target = extract_vm_info($vmdata, $vmid);
+	$target->{iface} = $target->{tapdev};
     } else {
 	die "implement me";
     }
 
-    my $res = 'UNKNOWN';
-    if ($pre_test) {
-	my ($chain, $testpkg) = @$pre_test;
-	$trace .= "PRE TEST $chain: " . Dumper($testpkg);
-	$res = ruleset_simulate_chain($ruleset, $chain, $testpkg);
-	if ($res ne 'ACCEPT') {
-	    die "test failed ($res != $action)\n" if $action ne $res;
-	    return undef; # sucess
-	}
-    }
-   
-    if ($post_test) {
-	my ($chain, $testpkg) = @$post_test;
-	$trace .= "POST TEST $chain: " . Dumper($testpkg);
-	$res = ruleset_simulate_chain($ruleset, $chain, $testpkg);
-	if ($res ne 'ACCEPT') {
-	    die "test failed ($res != $action)\n" if $action ne $res;
-	    return undef; # sucess
-	}
-    }
+    my $res = route_packet($ruleset, $ipset_ruleset, $pkg, $from_info, $target, $start_state);
 
-    die "test failed ($res != $action)\n" if $action ne $res; # fixme: remove
+    die "test failed ($res != $action)\n" if $action ne $res;
 
-    return undef;
+    return undef; 
 }
 
 sub run_tests {
@@ -288,12 +439,13 @@ sub run_tests {
 	    my $test = eval $line;
 	    die $@ if $@;
 	    $trace = '';
+	    print Dumper($ruleset) if $debug;
 	    eval { simulate_firewall($ruleset, $ipset_ruleset, $vmdata, $test); };
 	    if (my $err = $@) {
 
-		print Dumper($ruleset);
+		print Dumper($ruleset) if !$debug;
 
-		print "$trace\n";
+		print "$trace\n" if !$debug;
 
 		print "$testfile line $.: $line";
 
@@ -314,12 +466,22 @@ sub run_tests {
 my $vmdata = {
     qemu => {
 	100 => {
-	    net0 => "e1000=0E:0B:38:B8:B3:21,bridge=vmbr0,firewall=0",
+	    net0 => "e1000=0E:0B:38:B8:B3:21,bridge=vmbr0",
+	},
+	101 => {
+	    net0 => "e1000=0E:0B:38:B8:B3:22,bridge=vmbr0",
+	},
+	# on bridge vmbr1
+	110 => {
+	    net0 => "e1000=0E:0B:38:B8:B4:21,bridge=vmbr1",
 	},
     },
     openvz => {
 	200 => {
 	    ip_address => { value => '10.0.200.1' },
+	},
+	201 => {
+	    ip_address => { value => '10.0.200.2' },
 	},
     },
 };

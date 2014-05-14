@@ -14,3 +14,13 @@
 
 { from => 'vm100' , to => 'ct200', dport => 22, action => 'ACCEPT' }
 
+{ from => 'vm101', to => 'vm100', dport => 22, action => 'DROP' }
+{ from => 'vm101', to => 'vm100', dport => 443, action => 'ACCEPT' }
+
+{ from => 'ct201', to => 'ct200', dport => 22, action => 'ACCEPT' }
+{ from => 'ct201', to => 'ct200', dport => 23, action => 'DROP' }
+
+{ from => 'vm110', to => 'vm100', dport => 22, action => 'DROP' }
+{ from => 'vm110', to => 'vm100', dport => 443, action => 'ACCEPT' }
+
+

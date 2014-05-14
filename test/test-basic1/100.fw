@@ -4,4 +4,4 @@ enable: 1
 
 [RULES]
 
-#IN ACCEPT - - - tcp 22
+IN ACCEPT - - - tcp 443
