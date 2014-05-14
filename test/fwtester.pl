@@ -124,24 +124,27 @@ sub ruleset_simulate_chain {
 
     add_trace("ENTER chain $chain\n");
     
+    my $counter = 2; # ENTER + LEAVE = 2
+
     if ($chain eq 'PVEFW-Drop') {
 	add_trace("LEAVE chain $chain\n");
-	return 'DROP';
+	return ('DROP', $counter);
     }
     if ($chain eq 'PVEFW-reject') {
 	add_trace("LEAVE chain $chain\n");
-	return 'REJECT';
+	return ('REJECT', $counter);
     }
 
     if ($chain eq 'PVEFW-tcpflags') {
 	add_trace("LEAVE chain $chain\n");
-	return undef;
+	return (undef, $counter);
     }
 
     my $rules = $ruleset->{$chain} ||
 	die "no such chain '$chain'";
 
     foreach my $rule (@$rules) {
+	$counter++;
 	my ($goto, $action) = rule_match($chain, $rule, $pkg);
 	if (!defined($action)) {
 	    add_trace("SKIP: $rule\n");
@@ -151,7 +154,7 @@ sub ruleset_simulate_chain {
 	
 	if ($action eq 'ACCEPT' || $action eq 'DROP' || $action eq 'REJECT') {
 	    add_trace("TERMINATE chain $chain: $action\n");
-	    return $action;
+	    return ($action, $counter);
 	} elsif ($action eq 'RETURN') {
 	    add_trace("RETURN FROM chain $chain\n");
 	    last;
@@ -162,9 +165,9 @@ sub ruleset_simulate_chain {
 		#$chain = $action;
 		#$rules = $ruleset->{$chain} || die "no such chain '$chain'";
 	    } else {
-		if ($action = ruleset_simulate_chain($ruleset, $action, $pkg)) {
-		    return $action;
-		}
+		my ($act, $ctr) = ruleset_simulate_chain($ruleset, $action, $pkg);
+		$counter += $ctr;
+		return ($act, $counter) if $act;
 		add_trace("CONTINUE chain $chain\n");
 	    }
 	}
@@ -172,10 +175,10 @@ sub ruleset_simulate_chain {
 
     add_trace("LEAVE chain $chain\n");
     if ($chain =~ m/^PVEFW-(INPUT|OUTPUT|FORWARD)$/) {
-	return 'ACCEPT'; # default policy
+	return ('ACCEPT', $counter); # default policy
     }
 
-    return undef;
+    return (undef, $counter);
 }
 
 sub copy_packet {
@@ -198,6 +201,9 @@ sub route_packet {
     my $route_state = $start_state;
 
     my $physdev_in;
+
+    my $ipt_invocation_counter = 0;
+    my $rule_check_counter = 0;
 
     while ($route_state ne $target->{iface}) {
 
@@ -296,12 +302,6 @@ sub route_packet {
 		$pkg->{iface_out} = 'lo';
 		$next_route_state = 'host';
 
-		if ($route_state eq $outside_bridge) {
-
-		} else {
-
-		}
-
 	    } elsif ($target->{type} eq 'outside') {
 
 		$chain = 'PVEFW-FORWARD';
@@ -346,8 +346,10 @@ sub route_packet {
 	if ($chain) {
 	    add_trace("IPT check at $route_state (chain $chain)\n");
 	    add_trace(Dumper($pkg));
-	    my $res = ruleset_simulate_chain($ruleset, $chain, $pkg);
-	    return $res if $res ne 'ACCEPT';
+	    $ipt_invocation_counter++;
+	    my ($res, $ctr) = ruleset_simulate_chain($ruleset, $chain, $pkg);
+	    $rule_check_counter += $ctr;
+	    return ($res, $ipt_invocation_counter, $rule_check_counter) if $res ne 'ACCEPT';
 	} 
 
 	$route_state = $next_route_state;
@@ -355,7 +357,7 @@ sub route_packet {
 	$physdev_in = $next_physdev_in;
     }
 
-    return 'ACCEPT';
+    return ('ACCEPT', $ipt_invocation_counter, $rule_check_counter);
 }
 
 sub extract_ct_info {
@@ -467,8 +469,11 @@ sub simulate_firewall {
 	die "implement me";
     }
 
-    my $res = route_packet($ruleset, $ipset_ruleset, $pkg, $from_info, $target, $start_state);
+    my ($res, $ic, $rc) = route_packet($ruleset, $ipset_ruleset, $pkg, 
+				       $from_info, $target, $start_state);
 
+    add_trace("IPT statistics: invocation = $ic, checks = $rc\n");
+ 
     die "test failed ($res != $action)\n" if $action ne $res;
 
     return undef; 
