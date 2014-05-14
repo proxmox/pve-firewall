@@ -209,7 +209,7 @@ sub simulate_firewall {
 	$pkg->{mac_source} = $macaddr;
 	my $brpkg = copy_packet($pkg);
 	$brpkg->{physdev_in} = "tap${vmid}i0";
-	$brpkg->{physdev_out} = "link${vmid}i0";
+	$brpkg->{physdev_out} = "fwln${vmid}i0";
 	$brpkg->{iface_in} = $brpkg->{iface_out} = "fwbr${vmid}i0";
 	$pre_test = ['PVEFW-FORWARD', $brpkg];
     } else {
@@ -236,7 +236,7 @@ sub simulate_firewall {
 	$pkg->{iface_out} = $net->{bridge} || die "unable to get bridge";
 	my $brpkg = copy_packet($pkg);
 	$brpkg->{physdev_out} = "tap${vmid}i0";
-	$brpkg->{physdev_in} = "link${vmid}i0";
+	$brpkg->{physdev_in} = "fwln${vmid}i0";
 	$brpkg->{iface_in} = $brpkg->{iface_out} = "fwbr${vmid}i0";
 	$post_test = ['PVEFW-FORWARD', $brpkg];
     } else {

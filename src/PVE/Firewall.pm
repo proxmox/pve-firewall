@@ -2590,10 +2590,10 @@ sub compile {
     ruleset_create_chain($ruleset, "PVEFW-FWBR-IN");
     ruleset_chain_add_input_filters($ruleset, "PVEFW-FWBR-IN", $hostfw_options);
 
-    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m physdev --physdev-is-bridged --physdev-in link+ -j PVEFW-FWBR-IN");
+    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m physdev --physdev-is-bridged --physdev-in fwln+ -j PVEFW-FWBR-IN");
 
     ruleset_create_chain($ruleset, "PVEFW-FWBR-OUT");
-    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m physdev --physdev-is-bridged --physdev-out link+ -j PVEFW-FWBR-OUT");
+    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m physdev --physdev-is-bridged --physdev-out fwln+ -j PVEFW-FWBR-OUT");
 
     ruleset_create_chain($ruleset, "PVEFW-VENET-IN");
     ruleset_chain_add_input_filters($ruleset, "PVEFW-VENET-IN", $hostfw_options);
