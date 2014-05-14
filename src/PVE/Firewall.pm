@@ -40,7 +40,7 @@ sub pve_verify_ipv4_or_cidr {
     my ($cidr, $noerr) = @_;
 
     if ($cidr =~ m!^(?:$IPV4RE)(/(\d+))?$!) {
-	return $cidr if Net::IP->new($cidr); 
+	return $cidr if Net::IP->new($cidr);
 	return undef if $noerr;
 	die Net::IP::Error() . "\n";
     }
@@ -53,7 +53,7 @@ PVE::JSONSchema::register_standard_option('ipset-name', {
     type => 'string',
     pattern => '[A-Za-z][A-Za-z0-9\-\_]+',
     minLength => 2,
-    maxLength => 20,			  
+    maxLength => 20,
 });
 
 PVE::JSONSchema::register_standard_option('pve-fw-alias', {
@@ -61,12 +61,12 @@ PVE::JSONSchema::register_standard_option('pve-fw-alias', {
     type => 'string',
     pattern => '[A-Za-z][A-Za-z0-9\-\_]+',
     minLength => 2,
-    maxLength => 20,			  
+    maxLength => 20,
 });
 
 PVE::JSONSchema::register_standard_option('pve-fw-loglevel' => {
     description => "Log level.",
-    type => 'string', 
+    type => 'string',
     enum => ['emerg', 'alert', 'crit', 'err', 'warning', 'notice', 'info', 'debug', 'nolog'],
     optional => 1,
 });
@@ -79,7 +79,7 @@ PVE::JSONSchema::register_standard_option('pve-security-group-name', {
     type => 'string',
     pattern => $security_group_name_pattern,
     minLength => 2,
-    maxLength => 20,				  
+    maxLength => 20,
 });
 
 my $feature_ipset_nomatch = 0;
@@ -733,7 +733,7 @@ sub parse_address_list {
 	}
 	$iprange = 1 if $elem =~ m/-/;
     }
-    
+
     die "you can use a range in a list\n" if $iprange && $count > 1;
 }
 
@@ -757,7 +757,7 @@ sub parse_port_name_number_or_range {
 	    if ($icmp_type_names->{$item}) {
 		$icmp_port = 1;
 	    } else {
-		die "invalid port '$item'\n" if !$services->{byname}->{$item}; 
+		die "invalid port '$item'\n" if !$services->{byname}->{$item};
 	    }
 	}
     }
@@ -918,7 +918,7 @@ sub add_rule_properties {
 
 sub delete_rule_properties {
     my ($rule, $delete_str) = @_;
-    
+
     foreach my $opt (PVE::Tools::split_list($delete_str)) {
 	raise_param_exc({ 'delete' => "no such property ('$opt')"})
 	    if !defined($rule_properties->{$opt});
@@ -956,7 +956,7 @@ my $apply_macro = sub {
 
 	    if (!defined($v)) {
 		my $msg = "missing parameter '$k' in macro '$macro_name'";
-		raise_param_exc({ macro => $msg }) if $verify; 
+		raise_param_exc({ macro => $msg }) if $verify;
 		die "$msg\n";
 	    }
 	    $rule->{$k} = $v;
@@ -968,7 +968,7 @@ my $apply_macro = sub {
 	    if (defined($rule->{$k})) {
 		if ($rule->{$k} ne $param->{$k}) {
 		    my $msg = "parameter '$k' already define in macro (value = '$rule->{$k}')";
-		    raise_param_exc({ $k => $msg }) if $verify; 
+		    raise_param_exc({ $k => $msg }) if $verify;
 		    die "$msg\n";
 		}
 	    } else {
@@ -988,19 +988,19 @@ sub verify_rule {
 
     raise_param_exc({ type => "missing property"}) if !$type;
     raise_param_exc({ action => "missing property"}) if !$rule->{action};
- 
+
     if ($type eq  'in' || $type eq 'out') {
 	raise_param_exc({ action => "unknown action '$rule->{action}'"})
 	    if $rule->{action} !~ m/^(ACCEPT|DROP|REJECT)$/;
     } elsif ($type eq 'group') {
-	raise_param_exc({ type => "security groups not allowed"}) 
+	raise_param_exc({ type => "security groups not allowed"})
 	    if !$allow_groups;
-	raise_param_exc({ action => "invalid characters in security group name"}) 
+	raise_param_exc({ action => "invalid characters in security group name"})
 	    if $rule->{action} !~ m/^${security_group_name_pattern}$/;
     } else {
 	raise_param_exc({ type => "unknown rule type '$type'"});
     }
-   
+
     # fixme: verify $rule->{iface}?
 
     if ($rule->{macro}) {
@@ -1499,11 +1499,11 @@ sub ruleset_generate_vm_rules {
 	    eval {
 		if ($direction eq 'OUT') {
 		    ruleset_generate_rule($ruleset, $chain, $rule,
-					  { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" }, 
+					  { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" },
 					  undef, $cluster_conf);
 		} else {
-		    ruleset_generate_rule($ruleset, $chain, $rule, 
-					  { ACCEPT => $in_accept , REJECT => "PVEFW-reject" }, 
+		    ruleset_generate_rule($ruleset, $chain, $rule,
+					  { ACCEPT => $in_accept , REJECT => "PVEFW-reject" },
 					  undef, $cluster_conf);
 		}
 	    };
@@ -2012,14 +2012,14 @@ sub parse_cluster_fw_rules {
     my $section;
     my $group;
 
-    my $res = { 
-	rules => [], 
-	options => {}, 
-	aliases => {}, 
-	groups => {}, 
-	group_comments => {}, 
+    my $res = {
+	rules => [],
+	options => {},
+	aliases => {},
+	groups => {},
+	group_comments => {},
 	ipset => {} ,
-	ipset_comments => {}, 
+	ipset_comments => {},
     };
 
     while (defined(my $line = <$fh>)) {
@@ -2059,7 +2059,7 @@ sub parse_cluster_fw_rules {
 	    $group = lc($1);
 	    my $comment = $2;
 	    $res->{$section}->{$group} = [];
-	    $res->{ipset_comments}->{$group} = decode('utf8', $comment) 
+	    $res->{ipset_comments}->{$group} = decode('utf8', $comment)
 		if $comment;
 	    next;
 	}
@@ -2107,7 +2107,7 @@ sub parse_cluster_fw_rules {
 
 	    if($cidr !~ m/^${ip_alias_pattern}$/) {
 		$cidr =~ s|/32$||;
-	    
+
 		eval { pve_verify_ipv4_or_cidr($cidr); };
 		if (my $err = $@) {
 		    warn "$prefix: $cidr - $err";
@@ -2115,10 +2115,10 @@ sub parse_cluster_fw_rules {
 		}
 	    }
 
-	    my $entry = { cidr => $cidr }; 
+	    my $entry = { cidr => $cidr };
 	    $entry->{nomatch} = 1 if $nomatch;
 	    $entry->{comment} = $comment if $comment;
-	    
+
 	    push @{$res->{$section}->{$group}}, $entry;
 	}
     }
@@ -2274,7 +2274,7 @@ my $format_ipset = sub {
 	    if $entry->{comment} && $entry->{comment} !~ m/^\s*$/;
 	$raw .= "$line\n";
     }
- 
+
     return $raw;
 };
 
@@ -2469,7 +2469,7 @@ sub save_clusterfw_conf {
 
     my $aliases = $cluster_conf->{aliases};
     $raw .= &$format_aliases($aliases) if scalar(keys %$aliases);
- 
+
     foreach my $ipset (sort keys %{$cluster_conf->{ipset}}) {
 	if (my $comment = $cluster_conf->{ipset_comments}->{$ipset}) {
 	    my $utf8comment = encode('utf8', $comment);
@@ -2570,7 +2570,7 @@ sub compile {
     ruleset_create_chain($ruleset, "PVEFW-OUTPUT");
 
     ruleset_create_chain($ruleset, "PVEFW-FORWARD");
-    
+
     my $hostfw_options = $hostfw_conf->{options} || {};
 
     # fixme: what log level should we use here?
@@ -2639,7 +2639,7 @@ sub compile {
 
 	if ($conf->{ip_address} && $conf->{ip_address}->{value}) {
 	    my $ip = $conf->{ip_address}->{value};
-	    $ip =~ s/\s+/,/g;  
+	    $ip =~ s/\s+/,/g;
 	    generate_venet_rules_direction($ruleset, $cluster_conf, $hostfw_conf, $vmfw_conf, $vmid, $ip, 'IN');
 	    generate_venet_rules_direction($ruleset, $cluster_conf, $hostfw_conf, $vmfw_conf, $vmid, $ip, 'OUT');
 	}
@@ -2782,7 +2782,7 @@ sub get_ipset_cmdlist {
     my $active_chains = ipset_get_chains();
     my $statushash = get_ruleset_status($ruleset, $active_chains, \&ipset_chain_digest, $verbose);
 
-    # remove stale _swap chains 
+    # remove stale _swap chains
     foreach my $chain (keys %$active_chains) {
 	if ($chain =~ m/^PVEFW-\S+_swap$/) {
 	    $cmdlist .= "destroy $chain\n";
