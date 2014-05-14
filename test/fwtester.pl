@@ -395,18 +395,21 @@ sub simulate_firewall {
     my $from = delete $test->{from} || die "missing 'from' field";
     my $to = delete $test->{to} || die "missing 'to' field";
     my $action = delete $test->{action} || die "missing 'action'";
-
+    
+    my $testid = delete $test->{id};
+    
     die "from/to needs to be different" if $from eq $to;
 
     my $pkg = {
 	proto => 'tcp',
-	sport => '1234',
-	dport => '4321',
-	source => '10.11.12.13',
-	dest => '10.11.12.14',
+	sport => undef,
+	dport => undef,
+	source => undef,
+	dest => undef,
     };
 
     while (my ($k,$v) = each %$test) {
+	die "unknown attribute '$k'\n" if !exists($pkg->{$k});
 	$pkg->{$k} = $v;
     }
 
