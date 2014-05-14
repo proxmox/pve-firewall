@@ -1436,7 +1436,12 @@ sub ruleset_chain_add_conn_filters {
 }
 
 sub ruleset_chain_add_input_filters {
-    my ($ruleset, $chain, $options) = @_;
+    my ($ruleset, $chain, $options, $cluster_conf, $loglevel) = @_;
+
+    if ($cluster_conf->{ipset}->{blacklist}){
+	ruleset_addlog($ruleset, $chain, 0, "DROP: ", $loglevel, "-m set --match-set PVEFW-blacklist src");
+	ruleset_addrule($ruleset, $chain, "-m set --match-set PVEFW-blacklist src -j DROP");
+    }
 
     if (!(defined($options->{nosmurfs}) && $options->{nosmurfs} == 0)) {
 	ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate INVALID,NEW -j PVEFW-smurfs");
@@ -1649,7 +1654,7 @@ sub enable_host_firewall {
     ruleset_addrule($ruleset, $chain, "-i lo -j ACCEPT");
 
     ruleset_chain_add_conn_filters($ruleset, $chain, 'ACCEPT');
-    ruleset_chain_add_input_filters($ruleset, $chain, $options);
+    ruleset_chain_add_input_filters($ruleset, $chain, $options, $cluster_conf, $loglevel);
 
     ruleset_addrule($ruleset, $chain, "-m addrtype --dst-type MULTICAST -j ACCEPT");
     ruleset_addrule($ruleset, $chain, "-p udp -m conntrack --ctstate NEW --dport 5404:5405 -j ACCEPT");
@@ -2578,17 +2583,12 @@ sub compile {
 
     ruleset_chain_add_conn_filters($ruleset, "PVEFW-FORWARD", "ACCEPT");
 
-    if ($cluster_conf->{ipset}->{blacklist}){
-	ruleset_addlog($ruleset, "PVEFW-FORWARD", 0, "DROP: ", $loglevel, "-m set --match-set PVEFW-blacklist src");
-	ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m set --match-set PVEFW-blacklist src -j DROP");
-    }
-
     ruleset_create_chain($ruleset, "PVEFW-VENET-OUT");
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i venet0 -j PVEFW-VENET-OUT");
     ruleset_addrule($ruleset, "PVEFW-INPUT", "-i venet0 -j PVEFW-VENET-OUT");
 
     ruleset_create_chain($ruleset, "PVEFW-FWBR-IN");
-    ruleset_chain_add_input_filters($ruleset, "PVEFW-FWBR-IN", $hostfw_options);
+    ruleset_chain_add_input_filters($ruleset, "PVEFW-FWBR-IN", $hostfw_options, $cluster_conf, $loglevel);
 
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m physdev --physdev-is-bridged --physdev-in fwln+ -j PVEFW-FWBR-IN");
 
@@ -2596,7 +2596,7 @@ sub compile {
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m physdev --physdev-is-bridged --physdev-out fwln+ -j PVEFW-FWBR-OUT");
 
     ruleset_create_chain($ruleset, "PVEFW-VENET-IN");
-    ruleset_chain_add_input_filters($ruleset, "PVEFW-VENET-IN", $hostfw_options);
+    ruleset_chain_add_input_filters($ruleset, "PVEFW-VENET-IN", $hostfw_options, $cluster_conf, $loglevel);
 
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o venet0 -j PVEFW-VENET-IN");
 
