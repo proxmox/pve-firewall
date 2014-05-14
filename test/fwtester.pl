@@ -294,6 +294,7 @@ sub route_packet {
 	} elsif ($route_state =~ m/^vmbr\d+$/) {
 	    
 	    die "missing physdev_in - internal error?" if !$physdev_in;
+	    $pkg->{physdev_in} = $physdev_in;
 
 	    if ($target->{type} eq 'host') {
 
@@ -307,7 +308,6 @@ sub route_packet {
 		$chain = 'PVEFW-FORWARD';
 		$pkg->{iface_in} = $route_state;
 		$pkg->{iface_out} = $outside_bridge;
-		$pkg->{physdev_in} = $physdev_in;
 		# conditionally set physdev_out (same behavior as kernel)
 		if ($route_state eq $outside_bridge) {
 		    $pkg->{physdev_out} = $outside_iface || die 'internal error';
@@ -326,7 +326,6 @@ sub route_packet {
 		$chain = 'PVEFW-FORWARD';
 		$pkg->{iface_in} = $route_state;
 		$pkg->{iface_out} = $target->{bridge};
-		$pkg->{physdev_in} = $physdev_in;
 		# conditionally set physdev_out (same behavior as kernel)
 		if ($route_state eq $target->{bridge}) {
 		    $pkg->{physdev_out} = $target->{fwpr} || die 'internal error';
