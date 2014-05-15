@@ -30,16 +30,19 @@ the following syntax:
 
 The following <zone> definition exist currently:
 
-* host:     The host itself
+* host:              The host itself
 
-* outside:  The outside world (vmbr0 port eth0)
+* outside:  	     The outside world (alias for 'vmbr0/eth0')
 
-* vm<ID>:   A qemu virtual machine
+* vm<ID>:   	     A qemu virtual machine
 
-* ct<ID>:   An openvz container
+* ct<ID>:   	     An openvz container
 
-* nfvm:     Non firewalled VM (vmbr port tapXYZ)
+* nfvm:              Non firewalled VM (alias for 'vmbr0/tapXYZ')
 
+* vmbr<\d+>/<bport>: Unmanaged bridge port
+
+ 
 ==Test examples==
 
  { from => 'outside', to => 'ct200', dport => 22, action => 'ACCEPT' }

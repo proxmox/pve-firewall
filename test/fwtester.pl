@@ -11,12 +11,6 @@ use File::Basename;
 my $mark;
 my $trace;
 
-my $outside_iface = 'eth0';
-my $outside_bridge = 'vmbr0';
-
-my $nfvm_iface = 'tapXYZ';
-my $nfvm_bridge = 'vmbr0';
-
 my $debug = 0;
 
 sub print_usage_and_exit {
@@ -224,24 +218,16 @@ sub route_packet {
 	$pkg->{iface_in} = $pkg->{iface_out} = undef;
 	$pkg->{physdev_in} = $pkg->{physdev_out} = undef;
 
-	if ($route_state eq 'from-outside') {
-	    $next_route_state = $outside_bridge || die 'internal error';
-	    $next_physdev_in = $outside_iface || die 'internal error';
-	} elsif ($route_state eq 'from-nfvm') {
-	    $next_route_state = $nfvm_bridge || die 'internal error';
-	    $next_physdev_in = $nfvm_iface || die 'internal error';
+	if ($route_state eq 'from-bport') {
+	    $next_route_state = $from_info->{bridge} || die 'internal error';
+	    $next_physdev_in = $from_info->{iface} || die 'internal error';
 	} elsif ($route_state eq 'host') {
 
-	    if ($target->{type} eq 'outside') {
+	    if ($target->{type} eq 'bport') {
 		$pkg->{iface_in} = 'lo';
-		$pkg->{iface_out} = $outside_bridge;
+		$pkg->{iface_out} = $target->{bridge} || die 'internal error';
 		$chain = 'PVEFW-OUTPUT';
-		$next_route_state = $outside_iface
-	    } elsif ($target->{type} eq 'nfvm') {
-		$pkg->{iface_in} = 'lo';
-		$pkg->{iface_out} = $nfvm_bridge;
-		$chain = 'PVEFW-OUTPUT';
-		$next_route_state = $nfvm_iface
+		$next_route_state = $target->{iface} || die 'internal error';
 	    } elsif ($target->{type} eq 'ct') {
 		$pkg->{iface_in} = 'lo';
 		$pkg->{iface_out} = 'venet0';
@@ -265,19 +251,12 @@ sub route_packet {
 		$pkg->{iface_out} = 'lo';
 		$next_route_state = 'host';
 
-	    } elsif ($target->{type} eq 'outside') {
+	    } elsif ($target->{type} eq 'bport') {
 		
 		$chain = 'PVEFW-FORWARD';
 		$pkg->{iface_in} = 'venet0';
-		$pkg->{iface_out} = $outside_bridge;
-		$next_route_state = $outside_iface;
-
-	    } elsif ($target->{type} eq 'nfvm') {
-		
-		$chain = 'PVEFW-FORWARD';
-		$pkg->{iface_in} = 'venet0';
-		$pkg->{iface_out} = $nfvm_bridge;
-		$next_route_state = $nfvm_iface;
+		$pkg->{iface_out} = $target->{bridge} || die 'internal error';
+		$next_route_state = $target->{iface} || die 'internal error';
 
 	    } elsif ($target->{type} eq 'vm') {
 
@@ -328,27 +307,16 @@ sub route_packet {
 		$pkg->{iface_out} = 'lo';
 		$next_route_state = 'host';
 
-	    } elsif ($target->{type} eq 'outside') {
+	    } elsif ($target->{type} eq 'bport') {
 
 		$chain = 'PVEFW-FORWARD';
 		$pkg->{iface_in} = $route_state;
-		$pkg->{iface_out} = $outside_bridge;
+		$pkg->{iface_out} = $target->{bridge} || die 'internal error';
 		# conditionally set physdev_out (same behavior as kernel)
-		if ($route_state eq $outside_bridge) {
-		    $pkg->{physdev_out} = $outside_iface || die 'internal error';
+		if ($route_state eq $target->{bridge}) {
+		    $pkg->{physdev_out} = $target->{iface} || die 'internal error';
 		}
-		$next_route_state = $outside_iface;
-
-	    } elsif ($target->{type} eq 'nfvm') {
-
-		$chain = 'PVEFW-FORWARD';
-		$pkg->{iface_in} = $route_state;
-		$pkg->{iface_out} = $nfvm_bridge;
-		# conditionally set physdev_out (same behavior as kernel)
-		if ($route_state eq $nfvm_bridge) {
-		    $pkg->{physdev_out} = $nfvm_iface || die 'internal error';
-		}
-		$next_route_state = $nfvm_iface;
+		$next_route_state = $target->{iface};
 
 	    } elsif ($target->{type} eq 'ct') {
 
@@ -457,12 +425,21 @@ sub simulate_firewall {
     if ($from eq 'host') {
 	$from_info->{type} = 'host';
 	$start_state = 'host';
+    } elsif ($from =~ m|^(vmbr\d+)/(\S+)$|) {
+	$from_info->{type} = 'bport';
+	$from_info->{bridge} = $1;
+	$from_info->{iface} = $2;
+	$start_state = 'from-bport';
     } elsif ($from eq 'outside') {
-	$from_info->{type} = 'outside';
-	$start_state = 'from-outside';
+	$from_info->{type} = 'bport';
+	$from_info->{bridge} = 'vmbr0';
+	$from_info->{iface} = 'eth0';
+	$start_state = 'from-bport';
     } elsif ($from eq 'nfvm') {
-	$from_info->{type} = 'nfvm';
-	$start_state = 'from-nfvm';
+	$from_info->{type} = 'bport';
+	$from_info->{bridge} = 'vmbr0';
+	$from_info->{iface} = 'tapXYZ';
+	$start_state = 'from-bport';
     } elsif ($from =~ m/^ct(\d+)$/) {
 	my $vmid = $1;
 	$from_info = extract_ct_info($vmdata, $vmid);
@@ -486,12 +463,18 @@ sub simulate_firewall {
     if ($to eq 'host') {
 	$target->{type} = 'host';
 	$target->{iface} = 'host';
+    } elsif ($to =~ m|^(vmbr\d+)/(\S+)$|) {
+	$target->{type} = 'bport';
+	$target->{bridge} = $1;
+	$target->{iface} = $2;
     } elsif ($to eq 'outside') {
-	$target->{type} = 'outside';
-	$target->{iface} = $outside_iface;
+	$target->{type} = 'bport';
+	$target->{bridge} = 'vmbr0';
+	$target->{iface} = 'eth0';
      } elsif ($to eq 'nfvm') {
-	$target->{type} = 'nfvm';
-	$target->{iface} = $nfvm_iface;
+	$target->{type} = 'bport';
+	$target->{bridge} = 'vmbr0';
+	$target->{iface} = 'tapXYZ';
     } elsif ($to =~ m/^ct(\d+)$/) {
 	my $vmid = $1;
 	$target = extract_ct_info($vmdata, $vmid);

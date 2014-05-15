@@ -51,3 +51,6 @@
 { from => 'vm100', to => 'nfvm', dport => 80, action => 'ACCEPT' }
 { from => 'outside', to => 'nfvm', dport => 80, action => 'ACCEPT' }
 { from => 'host', to => 'nfvm', dport => 80, action => 'ACCEPT' }
+
+{ from => 'vmbr0/eth0', to => 'host', dport => 22, action => 'ACCEPT' }
+{ from => 'host' , to => 'vmbr0/eth0', dport => 22, action => 'ACCEPT' }
