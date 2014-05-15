@@ -42,8 +42,29 @@ sub nf_dev_match {
     return  ($dev =~ m/^${devre}$/) ? 1 : 0;
 }
 
+sub ipset_match {
+    my ($ipsetname, $ipset, $ipaddr) = @_;
+
+    my $ip = Net::IP->new($ipaddr);
+
+    foreach my $entry (@$ipset) {
+	next if $entry =~ m/^create/; # simply ignore
+	if ($entry =~ m/add \S+ (\S+)$/) {
+	    my $test = Net::IP->new($1);
+	    if ($test->overlaps($ip)) {
+		add_trace("IPSET $ipsetname match $ipaddr\n");
+		return 1;
+	    }
+	} else {
+	    die "implement me";
+	}
+    }
+
+    return 0;
+}
+
 sub rule_match {
-    my ($chain, $rule, $pkg) = @_;
+    my ($ipset_ruleset, $chain, $rule, $pkg) = @_;
 
     $rule =~ s/^-A $chain // || die "got strange rule: $rule";
 
@@ -103,6 +124,22 @@ sub rule_match {
 	    next;
 	}
 
+	if ($rule =~ s/^-m set --match-set (\S+) src\s*//) {
+	    die "missing source" if !$pkg->{source};
+	    my $ipset = $ipset_ruleset->{$1};
+	    die "no such ip set '$1'" if !$ipset;
+	    return undef if !ipset_match($1, $ipset, $pkg->{source});
+	    next;
+	}
+
+	if ($rule =~ s/^-m set --match-set (\S+) dst\s*//) {
+	    die "missing destination" if !$pkg->{dest};
+	    my $ipset = $ipset_ruleset->{$1};
+	    die "no such ip set '$1'" if !$ipset;
+	    return undef if !ipset_match($1, $ipset, $pkg->{dest});
+	    next;
+	}
+
 	if ($rule =~ s/^-m mac ! --mac-source (\S+)\s*//) {
 	    die "missing source mac" if !$pkg->{mac_source};
 	    return undef if $pkg->{mac_source} eq $1; # no match
@@ -129,6 +166,7 @@ sub rule_match {
 	}
 
 	# final actions
+
 	if ($rule =~ s/^-j MARK --set-mark (\d+)\s*$//) {
 	    $mark = $1;
 	    return undef;
@@ -142,6 +180,10 @@ sub rule_match {
 	    return (1, $1);
 	}
 
+	if ($rule =~ s/^-j NFLOG --nflog-prefix \"[^\"]+\"$//) {
+	    return undef; 
+	}
+
 	last;
     }
 
@@ -149,7 +191,7 @@ sub rule_match {
 }
 
 sub ruleset_simulate_chain {
-    my ($ruleset, $chain, $pkg) = @_;
+    my ($ruleset, $ipset_ruleset, $chain, $pkg) = @_;
 
     add_trace("ENTER chain $chain\n");
     
@@ -174,7 +216,7 @@ sub ruleset_simulate_chain {
 
     foreach my $rule (@$rules) {
 	$counter++;
-	my ($goto, $action) = rule_match($chain, $rule, $pkg);
+	my ($goto, $action) = rule_match($ipset_ruleset, $chain, $rule, $pkg);
 	if (!defined($action)) {
 	    add_trace("SKIP: $rule\n");
 	    next;
@@ -190,11 +232,11 @@ sub ruleset_simulate_chain {
 	} else {
 	    if ($goto) {
 		add_trace("LEAVE chain $chain - goto $action\n");
-		return ruleset_simulate_chain($ruleset, $action, $pkg)
+		return ruleset_simulate_chain($ruleset, $ipset_ruleset, $action, $pkg)
 		#$chain = $action;
 		#$rules = $ruleset->{$chain} || die "no such chain '$chain'";
 	    } else {
-		my ($act, $ctr) = ruleset_simulate_chain($ruleset, $action, $pkg);
+		my ($act, $ctr) = ruleset_simulate_chain($ruleset, $ipset_ruleset, $action, $pkg);
 		$counter += $ctr;
 		return ($act, $counter) if $act;
 		add_trace("CONTINUE chain $chain\n");
@@ -375,7 +417,7 @@ sub route_packet {
 	    add_trace("IPT check at $route_state (chain $chain)\n");
 	    add_trace(Dumper($pkg));
 	    $ipt_invocation_counter++;
-	    my ($res, $ctr) = ruleset_simulate_chain($ruleset, $chain, $pkg);
+	    my ($res, $ctr) = ruleset_simulate_chain($ruleset, $ipset_ruleset, $chain, $pkg);
 	    $rule_check_counter += $ctr;
 	    return ($res, $ipt_invocation_counter, $rule_check_counter) if $res ne 'ACCEPT';
 	} 
