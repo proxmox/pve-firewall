@@ -1484,12 +1484,11 @@ sub ruleset_add_group_rule {
     if(!ruleset_chain_exist($ruleset, $group_chain)){
 	generate_group_rules($ruleset, $cluster_conf, $group);
     }
-    if ($rule->{iface}) {
-	if ($direction eq 'OUT') {
-	    ruleset_addrule($ruleset, $chain, "-o $rule->{iface} -j $group_chain");
-	} else {
-	    ruleset_addrule($ruleset, $chain, "-i $rule->{iface} -j $group_chain");
-	}
+	
+    if ($direction eq 'OUT' && $rule->{iface_out}) {
+	ruleset_addrule($ruleset, $chain, "-o $rule->{iface_out} -j $group_chain");
+    } elsif ($direction eq 'IN' && $rule->{iface_in}) {
+	ruleset_addrule($ruleset, $chain, "-i $rule->{iface_in} -j $group_chain");
     } else {
 	ruleset_addrule($ruleset, $chain, "-j $group_chain");
     }
@@ -1676,14 +1675,14 @@ sub enable_host_firewall {
 
     # add host rules first, so that cluster wide rules can be overwritten
     foreach my $rule (@$rules, @$cluster_rules) {
+	$rule->{iface_in} = $rule->{iface} if $rule->{iface};
 	if ($rule->{type} eq 'group') {
 	    ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, 'IN', $accept_action);
 	} elsif ($rule->{type} eq 'in') {
-	    $rule->{iface_in} = $rule->{iface} if $rule->{iface};
 	    ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" }, 
 				  undef, $cluster_conf);
-	    delete $rule->{iface_in};
 	}
+	delete $rule->{iface_in};
     }
 
     # implement input policy
@@ -1709,14 +1708,14 @@ sub enable_host_firewall {
 
     # add host rules first, so that cluster wide rules can be overwritten
     foreach my $rule (@$rules, @$cluster_rules) {
+	$rule->{iface_out} = $rule->{iface} if $rule->{iface};
 	if ($rule->{type} eq 'group') {
 	    ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, 'OUT', $accept_action);
 	} elsif ($rule->{type} eq 'out') {
-	    $rule->{iface_out} = $rule->{iface} if $rule->{iface};
 	    ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" }, 
 				  undef, $cluster_conf);
-	    delete $rule->{iface_out};
 	}
+	delete $rule->{iface_out};
     }
 
     # implement output policy

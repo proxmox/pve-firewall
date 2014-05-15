@@ -1,3 +1,6 @@
+{ from => 'outside', to => 'vm100', source => '192.168.4.1', dport => 22, action => 'DROP' }
+{ from => 'outside', to => 'vm100', source => '192.168.3.1', dport => 22, action => 'ACCEPT' }
+
 { from => 'host', source => '192.168.2.1', dport => 22, action => 'ACCEPT' }
 { from => 'host', source => '192.168.2.1', dport => 443, action => 'REJECT' }
 { from => 'host', source => '192.168.2.1', dport => 80, action => 'REJECT' }
@@ -6,3 +9,8 @@
 { to => 'host', source => '127.0.0.1', dport => 22, action => 'DROP' }
 { to => 'host', source => '192.168.2.1', dport => 22, action => 'ACCEPT' }
 { to => 'host', source => '192.168.2.1', dport => 80, action => 'REJECT' }
+
+{ to => 'vm100', source => '192.168.3.1', dport => 22, action => 'ACCEPT' }
+{ to => 'vm100', source => '192.168.4.1', dport => 22, action => 'DROP' }
+
+

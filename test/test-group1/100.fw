@@ -1,6 +1,8 @@
 [RULES]
 
-IN ACCEPT - - - tcp 22 
-IN ACCEPT - - - tcp 80
+IN ACCEPT - 192.168.2.1 - tcp 22 
+IN ACCEPT - 192.168.2.1 - tcp 80
+IN ACCEPT - 127.0.0.1 - tcp 80
 
-GROUP group2
+IN ACCEPT net0 192.168.5.0/24 - tcp 22
+GROUP group2 net0
