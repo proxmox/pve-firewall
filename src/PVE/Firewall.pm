@@ -1476,6 +1476,27 @@ sub ruleset_create_vm_chain {
     }
 }
 
+sub ruleset_add_group_rule {
+    my ($ruleset, $cluster_conf, $chain, $rule, $direction, $action) = @_;
+
+    my $group = $rule->{action};
+    my $group_chain = "GROUP-$group-$direction";
+    if(!ruleset_chain_exist($ruleset, $group_chain)){
+	generate_group_rules($ruleset, $cluster_conf, $group);
+    }
+    if ($rule->{iface}) {
+	if ($direction eq 'OUT') {
+	    ruleset_addrule($ruleset, $chain, "-o $rule->{iface} -j $group_chain");
+	} else {
+	    ruleset_addrule($ruleset, $chain, "-i $rule->{iface} -j $group_chain");
+	}
+    } else {
+	ruleset_addrule($ruleset, $chain, "-j $group_chain");
+    }
+
+    ruleset_addrule($ruleset, $chain, "-m mark --mark 1 -j $action");
+}
+
 sub ruleset_generate_vm_rules {
     my ($ruleset, $rules, $cluster_conf, $chain, $netid, $direction, $options) = @_;
 
@@ -1487,18 +1508,8 @@ sub ruleset_generate_vm_rules {
 	next if $rule->{iface} && $rule->{iface} ne $netid;
 	next if !$rule->{enable};
 	if ($rule->{type} eq 'group') {
-	    my $group_chain = "GROUP-$rule->{action}-$direction";
-	    if(!ruleset_chain_exist($ruleset, $group_chain)){
-		generate_group_rules($ruleset, $cluster_conf, $rule->{action});
-	    }
-	    ruleset_addrule($ruleset, $chain, "-j $group_chain");
-	    if ($direction eq 'OUT'){
-		ruleset_addrule($ruleset, $chain, "-m mark --mark 1 -j RETURN");
-	    }else{
-		my $accept = generate_nfqueue($options);
-		ruleset_addrule($ruleset, $chain, "-m mark --mark 1 -j $accept");
-	    }
-
+	    ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, $direction,
+				   $direction eq 'OUT' ? 'RETURN' : $in_accept);
 	} else {
 	    next if $rule->{type} ne $lc_direction;
 	    eval {
@@ -1665,9 +1676,14 @@ sub enable_host_firewall {
 
     # add host rules first, so that cluster wide rules can be overwritten
     foreach my $rule (@$rules, @$cluster_rules) {
-	next if $rule->{type} ne 'in';
-	$rule->{iface_in} = $rule->{iface} if $rule->{iface};
-	ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" }, undef, $cluster_conf);
+	if ($rule->{type} eq 'group') {
+	    ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, 'IN', $accept_action);
+	} elsif ($rule->{type} eq 'in') {
+	    $rule->{iface_in} = $rule->{iface} if $rule->{iface};
+	    ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" }, 
+				  undef, $cluster_conf);
+	    delete $rule->{iface_in};
+	}
     }
 
     # implement input policy
@@ -1693,9 +1709,14 @@ sub enable_host_firewall {
 
     # add host rules first, so that cluster wide rules can be overwritten
     foreach my $rule (@$rules, @$cluster_rules) {
-	next if $rule->{type} ne 'out';
-	$rule->{iface_out} = $rule->{iface} if $rule->{iface};
-	ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" }, undef, $cluster_conf);
+	if ($rule->{type} eq 'group') {
+	    ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, 'OUT', $accept_action);
+	} elsif ($rule->{type} eq 'out') {
+	    $rule->{iface_out} = $rule->{iface} if $rule->{iface};
+	    ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" }, 
+				  undef, $cluster_conf);
+	    delete $rule->{iface_out};
+	}
     }
 
     # implement output policy
