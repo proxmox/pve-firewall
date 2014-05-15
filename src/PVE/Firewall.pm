@@ -1784,7 +1784,7 @@ sub parse_fw_rule {
 	    die "unknown action '$action'\n";
 	}
     } elsif ($type eq 'group') {
-	die "wrong number of rule elements\n" if scalar(@data) != 3;
+	die "wrong number of rule elements\n" if scalar(@data) > 3;
 	die "groups disabled\n" if !$allow_groups;
 
 	die "invalid characters in group name\n" if $action !~ m/^${security_group_name_pattern}$/;
