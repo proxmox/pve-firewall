@@ -2620,7 +2620,7 @@ sub compile {
 	foreach my $netid (keys %$conf) {
 	    next if $netid !~ m/^net(\d+)$/;
 	    my $net = PVE::QemuServer::parse_net($conf->{$netid});
-	    next if !$net;
+	    next if !$net->{firewall};
 	    my $iface = "tap${vmid}i$1";
 
 	    my $macaddr = $net->{macaddr};
