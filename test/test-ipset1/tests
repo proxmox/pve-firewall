@@ -1,0 +1,17 @@
+
+# blacklisted
+{ from => 'outside', to => 'host', source => '192.168.0.1', dest => '1.2.3.4', dport => 22, action => 'DROP' }
+# accept in myipset
+{ from => 'outside', to => 'host', source => '172.16.0.10', dest => '1.2.3.4', dport => 22, action => 'ACCEPT' }
+{ from => 'outside', to => 'host', source => '192.168.1.10', dest => '1.2.3.4', dport => 22, action => 'ACCEPT' }
+# network alias inside myipset
+{ from => 'outside', to => 'host', source => '10.3.0.1', dest => '1.2.3.4', dport => 22, action => 'ACCEPT' }
+# server alias inside myipset
+{ from => 'outside', to => 'host', source => '10.2.0.111', dest => '1.2.3.4', dport => 22, action => 'ACCEPT' }
+
+# not inside myipset
+{ from => 'outside', to => 'host', source => '10.2.0.112', dest => '1.2.3.4', dport => 22, action => 'DROP' }
+
+# reject dmzhosts if from myipset
+{ from => 'outside', to => 'host', source => '172.16.0.10', dest => '10.10.10.1', dport => 22, action => 'REJECT' }
+{ from => 'outside', to => 'host', source => '172.16.0.10', dest => '10.10.11.1', dport => 22, action => 'REJECT' }

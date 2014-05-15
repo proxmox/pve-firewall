@@ -1,0 +1,8 @@
+
+
+[RULES]
+
+IN REJECT - +myipset +dmzhosts tcp 22
+
+IN ACCEPT - +myipset - tcp 22
+

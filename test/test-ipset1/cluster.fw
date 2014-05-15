@@ -1,0 +1,23 @@
+[ALIASES]
+
+myserveralias 10.2.0.111
+mynetworkalias 10.3.0.0/24
+
+[ipset myipset]
+
+192.168.0.1 
+172.16.0.10
+192.168.1.0/24
+mynetworkalias
+myserveralias
+
+[ipset dmzhosts]
+10.10.10.0/24
+10.10.11.1
+
+#global ipset blacklist
+[ipset blacklist]
+
+10.0.0.8
+192.168.0.0/24
+
