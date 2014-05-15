@@ -1563,8 +1563,6 @@ sub ruleset_generate_vm_ipsrules {
 sub generate_venet_rules_direction {
     my ($ruleset, $cluster_conf, $hostfw_conf, $vmfw_conf, $vmid, $ip, $direction) = @_;
 
-    parse_address_list($ip); # make sure we have a valid $ip list
-
     my $lc_direction = lc($direction);
 
     my $rules = $vmfw_conf->{rules};
@@ -2592,8 +2590,7 @@ sub compile {
     }
 
 
-    my $ipset_ruleset = {};
-    generate_ipset_chains($ipset_ruleset, $cluster_conf);
+    $cluster_conf->{ipset}->{venet0} = [];
 
     my $ruleset = {};
 
@@ -2610,8 +2607,8 @@ sub compile {
     ruleset_chain_add_conn_filters($ruleset, "PVEFW-FORWARD", "ACCEPT");
 
     ruleset_create_chain($ruleset, "PVEFW-VENET-OUT");
-    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i venet0 -j PVEFW-VENET-OUT");
-    ruleset_addrule($ruleset, "PVEFW-INPUT", "-i venet0 -j PVEFW-VENET-OUT");
+    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-i venet0 -m set --match-set PVEFW-venet0 src -j PVEFW-VENET-OUT");
+    ruleset_addrule($ruleset, "PVEFW-INPUT", "-i venet0 -m set --match-set PVEFW-venet0 src -j PVEFW-VENET-OUT");
 
     ruleset_create_chain($ruleset, "PVEFW-FWBR-IN");
     ruleset_chain_add_input_filters($ruleset, "PVEFW-FWBR-IN", $hostfw_options, $cluster_conf, $loglevel);
@@ -2624,7 +2621,7 @@ sub compile {
     ruleset_create_chain($ruleset, "PVEFW-VENET-IN");
     ruleset_chain_add_input_filters($ruleset, "PVEFW-VENET-IN", $hostfw_options, $cluster_conf, $loglevel);
 
-    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o venet0 -j PVEFW-VENET-IN");
+    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o venet0 -m set --match-set PVEFW-venet0 dst -j PVEFW-VENET-IN");
 
     generate_std_chains($ruleset, $hostfw_options);
 
@@ -2632,7 +2629,7 @@ sub compile {
 
     enable_host_firewall($ruleset, $hostfw_conf, $cluster_conf) if $hostfw_enable;
 
-    ruleset_addrule($ruleset, "PVEFW-OUTPUT", "-o venet0 -j PVEFW-VENET-IN");
+    ruleset_addrule($ruleset, "PVEFW-OUTPUT", "-o venet0 -m set --match-set PVEFW-venet0 dst -j PVEFW-VENET-IN");
 
     # generate firewall rules for QEMU VMs
     foreach my $vmid (keys %{$vmdata->{qemu}}) {
@@ -2666,6 +2663,16 @@ sub compile {
 	if ($conf->{ip_address} && $conf->{ip_address}->{value}) {
 	    my $ip = $conf->{ip_address}->{value};
 	    $ip =~ s/\s+/,/g;
+	    parse_address_list($ip); # make sure we have a valid $ip list
+
+	    my @ips = split(',', $ip);
+
+	    foreach my $singleip (@ips) {
+		my $venet0ipset = {};
+		$venet0ipset->{cidr} = $singleip;
+		push @{$cluster_conf->{ipset}->{venet0}}, $venet0ipset;
+	    }
+
 	    generate_venet_rules_direction($ruleset, $cluster_conf, $hostfw_conf, $vmfw_conf, $vmid, $ip, 'IN');
 	    generate_venet_rules_direction($ruleset, $cluster_conf, $hostfw_conf, $vmfw_conf, $vmid, $ip, 'OUT');
 	}
@@ -2688,6 +2695,9 @@ sub compile {
     if(ruleset_chain_exist($ruleset, "PVEFW-IPS")){
 	ruleset_insertrule($ruleset, "PVEFW-FORWARD", "-m conntrack --ctstate RELATED,ESTABLISHED -j PVEFW-IPS");
     }
+
+    my $ipset_ruleset = {};
+    generate_ipset_chains($ipset_ruleset, $cluster_conf);
 
     return ($ruleset, $ipset_ruleset);
 }
