@@ -1,0 +1,7 @@
+[OPTIONS]
+
+enable: 1
+
+[RULES]
+
+GROUP group1

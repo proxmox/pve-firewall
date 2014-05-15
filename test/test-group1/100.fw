@@ -1,0 +1,6 @@
+[RULES]
+
+IN ACCEPT - - - tcp 22 
+IN ACCEPT - - - tcp 80
+
+GROUP group2
