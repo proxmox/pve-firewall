@@ -7,6 +7,7 @@ use Data::Dumper;
 use PVE::Firewall;
 use Getopt::Long;
 use File::Basename;
+use Net::IP;
 
 my $mark;
 my $trace;
@@ -46,78 +47,102 @@ sub rule_match {
 
     $rule =~ s/^-A $chain // || die "got strange rule: $rule";
 
-    if ($rule =~ s/^-m conntrack\s*//) {
-	return undef; # simply ignore
-    }
+    while (length($rule)) {
 
-    if ($rule =~ s/^-m addrtype\s*//) {
-	return undef; # simply ignore
-    }
+	if ($rule =~ s/^-m conntrack\s*//) {
+	    return undef; # simply ignore
+	}
 
-    if ($rule =~ s/^-i (\S+)\s*//) {
-	my $devre = $1;
-	die "missing iface_in" if !$pkg->{iface_in};
-	return undef if !nf_dev_match($devre, $pkg->{iface_in});
-    }
-    if ($rule =~ s/^-o (\S+)\s*//) {
-	my $devre = $1;
-	die "missing iface_out" if !$pkg->{iface_out};
-	return undef if !nf_dev_match($devre, $pkg->{iface_out});
-    }
+	if ($rule =~ s/^-m addrtype\s*//) {
+	    return undef; # simply ignore
+	}
 
-    if ($rule =~ s/^-p (tcp|udp)\s*//) {
-	die "missing proto" if !$pkg->{proto};
-	return undef if $pkg->{proto} ne $1; # no match
-    }
+	if ($rule =~ s/^-i (\S+)\s*//) {
+	    my $devre = $1;
+	    die "missing iface_in" if !$pkg->{iface_in};
+	    return undef if !nf_dev_match($devre, $pkg->{iface_in});
+	    next;
+	}
 
-    if ($rule =~ s/^--dport (\d+):(\d+)\s*//) {
-	die "missing dport" if !$pkg->{dport};
-	return undef if ($pkg->{dport} < $1) || ($pkg->{dport} > $2); # no match
-    }
+	if ($rule =~ s/^-o (\S+)\s*//) {
+	    my $devre = $1;
+	    die "missing iface_out" if !$pkg->{iface_out};
+	    return undef if !nf_dev_match($devre, $pkg->{iface_out});
+	    next;
+	}
 
-    if ($rule =~ s/^--dport (\d+)\s*//) {
-	die "missing dport" if !$pkg->{dport};
-	return undef if $pkg->{dport} != $1; # no match
-    }
+	if ($rule =~ s/^-p (tcp|udp)\s*//) {
+	    die "missing proto" if !$pkg->{proto};
+	    return undef if $pkg->{proto} ne $1; # no match
+	    next;
+	}
 
-    if ($rule =~ s/^-s (\S+)\s*//) {
-	die "missing source" if !$pkg->{source};
-	return undef if $pkg->{source} ne $1; # no match
-    }
+	if ($rule =~ s/^--dport (\d+):(\d+)\s*//) {
+	    die "missing dport" if !$pkg->{dport};
+	    return undef if ($pkg->{dport} < $1) || ($pkg->{dport} > $2); # no match
+	    next;
+	}
+
+	if ($rule =~ s/^--dport (\d+)\s*//) {
+	    die "missing dport" if !$pkg->{dport};
+	    return undef if $pkg->{dport} != $1; # no match
+	    next;
+	}
+
+	if ($rule =~ s/^-s (\S+)\s*//) {
+	    die "missing source" if !$pkg->{source};
+	    my $ip = Net::IP->new($1);
+	    return undef if !$ip->overlaps(Net::IP->new($pkg->{source})); # no match
+	    next;
+	}
     
-    if ($rule =~ s/^-d (\S+)\s*//) {
-	die "missing destination" if !$pkg->{dest};
-	return undef if $pkg->{dest} ne $1; # no match
-    }
+	if ($rule =~ s/^-d (\S+)\s*//) {
+	    die "missing destination" if !$pkg->{dest};
+	    my $ip = Net::IP->new($1);
+	    return undef if !$ip->overlaps(Net::IP->new($pkg->{dest})); # no match
+	    next;
+	}
 
-    if ($rule =~ s/^-m mac ! --mac-source (\S+)\s*//) {
-	die "missing source mac" if !$pkg->{mac_source};
-	return undef if $pkg->{mac_source} eq $1; # no match
-    }
+	if ($rule =~ s/^-m mac ! --mac-source (\S+)\s*//) {
+	    die "missing source mac" if !$pkg->{mac_source};
+	    return undef if $pkg->{mac_source} eq $1; # no match
+	    next;
+	}
 
-    if ($rule =~ s/^-m physdev --physdev-is-bridged --physdev-in (\S+)\s*//) {
-	my $devre = $1;
-	return undef if !$pkg->{physdev_in};
-	return undef if !nf_dev_match($devre, $pkg->{physdev_in});
-    }
+	if ($rule =~ s/^-m physdev --physdev-is-bridged --physdev-in (\S+)\s*//) {
+	    my $devre = $1;
+	    return undef if !$pkg->{physdev_in};
+	    return undef if !nf_dev_match($devre, $pkg->{physdev_in});
+	    next;
+	}
 
-    if ($rule =~ s/^-m physdev --physdev-is-bridged --physdev-out (\S+)\s*//) {
-	my $devre = $1;
-	return undef if !$pkg->{physdev_out};
-	return undef if !nf_dev_match($devre, $pkg->{physdev_out});
-    }
+	if ($rule =~ s/^-m physdev --physdev-is-bridged --physdev-out (\S+)\s*//) {
+	    my $devre = $1;
+	    return undef if !$pkg->{physdev_out};
+	    return undef if !nf_dev_match($devre, $pkg->{physdev_out});
+	    next;
+	}
 
-    if ($rule =~ s/^-j MARK --set-mark (\d+)\s*$//) {
-	$mark = $1;
-	return undef;
-    }
+	if ($rule =~ s/^-m mark --mark (\d+)\s*//) {
+	    return undef if !defined($mark) || $mark != $1;
+	    next;
+	}
 
-    if ($rule =~ s/^-j (\S+)\s*$//) {
-	return (0, $1);
-    }
+	# final actions
+	if ($rule =~ s/^-j MARK --set-mark (\d+)\s*$//) {
+	    $mark = $1;
+	    return undef;
+	}
 
-    if ($rule =~ s/^-g (\S+)\s*$//) {
-	return (1, $1);
+	if ($rule =~ s/^-j (\S+)\s*$//) {
+	    return (0, $1);
+	}
+
+	if ($rule =~ s/^-g (\S+)\s*$//) {
+	    return (1, $1);
+	}
+
+	last;
     }
 
     die "unable to parse rule: $rule";
