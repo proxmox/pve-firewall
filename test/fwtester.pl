@@ -478,7 +478,7 @@ sub simulate_firewall {
 	$start_state = 'fwbr-out'; 
 	$pkg->{mac_source} = $from_info->{macaddr};
     } else {
-	die "implement me";
+	die "unable to parse \"from => '$from'\"\n";
     }
 
     my $target;
@@ -507,7 +507,7 @@ sub simulate_firewall {
 	$target = extract_vm_info($vmdata, $vmid);
 	$target->{iface} = $target->{tapdev};
     } else {
-	die "implement me";
+	die "unable to parse \"to => '$to'\"\n";
     }
 
     my ($res, $ic, $rc) = route_packet($ruleset, $ipset_ruleset, $pkg, 
