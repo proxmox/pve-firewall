@@ -1243,7 +1243,7 @@ sub ruleset_generate_cmdstr {
 		die "invalid security group name '$dest'\n";
 	    }
 	} elsif ($dest =~ m/^${ip_alias_pattern}$/){
-	    my $alias = lc($source);
+	    my $alias = lc($dest);
 	    my $e = $cluster_conf->{aliases}->{$alias};
 	    die "no such alias $dest" if !$e;
 	    push @cmd, "-d $e->{cidr}";
