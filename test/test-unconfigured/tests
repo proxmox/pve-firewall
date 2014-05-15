@@ -1,0 +1,5 @@
+{ to => 'ct200', action => 'ACCEPT' }
+{ to => 'ct201', action => 'DROP' }
+{ to => 'vm100', action => 'ACCEPT' }
+{ to => 'vm101', action => 'DROP' }
+
