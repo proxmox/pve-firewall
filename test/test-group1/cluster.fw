@@ -12,3 +12,7 @@ OUT REJECT - - tcp 443
 [GROUP group2]
 
 IN ACCEPT 192.168.3.0/24 - tcp 22
+
+[GROUP group3]
+
+IN ACCEPT 192.168.6.0/24 - tcp 22

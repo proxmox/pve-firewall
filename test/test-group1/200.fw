@@ -1,4 +1,7 @@
 [RULES]
 
-IN ACCEPT - - - tcp 22 
-IN ACCEPT - - - tcp 80
+IN ACCEPT - 192.168.2.1 - tcp 22 
+IN ACCEPT - 192.168.2.1 - tcp 80
+IN ACCEPT - 127.0.0.1 - tcp 80
+
+GROUP group3 venet
