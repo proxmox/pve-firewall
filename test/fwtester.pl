@@ -422,11 +422,11 @@ sub extract_vm_info {
 sub simulate_firewall {
     my ($ruleset, $ipset_ruleset, $vmdata, $test) = @_;
 
-    my $from = delete $test->{from} || die "missing 'from' field";
-    my $to = delete $test->{to} || die "missing 'to' field";
-    my $action = delete $test->{action} || die "missing 'action'";
+    my $from = $test->{from} || die "missing 'from' field";
+    my $to = $test->{to} || die "missing 'to' field";
+    my $action = $test->{action} || die "missing 'action'";
     
-    my $testid = delete $test->{id};
+    my $testid = $test->{id};
     
     die "from/to needs to be different" if $from eq $to;
 
@@ -439,6 +439,10 @@ sub simulate_firewall {
     };
 
     while (my ($k,$v) = each %$test) {
+	next if $k eq 'from';
+	next if $k eq 'to';
+	next if $k eq 'action';
+	next if $k eq 'id';
 	die "unknown attribute '$k'\n" if !exists($pkg->{$k});
 	$pkg->{$k} = $v;
     }
@@ -469,7 +473,7 @@ sub simulate_firewall {
 	my $vmid = $1;
 	$from_info = extract_ct_info($vmdata, $vmid);
 	if ($from_info->{ip_address}) {
-	    $pkg->{source} = $from_info->{ip_address};
+	    $pkg->{source} = $from_info->{ip_address} if !defined($pkg->{source});
 	    $start_state = 'venet-out';
 	} else {
 	    die "implement me";
@@ -553,7 +557,28 @@ sub run_tests {
 	    $trace = '';
 	    print Dumper($ruleset) if $debug;
 	    $testcount++;
-	    eval { simulate_firewall($ruleset, $ipset_ruleset, $vmdata, $test); };
+	    eval {
+		my @test_zones = qw(host outside nfvm vm100 ct200);
+		if (!defined($test->{from}) && !defined($test->{to})) {
+		    die "missing zone speification (from, to)\n";
+		} elsif (!defined($test->{to})) {
+		    foreach my $zone (@test_zones) {
+			next if $zone eq $test->{from};
+			$test->{to} = $zone;
+			add_trace("Set Zone: to => '$zone'\n"); 
+			simulate_firewall($ruleset, $ipset_ruleset, $vmdata, $test);
+		    }
+		} elsif (!defined($test->{from})) {
+		    foreach my $zone (@test_zones) {
+			next if $zone eq $test->{to};
+			$test->{from} = $zone;
+			add_trace("Set Zone: from => '$zone'\n"); 
+			simulate_firewall($ruleset, $ipset_ruleset, $vmdata, $test);
+		    }
+		} else {
+		    simulate_firewall($ruleset, $ipset_ruleset, $vmdata, $test);
+		}
+	    };
 	    if (my $err = $@) {
 
 		print Dumper($ruleset) if !$debug;
