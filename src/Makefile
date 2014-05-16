@@ -7,7 +7,14 @@ export DOCDIR=${PREFIX}/share/doc
 export MAN1DIR=${MANDIR}/man1/
 export PERLDIR=${PREFIX}/share/perl5
 
-all: pvefw-logger
+all: pve-firewall.1 pvefw-logger
+
+%.1: %.1.pod
+	rm -f $@
+	cat $<|pod2man -n $* -s 1 -r ${VERSION} -c "Proxmox Documentation" >$@
+
+pve-firewall.1.pod: pve-firewall
+	perl -I.. ./pve-firewall printmanpod >$@
 
 CPPFLAGS:=$(shell dpkg-buildflags --get CPPFLAGS)
 CFLAGS:=$(shell dpkg-buildflags --get CFLAGS)
@@ -19,11 +26,13 @@ pvefw-logger: pvefw-logger.c
 	$(shell pkg-config libnetfilter_log glib-2.0 gthread-2.0 --libs --cflags)
 
 .PHONY: install
-install: pve-firewall pvefw-logger
+install: pve-firewall pve-firewall.1 pvefw-logger
 	make -C PVE install
 	install -d -m 0755 ${DESTDIR}/${SBINDIR}
 	install -m 0755 pve-firewall ${DESTDIR}/${SBINDIR}
 	install -m 0755 --strip pvefw-logger ${DESTDIR}/${SBINDIR}
+	install -d ${MAN1DIR}
+	install -m 0644 pve-firewall.1 ${MAN1DIR}
 
 .PHONY: clean
 clean: 	

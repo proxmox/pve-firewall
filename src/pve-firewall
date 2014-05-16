@@ -251,7 +251,7 @@ __PACKAGE__->register_method ({
     name => 'stop',
     path => 'stop',
     method => 'POST',
-    description => "Stop firewall. This will remove all rules installed by this script. The host is unprotected afterwards.",
+    description => "Stop firewall. This removes all Proxmox VE related iptable rules. The host is unprotected afterwards.",
     parameters => {
     	additionalProperties => 0,
 	properties => {},
@@ -342,7 +342,7 @@ __PACKAGE__->register_method ({
     name => 'compile',
     path => 'compile',
     method => 'POST',
-    description => "Compile amd print firewall rules. This is only for testing.",
+    description => "Compile and print firewall rules. This is useful for testing.",
     parameters => {
     	additionalProperties => 0,
 	properties => {},
@@ -397,16 +397,14 @@ __END__
 
 =head1 NAME
                                           
-pvestatd - PVE Firewall Daemon
+pve-firewall - PVE Firewall Daemon
 
 =head1 SYNOPSIS
 
-pve-firewall
+=include synopsis
 
 =head1 DESCRIPTION
 
 This service updates iptables rules periodically.
 
-
-
-
+=include pve_copyright
