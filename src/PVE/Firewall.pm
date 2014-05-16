@@ -1728,9 +1728,13 @@ sub enable_host_firewall {
 
 sub generate_group_rules {
     my ($ruleset, $cluster_conf, $group) = @_;
-    die "no such security group '$group'\n" if !$cluster_conf->{groups}->{$group};
 
     my $rules = $cluster_conf->{groups}->{$group};
+
+    if (!$rules) {
+	warn "no such security group '$group'\n";
+	$rules = []; # create empty chain
+    }
 
     my $chain = "GROUP-${group}-IN";
 
