@@ -38,6 +38,7 @@ __PACKAGE__->register_method({
     description => "List security groups.",
     parameters => {
     	additionalProperties => 0,
+	properties => {},
     },
     returns => {
 	type => 'array',

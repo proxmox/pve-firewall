@@ -807,9 +807,8 @@ main(int argc, char *argv[])
     g_io_add_watch(nflog_ch, G_IO_IN, nflog_read_cb, NULL);
 
     GIOChannel *sig_ch = g_io_channel_unix_new(sigfd);
-    printf("TEST0: %p %d\n", sig_ch, sigfd);
     if (!g_io_add_watch(sig_ch, G_IO_IN, signal_read_cb, NULL)) {
-        printf("TEST1\n"); exit(-1);
+        exit(-1);
     }
 
     GThread *wthread = g_thread_new("log_writer_thread", log_writer_thread, NULL);

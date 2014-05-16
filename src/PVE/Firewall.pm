@@ -98,7 +98,6 @@ use Data::Dumper;
 my $nodename = PVE::INotify::nodename();
 
 my $pve_fw_lock_filename = "/var/lock/pvefw.lck";
-my $pve_fw_status_filename = "/var/lib/pve-firewall/pvefw.status";
 
 my $default_log_level = 'info';
 
@@ -2451,30 +2450,6 @@ sub round_powerof2 {
     return ++$int;
 }
 
-sub save_pvefw_status {
-    my ($status) = @_;
-
-    die "unknown status '$status' - internal error"
-	if $status !~ m/^(stopped|active)$/;
-
-    mkdir dirname($pve_fw_status_filename);
-    PVE::Tools::file_set_contents($pve_fw_status_filename, $status);
-}
-
-sub read_pvefw_status {
-
-    my $status = 'unknown';
-
-    return 'stopped' if ! -f $pve_fw_status_filename;
-
-    eval {
-	$status = PVE::Tools::file_get_contents($pve_fw_status_filename);
-    };
-    warn $@ if $@;
-
-    return $status;
-}
-
 sub load_clusterfw_conf {
     my ($filename) = @_;
 
@@ -2969,7 +2944,7 @@ sub remove_pvefw_chains {
 }
 
 sub update {
-    my ($start, $verbose) = @_;
+    my ($verbose) = @_;
 
     my $code = sub {
 
@@ -2978,9 +2953,7 @@ sub update {
 
 	my $enable = $cluster_options->{enable};
 
-	my $status = read_pvefw_status();
-
-	die "Firewall is disabled - cannot start\n" if !$enable && $start;
+	die "Firewall is disabled - cannot start\n" if !$enable;
 
 	if (!$enable) {
 	    PVE::Firewall::remove_pvefw_chains();
@@ -2992,14 +2965,7 @@ sub update {
 
 	my ($ruleset, $ipset_ruleset) = compile($cluster_conf, $hostfw_conf);
 
-	if ($start || $status eq 'active') {
-
-	    save_pvefw_status('active')	if ($status ne 'active');
-
-	    apply_ruleset($ruleset, $hostfw_conf, $ipset_ruleset, $verbose);
-	} else {
-	    print "Firewall not active (status = $status)\n" if $verbose;
-	}
+	apply_ruleset($ruleset, $hostfw_conf, $ipset_ruleset, $verbose);
     };
 
     run_locked($code);

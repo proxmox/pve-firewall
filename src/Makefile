@@ -19,10 +19,10 @@ pvefw-logger: pvefw-logger.c
 	$(shell pkg-config libnetfilter_log glib-2.0 gthread-2.0 --libs --cflags)
 
 .PHONY: install
-install: pvefw pvefw-logger
+install: pve-firewall pvefw-logger
 	make -C PVE install
 	install -d -m 0755 ${DESTDIR}/${SBINDIR}
-	install -m 0755 pvefw ${DESTDIR}/${SBINDIR}
+	install -m 0755 pve-firewall ${DESTDIR}/${SBINDIR}
 	install -m 0755 --strip pvefw-logger ${DESTDIR}/${SBINDIR}
 
 .PHONY: clean

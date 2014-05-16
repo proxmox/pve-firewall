@@ -1,0 +1,2 @@
+# Should pve-firewall run automatically on startup? (default: yes)
+START_FIREWALL=yes
