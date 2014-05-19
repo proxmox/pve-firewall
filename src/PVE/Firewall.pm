@@ -1000,7 +1000,10 @@ sub verify_rule {
 	raise_param_exc({ type => "unknown rule type '$type'"});
     }
 
-    # fixme: verify $rule->{iface}?
+    if ($rule->{iface}) {
+	eval { PVE::JSONSchema::pve_verify_iface($rule->{iface}); };
+	raise_param_exc({ iface => $@ }) if $@;
+    }	
 
     if ($rule->{macro}) {
 	my $preferred_name = $pve_fw_preferred_macro_names->{lc($rule->{macro})};
@@ -1764,9 +1767,11 @@ for (my $i = 0; $i < $MAX_NETS; $i++)  {
 }
 
 sub parse_fw_rule {
-    my ($line, $need_iface, $allow_groups) = @_;
+    my ($line, $allow_iface, $allow_groups) = @_;
 
-    my ($type, $action, $iface, $source, $dest, $proto, $dport, $sport);
+    my ($type, $action, $macro, $iface, $source, $dest, $proto, $dport, $sport);
+
+    chomp $line;
 
     # we can add single line comments to the end of the rule
     my $comment = decode('utf8', $1) if $line =~ s/#\s*(.*?)\s*$//;
@@ -1776,22 +1781,11 @@ sub parse_fw_rule {
 
     $enable = 0 if $line =~ s/^\|//;
 
-    my @data = split(/\s+/, $line);
-    my $expected_elements = $need_iface ? 8 : 7;
-
-    die "wrong number of rule elements\n" if scalar(@data) > $expected_elements;
-
-    if ($need_iface) {
-	($type, $action, $iface, $source, $dest, $proto, $dport, $sport) = @data
-    } else {
-	($type, $action, $source, $dest, $proto, $dport, $sport) =  @data;
-    }
-
-    die "incomplete rule\n" if ! ($type && $action);
-
-    my $macro;
-
-    $type = lc($type);
+    $line =~ s/^(\S+)\s+(\S+)\s*// ||
+ 	die "unable to parse rule: $line\n";
+    
+    $type = lc($1);
+    $action = $2;
 
     if ($type eq  'in' || $type eq 'out') {
 	if ($action =~ m/^(ACCEPT|DROP|REJECT)$/) {
@@ -1805,32 +1799,52 @@ sub parse_fw_rule {
 	    die "unknown action '$action'\n";
 	}
     } elsif ($type eq 'group') {
-	die "wrong number of rule elements\n" if scalar(@data) > 3;
 	die "groups disabled\n" if !$allow_groups;
-
 	die "invalid characters in group name\n" if $action !~ m/^${security_group_name_pattern}$/;
     } else {
 	die "unknown rule type '$type'\n";
     }
 
-    if ($need_iface) {
-	$iface = undef if $iface && $iface eq '-';
+    while (length($line)) {
+	if ($line =~ s/^-i (\S+)\s*//) {
+	    die "parameter -i not allowed\n" if !$allow_iface;
+	    $iface = $1;
+	    PVE::JSONSchema::pve_verify_iface($iface);
+	    next;
+	}
+
+	last if $type eq 'group';
+
+	if ($line =~ s/^-p (\S+)\s*//) {
+	    $proto = $1;
+	    pve_fw_verify_protocol_spec($proto);
+	    next;
+	}
+	if ($line =~ s/^-dport (\S+)\s*//) {
+	    $dport = $1;
+	    parse_port_name_number_or_range($dport);
+	    next;
+	}
+	if ($line =~ s/^-sport (\S+)\s*//) {
+	    $sport = $1;
+	    parse_port_name_number_or_range($sport);
+	    next;
+	}
+	if ($line =~ s/^-source (\S+)\s*//) {
+	    $source = $1;
+	    parse_address_list($source);
+	    next;
+	}
+	if ($line =~ s/^-dest (\S+)\s*//) {
+	    $dest = $1;
+	    parse_address_list($dest);
+	    next;
+	}
+
+	last;
     }
 
-    $proto = undef if $proto && $proto eq '-';
-    pve_fw_verify_protocol_spec($proto) if $proto;
-
-    $source = undef if $source && $source eq '-';
-    $dest = undef if $dest && $dest eq '-';
-
-    $dport = undef if $dport && $dport eq '-';
-    $sport = undef if $sport && $sport eq '-';
-
-    parse_port_name_number_or_range($dport) if defined($dport);
-    parse_port_name_number_or_range($sport) if defined($sport);
-
-    parse_address_list($source) if $source;
-    parse_address_list($dest) if $dest;
+    die "unable to parse rule parameters: $line\n" if length($line);
 
     return {
 	type => $type,
@@ -2218,7 +2232,7 @@ sub load_vmfw_conf {
 }
 
 my $format_rules = sub {
-    my ($rules, $need_iface) = @_;
+    my ($rules, $allow_iface) = @_;
 
     my $raw = '';
 
@@ -2231,14 +2245,16 @@ my $format_rules = sub {
 	    } else {
 		$raw .= " " . $rule->{action};
 	    }
-	    $raw .= " " . ($rule->{iface} || '-') if $need_iface;
+	    if ($allow_iface && $rule->{iface}) {
+		$raw .= " -i $rule->{iface}";
+	    }
 
 	    if ($rule->{type} ne  'group')  {
-		$raw .= " " . ($rule->{source} || '-');
-		$raw .= " " . ($rule->{dest} || '-');
-		$raw .= " " . ($rule->{proto} || '-');
-		$raw .= " " . ($rule->{dport} || '-');
-		$raw .= " " . ($rule->{sport} || '-');
+		$raw .= " -source $rule->{source}" if $rule->{source};
+		$raw .= " -dest $rule->{dest}" if $rule->{dest};
+		$raw .= " -p $rule->{proto}" if $rule->{proto};
+		$raw .= " -dport $rule->{dport}" if $rule->{dport};
+		$raw .= " -sport $rule->{sport}" if $rule->{sport};
 	    }
 
 	    $raw .= " # " . encode('utf8', $rule->{comment})

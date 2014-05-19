@@ -4,5 +4,5 @@ enable: 1
 
 [RULES]
 
-IN ACCEPT - - - tcp 22
-OUT REJECT - - - tcp 81
+IN ACCEPT -p tcp -dport 22
+OUT REJECT -p tcp -dport 81

@@ -2,7 +2,7 @@
 
 [RULES]
 
-IN REJECT - +myipset +dmzhosts tcp 22
+IN REJECT -source +myipset -dest +dmzhosts -p tcp -dport 22
 
-IN ACCEPT - +myipset - tcp 22
+IN ACCEPT -source +myipset -p tcp -dport 22
 

@@ -4,15 +4,15 @@ enable: 1
 
 [GROUP group1]
 
-IN ACCEPT 192.168.2.0/24 - tcp 22 
-IN REJECT 192.168.2.0/24 - tcp 80 
-OUT REJECT 192.168.2.0/24 - tcp 80 
-OUT REJECT - - tcp 443 
+IN ACCEPT -source 192.168.2.0/24 -p tcp -dport 22 
+IN REJECT -source 192.168.2.0/24 -p tcp -dport 80 
+OUT REJECT -source 192.168.2.0/24 -p tcp -dport 80 
+OUT REJECT -p tcp -dport 443 
 
 [GROUP group2]
 
-IN ACCEPT 192.168.3.0/24 - tcp 22
+IN ACCEPT -source 192.168.3.0/24 -p tcp -dport 22
 
 [GROUP group3]
 
-IN ACCEPT 192.168.6.0/24 - tcp 22
+IN ACCEPT -source 192.168.6.0/24 -p tcp -dport 22

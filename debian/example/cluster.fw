@@ -14,21 +14,21 @@ mynetworkalias 10.0.0.0/24
 
 [RULES]
 
-IN  SSH(ACCEPT) vmbr0
+IN  SSH(ACCEPT) -i vmbr0
 
 [group group1]
 
-IN  ACCEPT - - tcp 22 -
-OUT ACCEPT - - tcp 80 -
-OUT ACCEPT - - icmp - -
+IN  ACCEPT -p tcp -dport 22
+OUT ACCEPT -p tcp -dport 80
+OUT ACCEPT -p icmp
 
 [group group3]
 
-IN  ACCEPT 10.0.0.1 
-IN  ACCEPT 10.0.0.1-10.0.0.10
-IN  ACCEPT 10.0.0.1,10.0.0.2,10.0.0.3
-IN  ACCEPT +mynetgroup 
-IN  ACCEPT myserveralias
+IN  ACCEPT -source 10.0.0.1 
+IN  ACCEPT -source 10.0.0.1-10.0.0.10
+IN  ACCEPT -source 10.0.0.1,10.0.0.2,10.0.0.3
+IN  ACCEPT -source +mynetgroup 
+IN  ACCEPT -source myserveralias
 
 
 [ipset myipset]
