@@ -157,9 +157,8 @@ my $pve_fw_macros = {
 	{ action => 'PARAM', proto => 'tcp', dport => '6277' },
     ],
     'DHCPfwd' => [
-	"Forwarded DHCP traffic (bidirectional)",
+	"Forwarded DHCP traffic",
 	{ action => 'PARAM', proto => 'udp', dport => '67:68', sport => '67:68' },
-	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'udp', dport => '67:68', sport => '67:68' },
     ],
     'DNS' => [
 	"Domain Name System traffic (upd and tcp)",
@@ -186,9 +185,8 @@ my $pve_fw_macros = {
 	{ action => 'PARAM', proto => 'udp', dport => '1080' },
     ],
     'GRE' => [
-	"Generic Routing Encapsulation tunneling protocol (bidirectional)",
+	"Generic Routing Encapsulation tunneling protocol",
 	{ action => 'PARAM', proto => '47' },
-	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => '47' },
     ],
     'Git' => [
 	"Git distributed revision control traffic",
@@ -223,32 +221,24 @@ my $pve_fw_macros = {
 	{ action => 'PARAM', proto => 'tcp', dport => '993' },
     ],
     'IPIP' => [
-	"IPIP capsulation traffic (bidirectional)",
+	"IPIP capsulation traffic",
 	{ action => 'PARAM', proto => '94' },
-	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => '94' },
     ],
     'IPsec' => [
-	"IPsec traffic (bidirectional)",
+	"IPsec traffic",
 	{ action => 'PARAM', proto => 'udp', dport => '500', sport => '500' },
 	{ action => 'PARAM', proto => '50' },
-	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'udp', dport => '500', sport => '500' },
-	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => '50' },
     ],
     'IPsecah' => [
-	"IPsec authentication (AH) traffic (bidirectional)",
+	"IPsec authentication (AH) traffic",
 	{ action => 'PARAM', proto => 'udp', dport => '500', sport => '500' },
 	{ action => 'PARAM', proto => '51' },
-	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'udp', dport => '500', sport => '500' },
-	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => '51' },
     ],
     'IPsecnat' => [
-	"IPsec traffic and Nat-Traversal (bidirectional)",
+	"IPsec traffic and Nat-Traversal",
 	{ action => 'PARAM', proto => 'udp', dport => '500' },
 	{ action => 'PARAM', proto => 'udp', dport => '4500' },
 	{ action => 'PARAM', proto => '50' },
-	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'udp', dport => '500' },
-	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'udp', dport => '4500' },
-	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => '50' },
     ],
     'IRC' => [
 	"Internet Relay Chat traffic",
@@ -261,7 +251,6 @@ my $pve_fw_macros = {
     'L2TP' => [
 	"Layer 2 Tunneling Protocol traffic",
 	{ action => 'PARAM', proto => 'udp', dport => '1701' },
-	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'udp', dport => '1701' },
     ],
     'LDAP' => [
 	"Lightweight Directory Access Protocol traffic",
@@ -305,11 +294,6 @@ my $pve_fw_macros = {
 	"Network Time Protocol (ntpd)",
 	{ action => 'PARAM', proto => 'udp', dport => '123' },
     ],
-    'NTPbi' => [
-	"Bi-directional NTP (for NTP peers)",
-	{ action => 'PARAM', proto => 'udp', dport => '123' },
-	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'udp', dport => '123' },
-    ],
     'OSPF' => [
 	"OSPF multicast traffic",
 	{ action => 'PARAM', proto => '89' },
@@ -334,7 +318,6 @@ my $pve_fw_macros = {
     'PPtP' => [
 	"Point-to-Point Tunneling Protocol",
 	{ action => 'PARAM', proto => '47' },
-	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => '47' },
 	{ action => 'PARAM', proto => 'tcp', dport => '1723' },
     ],
     'Ping' => [
@@ -353,10 +336,9 @@ my $pve_fw_macros = {
 	"Microsoft Remote Desktop Protocol traffic",
 	{ action => 'PARAM', proto => 'tcp', dport => '3389' },
     ],
-    'RIPbi' => [
+    'RIP' => [
 	"Routing Information Protocol (bidirectional)",
 	{ action => 'PARAM', proto => 'udp', dport => '520' },
-	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'udp', dport => '520' },
     ],
     'RNDC' => [
 	"BIND remote management protocol",
@@ -384,17 +366,6 @@ my $pve_fw_macros = {
 	{ action => 'PARAM', proto => 'udp', dport => '137:139' },
 	{ action => 'PARAM', proto => 'udp', dport => '1024:65535', sport => '137' },
 	{ action => 'PARAM', proto => 'tcp', dport => '135,139,445' },
-    ],
-    'SMBBI' => [
-	"Microsoft SMB traffic (bidirectional)",
-	{ action => 'PARAM', proto => 'udp', dport => '135,445' },
-	{ action => 'PARAM', proto => 'udp', dport => '137:139' },
-	{ action => 'PARAM', proto => 'udp', dport => '1024:65535', sport => '137' },
-	{ action => 'PARAM', proto => 'tcp', dport => '135,139,445' },
-	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'udp', dport => '135,445' },
-	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'udp', dport => '137:139' },
-	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'udp', dport => '1024:65535', sport => '137' },
-	{ action => 'PARAM', source => 'DEST', dest => 'SOURCE', proto => 'tcp', dport => '135,139,445' },
     ],
     'SMBswat' => [
 	"Samba Web Administration Tool",
