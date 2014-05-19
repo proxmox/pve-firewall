@@ -73,16 +73,6 @@ my $option_properties = {
 	type => 'boolean',
 	optional => 1,
     },
-    allow_bridge_route => {
-	description => "Enable firewall when bridges contains IP address. The firewall is not fully functional in that case, so you need to enable that explicitly",
-	type => 'boolean',
-	optional => 1,
-    },
-    optimize => {
-	description => "Allow rules processing speed optimizations.",
-	type => 'boolean',
-	optional => 1,
-    },
     nf_conntrack_max => {
 	description => "Maximum number of tracked connections.",
 	type => 'integer',
