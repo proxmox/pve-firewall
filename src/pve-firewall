@@ -114,6 +114,10 @@ sub run_server {
 
     delete $ENV{RESTART_PVE_FIREWALL};
 
+    PVE::Cluster::cfs_update();
+    
+    PVE::Firewall::init();
+
     if (!$param->{debug}) {
 	open STDIN,  '</dev/null' || die "can't read /dev/null";
 	open STDOUT, '>/dev/null' || die "can't write /dev/null";

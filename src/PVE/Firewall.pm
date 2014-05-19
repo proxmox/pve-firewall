@@ -2928,6 +2928,16 @@ sub remove_pvefw_chains {
     iptables_restore_cmdlist($cmdlist);
 }
 
+sub init {
+    my $cluster_conf = load_clusterfw_conf();
+    my $cluster_options = $cluster_conf->{options};
+    my $enable = $cluster_options->{enable};
+
+    return if !$enable;
+
+    # load required modules here
+}
+
 sub update {
     my ($verbose) = @_;
 
@@ -2955,6 +2965,5 @@ sub update {
 
     run_locked($code);
 }
-
 
 1;
