@@ -529,6 +529,8 @@ sub simulate_firewall {
 	die "unable to parse \"from => '$from'\"\n";
     }
 
+    $pkg->{source} = '100.200.3.4' if !defined($pkg->{source});
+
     my $target;
 
     if ($to eq 'host') {

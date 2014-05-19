@@ -438,8 +438,8 @@ my $pve_fw_macros = {
 	{ action => 'PARAM', proto => 'icmp', dport => 'echo-request' },
     ],
     'VNC' => [
-	"VNC traffic for VNC display's 0 - 9",
-	{ action => 'PARAM', proto => 'tcp', dport => '5900:5909' },
+	"VNC traffic for VNC display's 0 - 99",
+	{ action => 'PARAM', proto => 'tcp', dport => '5900:5999' },
     ],
     'VNCL' => [
 	"VNC traffic from Vncservers to Vncviewers in listen mode",
@@ -685,6 +685,55 @@ sub get_etc_protocols {
     $etc_protocols = $protocols;
 
     return $etc_protocols;
+}
+
+my $ipv4_mask_hash_clusternet = {
+    '255.255.0.0' => 16,
+    '255.255.128.0' => 17,
+    '255.255.192.0' => 18,
+    '255.255.224.0' => 19,
+    '255.255.240.0' => 20,
+    '255.255.248.0' => 21,
+    '255.255.252.0' => 22,
+    '255.255.254.0' => 23,
+    '255.255.255.0' => 24,
+    '255.255.255.128' => 25,
+    '255.255.255.192' => 26,
+    '255.255.255.224' => 27,
+    '255.255.255.240' => 28,
+    '255.255.255.248' => 29,
+    '255.255.255.252' => 30,
+};
+
+my $cluster_network;
+
+sub get_cluster_network {
+
+    return $cluster_network if defined($cluster_network);
+
+    eval {
+	my $nodename = PVE::INotify::nodename();
+
+	my $ip = PVE::Cluster::remote_node_ip($nodename);
+
+	my $testip = Net::IP->new($ip);
+   
+	my $routes = PVE::ProcFSTools::read_proc_net_route();
+	foreach my $entry (@$routes) {
+	    my $mask = $ipv4_mask_hash_clusternet->{$entry->{mask}};
+	    next if !defined($mask);
+	    return if $mask eq '0.0.0.0';
+	    my $cidr = "$entry->{dest}/$mask";
+	    my $testnet = Net::IP->new($cidr);
+	    if ($testnet->overlaps($testip)) {
+		$cluster_network = $cidr;
+		return;
+	    }
+	}
+    };
+    warn $@ if $@;
+
+    return $cluster_network;
 }
 
 sub parse_address_list {
@@ -1634,6 +1683,15 @@ sub enable_host_firewall {
 
     ruleset_chain_add_conn_filters($ruleset, $chain, 'ACCEPT');
     ruleset_chain_add_input_filters($ruleset, $chain, $options, $cluster_conf, $loglevel);
+
+    my $clusternet = get_cluster_network();
+
+    if ($clusternet) {
+	ruleset_addrule($ruleset, $chain, "-s $clusternet -p tcp --dport 8006 -j ACCEPT");  # PVE API
+	ruleset_addrule($ruleset, $chain, "-s $clusternet -p tcp --dport 5900:5999 -j ACCEPT");  # PVE VNC Console 
+	ruleset_addrule($ruleset, $chain, "-s $clusternet -p tcp --dport 3128 -j ACCEPT");  # SPICE Proxy
+	ruleset_addrule($ruleset, $chain, "-s $clusternet -p tcp --dport 22 -j ACCEPT");  # SSH
+    }
 
     ruleset_addrule($ruleset, $chain, "-m addrtype --dst-type MULTICAST -j ACCEPT");
     ruleset_addrule($ruleset, $chain, "-p udp -m conntrack --ctstate NEW --dport 5404:5405 -j ACCEPT");
