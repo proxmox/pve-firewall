@@ -99,7 +99,7 @@ my $nodename = PVE::INotify::nodename();
 
 my $pve_fw_lock_filename = "/var/lock/pvefw.lck";
 
-my $default_log_level = 'info';
+my $default_log_level = 'nolog'; # avoid logs by default
 
 my $log_level_hash = {
     debug => 7,
