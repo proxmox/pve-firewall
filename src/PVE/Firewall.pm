@@ -1426,7 +1426,7 @@ sub ruleset_chain_add_input_filters {
 }
 
 sub ruleset_create_vm_chain {
-    my ($ruleset, $chain, $options, $host_options, $macaddr, $direction) = @_;
+    my ($ruleset, $chain, $options, $macaddr, $direction) = @_;
 
     ruleset_create_chain($ruleset, $chain);
     my $accept = generate_nfqueue($options);
@@ -1534,19 +1534,18 @@ sub ruleset_generate_vm_ipsrules {
 }
 
 sub generate_venet_rules_direction {
-    my ($ruleset, $cluster_conf, $hostfw_conf, $vmfw_conf, $vmid, $ip, $direction) = @_;
+    my ($ruleset, $cluster_conf, $vmfw_conf, $vmid, $ip, $direction) = @_;
 
     my $lc_direction = lc($direction);
 
     my $rules = $vmfw_conf->{rules};
 
     my $options = $vmfw_conf->{options};
-    my $hostfw_options = $vmfw_conf->{options};
     my $loglevel = get_option_log_level($options, "log_level_${lc_direction}");
 
     my $chain = "venet0-$vmid-$direction";
 
-    ruleset_create_vm_chain($ruleset, $chain, $options, $hostfw_options, undef, $direction);
+    ruleset_create_vm_chain($ruleset, $chain, $options, undef, $direction);
 
     ruleset_generate_vm_rules($ruleset, $rules, $cluster_conf, $chain, 'venet', $direction);
 
@@ -1577,19 +1576,18 @@ sub generate_venet_rules_direction {
 }
 
 sub generate_tap_rules_direction {
-    my ($ruleset, $cluster_conf, $hostfw_conf, $iface, $netid, $macaddr, $vmfw_conf, $vmid, $direction) = @_;
+    my ($ruleset, $cluster_conf, $iface, $netid, $macaddr, $vmfw_conf, $vmid, $direction) = @_;
 
     my $lc_direction = lc($direction);
 
     my $rules = $vmfw_conf->{rules};
 
     my $options = $vmfw_conf->{options};
-    my $hostfw_options = $hostfw_conf->{options};
     my $loglevel = get_option_log_level($options, "log_level_${lc_direction}");
 
     my $tapchain = "$iface-$direction";
 
-    ruleset_create_vm_chain($ruleset, $tapchain, $options, $hostfw_options, $macaddr, $direction);
+    ruleset_create_vm_chain($ruleset, $tapchain, $options, $macaddr, $direction);
 
     ruleset_generate_vm_rules($ruleset, $rules, $cluster_conf, $tapchain, $netid, $direction, $options);
 
@@ -2607,9 +2605,9 @@ sub compile {
 	    my $iface = "tap${vmid}i$1";
 
 	    my $macaddr = $net->{macaddr};
-	    generate_tap_rules_direction($ruleset, $cluster_conf, $hostfw_conf, $iface, $netid, $macaddr,
+	    generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
 					 $vmfw_conf, $vmid, 'IN');
-	    generate_tap_rules_direction($ruleset, $cluster_conf, $hostfw_conf, $iface, $netid, $macaddr,
+	    generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
 					 $vmfw_conf, $vmid, 'OUT');
 	}
     }
@@ -2635,8 +2633,8 @@ sub compile {
 		push @{$cluster_conf->{ipset}->{venet0}}, $venet0ipset;
 	    }
 
-	    generate_venet_rules_direction($ruleset, $cluster_conf, $hostfw_conf, $vmfw_conf, $vmid, $ip, 'IN');
-	    generate_venet_rules_direction($ruleset, $cluster_conf, $hostfw_conf, $vmfw_conf, $vmid, $ip, 'OUT');
+	    generate_venet_rules_direction($ruleset, $cluster_conf, $vmfw_conf, $vmid, $ip, 'IN');
+	    generate_venet_rules_direction($ruleset, $cluster_conf, $vmfw_conf, $vmid, $ip, 'OUT');
 	}
 
 	if ($conf->{netif} && $conf->{netif}->{value}) {
@@ -2646,9 +2644,9 @@ sub compile {
 
 		my $macaddr = $d->{mac};
 		my $iface = $d->{host_ifname};
-		generate_tap_rules_direction($ruleset, $cluster_conf, $hostfw_conf, $iface, $netid, $macaddr,
+		generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
 					     $vmfw_conf, $vmid, 'IN');
-		generate_tap_rules_direction($ruleset, $cluster_conf, $hostfw_conf, $iface, $netid, $macaddr,
+		generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
 					     $vmfw_conf, $vmid, 'OUT');
 	    }
 	}
