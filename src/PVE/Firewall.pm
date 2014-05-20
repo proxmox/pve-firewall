@@ -1684,20 +1684,6 @@ sub enable_host_firewall {
     ruleset_chain_add_conn_filters($ruleset, $chain, 'ACCEPT');
     ruleset_chain_add_input_filters($ruleset, $chain, $options, $cluster_conf, $loglevel);
 
-    my $clusternet = get_cluster_network();
-
-    if ($clusternet) {
-	ruleset_addrule($ruleset, $chain, "-s $clusternet -p tcp --dport 8006 -j ACCEPT");  # PVE API
-	ruleset_addrule($ruleset, $chain, "-s $clusternet -p tcp --dport 5900:5999 -j ACCEPT");  # PVE VNC Console 
-	ruleset_addrule($ruleset, $chain, "-s $clusternet -p tcp --dport 3128 -j ACCEPT");  # SPICE Proxy
-	ruleset_addrule($ruleset, $chain, "-s $clusternet -p tcp --dport 22 -j ACCEPT");  # SSH
- 
-	# corosync
-	my $corosync_rule = "-p udp -m conntrack --ctstate NEW --dport 5404:5405 -j ACCEPT"
-	ruleset_addrule($ruleset, $chain, "-s $clusternet -d $clusternet $corosync_rule");
-	ruleset_addrule($ruleset, $chain, "-s $clusternet -m addrtype --dst-type MULTICAST $corosync_rule");
-    }
-
     # we use RETURN because we need to check also tap rules
     my $accept_action = 'RETURN';
 
@@ -1711,6 +1697,21 @@ sub enable_host_firewall {
 				  undef, $cluster_conf);
 	}
 	delete $rule->{iface_in};
+    }
+   
+    my $clusternet = get_cluster_network();
+
+    # allow standard traffic on cluster network
+    if ($clusternet) {
+	ruleset_addrule($ruleset, $chain, "-s $clusternet -p tcp --dport 8006 -j ACCEPT");  # PVE API
+	ruleset_addrule($ruleset, $chain, "-s $clusternet -p tcp --dport 5900:5999 -j ACCEPT");  # PVE VNC Console 
+	ruleset_addrule($ruleset, $chain, "-s $clusternet -p tcp --dport 3128 -j ACCEPT");  # SPICE Proxy
+	ruleset_addrule($ruleset, $chain, "-s $clusternet -p tcp --dport 22 -j ACCEPT");  # SSH
+ 
+	# corosync
+	my $corosync_rule = "-p udp -m conntrack --ctstate NEW --dport 5404:5405 -j ACCEPT"
+	ruleset_addrule($ruleset, $chain, "-s $clusternet -d $clusternet $corosync_rule");
+	ruleset_addrule($ruleset, $chain, "-s $clusternet -m addrtype --dst-type MULTICAST $corosync_rule");
     }
 
     # implement input policy
@@ -1727,12 +1728,6 @@ sub enable_host_firewall {
 
     ruleset_chain_add_conn_filters($ruleset, $chain, 'ACCEPT');
 
-    if ($clusternet) {
-	my $corosync_rule = "-p udp -m conntrack --ctstate NEW --dport 5404:5405 -j ACCEPT";
-	ruleset_addrule($ruleset, $chain, "-s $clusternet -d $clusternet $corosync_rule");
-	ruleset_addrule($ruleset, $chain, "-s $clusternet -m addrtype --dst-type MULTICAST $corosync_rule");
-    }
-
     # we use RETURN because we may want to check other thigs later
     $accept_action = 'RETURN';
 
@@ -1746,6 +1741,16 @@ sub enable_host_firewall {
 				  undef, $cluster_conf);
 	}
 	delete $rule->{iface_out};
+    }
+
+    # allow standard traffic on cluster network
+    if ($clusternet) {
+	ruleset_addrule($ruleset, $chain, "-d $clusternet -p tcp --dport 8006 -j ACCEPT");  # PVE API
+	ruleset_addrule($ruleset, $chain, "-d $clusternet -p tcp --dport 22 -j ACCEPT");  # SSH
+ 
+	my $corosync_rule = "-p udp -m conntrack --ctstate NEW --dport 5404:5405 -j ACCEPT";
+	ruleset_addrule($ruleset, $chain, "-s $clusternet -d $clusternet $corosync_rule");
+	ruleset_addrule($ruleset, $chain, "-s $clusternet -m addrtype --dst-type MULTICAST $corosync_rule");
     }
 
     # implement output policy
