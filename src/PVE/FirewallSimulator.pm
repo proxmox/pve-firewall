@@ -80,31 +80,33 @@ sub rule_match {
 	    
 	    next if $cstate =~ m/NEW/;
 	    
-	    die "please implement cstate test '$cstate'";
+	    die "cstate test '$cstate' not implemented\n";
 	}
 
 	if ($rule =~ s/^-m addrtype --src-type (\S+)\s*//) {
 	    my $atype = $1;
-	    die "missing srctype" if !$pkg->{srctype};
+	    die "missing source address type (srctype)\n" 
+		if !$pkg->{srctype};
 	    return undef if $atype ne $pkg->{srctype};
 	}
 
 	if ($rule =~ s/^-m addrtype --dst-type (\S+)\s*//) {
 	    my $atype = $1;
-	    die "missing dsttype" if !$pkg->{dsttype};
+	    die "missing destination address type (dsttype)\n" 
+		if !$pkg->{dsttype};
 	    return undef if $atype ne $pkg->{dsttype};
 	}
 
 	if ($rule =~ s/^-i (\S+)\s*//) {
 	    my $devre = $1;
-	    die "missing iface_in" if !$pkg->{iface_in};
+	    die "missing interface (iface_in)\n" if !$pkg->{iface_in};
 	    return undef if !nf_dev_match($devre, $pkg->{iface_in});
 	    next;
 	}
 
 	if ($rule =~ s/^-o (\S+)\s*//) {
 	    my $devre = $1;
-	    die "missing iface_out" if !$pkg->{iface_out};
+	    die "missing interface (iface_out)\n" if !$pkg->{iface_out};
 	    return undef if !nf_dev_match($devre, $pkg->{iface_out});
 	    next;
 	}

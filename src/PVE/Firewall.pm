@@ -1971,7 +1971,7 @@ sub parse_clusterfw_option {
     return ($opt, $value);
 }
 
-sub parse_clusterfw_alias {
+sub parse_alias {
     my ($line) = @_;
 
     # we can add single line comments to the end of the line
@@ -1995,7 +1995,11 @@ sub parse_clusterfw_alias {
 sub parse_vm_fw_rules {
     my ($filename, $fh) = @_;
 
-    my $res = { rules => [], options => {}};
+    my $res = { 
+	rules => [], 
+	options => {},
+	aliases => {},
+    };
 
     my $section;
 
@@ -2022,6 +2026,15 @@ sub parse_vm_fw_rules {
 	    eval {
 		my ($opt, $value) = parse_vmfw_option($line);
 		$res->{options}->{$opt} = $value;
+	    };
+	    warn "$prefix: $@" if $@;
+	    next;
+	}
+
+	if ($section eq 'aliases') {
+	    eval {
+		my $data = parse_alias($line);
+		$res->{aliases}->{lc($data->{name})} = $data;
 	    };
 	    warn "$prefix: $@" if $@;
 	    next;
@@ -2159,7 +2172,7 @@ sub parse_cluster_fw_rules {
 	    warn "$prefix: $@" if $@;
 	} elsif ($section eq 'aliases') {
 	    eval {
-		my $data = parse_clusterfw_alias($line);
+		my $data = parse_alias($line);
 		$res->{aliases}->{lc($data->{name})} = $data;
 	    };
 	    warn "$prefix: $@" if $@;
@@ -2369,6 +2382,9 @@ sub save_vmfw_conf {
 
     my $options = $vmfw_conf->{options};
     $raw .= &$format_options($options) if scalar(keys %$options);
+
+    my $aliases = $vmfw_conf->{aliases};
+    $raw .= &$format_aliases($aliases) if scalar(keys %$aliases);
 
     my $rules = $vmfw_conf->{rules} || [];
     if (scalar(@$rules)) {

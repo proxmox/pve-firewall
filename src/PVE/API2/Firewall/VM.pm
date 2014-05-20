@@ -6,6 +6,7 @@ use PVE::JSONSchema qw(get_standard_option);
 use PVE::Cluster;
 use PVE::Firewall;
 use PVE::API2::Firewall::Rules;
+use PVE::API2::Firewall::Aliases;
 
 use Data::Dumper; # fixme: remove
 
@@ -14,6 +15,11 @@ use base qw(PVE::RESTHandler);
 __PACKAGE__->register_method ({
     subclass => "PVE::API2::Firewall::VMRules",  
     path => 'rules',
+});
+
+__PACKAGE__->register_method ({
+    subclass => "PVE::API2::Firewall::VMAliases",  
+    path => 'aliases',
 });
 
 __PACKAGE__->register_method({
