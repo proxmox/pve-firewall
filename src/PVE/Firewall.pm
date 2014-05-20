@@ -1752,8 +1752,8 @@ sub enable_host_firewall {
 	ruleset_addrule($ruleset, $chain, "-d $clusternet -p tcp --dport 22 -j $accept_action");  # SSH
  
 	my $corosync_rule = "-p udp -m conntrack --ctstate NEW --dport 5404:5405 -j $accept_action";
-	ruleset_addrule($ruleset, $chain, "-s $clusternet -d $clusternet $corosync_rule");
-	ruleset_addrule($ruleset, $chain, "-s $clusternet -m addrtype --dst-type MULTICAST $corosync_rule");
+	ruleset_addrule($ruleset, $chain, "-d $clusternet $corosync_rule");
+	ruleset_addrule($ruleset, $chain, "-m addrtype --dst-type MULTICAST $corosync_rule");
     }
 
     # implement output policy
