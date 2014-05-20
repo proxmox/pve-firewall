@@ -1750,6 +1750,8 @@ sub enable_host_firewall {
     if ($clusternet) {
 	ruleset_addrule($ruleset, $chain, "-d $clusternet -p tcp --dport 8006 -j $accept_action");  # PVE API
 	ruleset_addrule($ruleset, $chain, "-d $clusternet -p tcp --dport 22 -j $accept_action");  # SSH
+	ruleset_addrule($ruleset, $chain, "-d $clusternet -p tcp --dport 5900:5999 -j $accept_action");  # PVE VNC Console 
+	ruleset_addrule($ruleset, $chain, "-d $clusternet -p tcp --dport 3128 -j $accept_action");  # SPICE Proxy
  
 	my $corosync_rule = "-p udp -m conntrack --ctstate NEW --dport 5404:5405 -j $accept_action";
 	ruleset_addrule($ruleset, $chain, "-d $clusternet $corosync_rule");
