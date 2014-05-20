@@ -1695,7 +1695,6 @@ sub enable_host_firewall {
 
     ruleset_addrule($ruleset, $chain, "-m addrtype --dst-type MULTICAST -j ACCEPT");
     ruleset_addrule($ruleset, $chain, "-p udp -m conntrack --ctstate NEW --dport 5404:5405 -j ACCEPT");
-    ruleset_addrule($ruleset, $chain, "-p udp -m udp --dport 9000 -j ACCEPT");  #corosync
 
     # we use RETURN because we need to check also tap rules
     my $accept_action = 'RETURN';
@@ -1728,7 +1727,6 @@ sub enable_host_firewall {
 
     ruleset_addrule($ruleset, $chain, "-m addrtype --dst-type MULTICAST -j ACCEPT");
     ruleset_addrule($ruleset, $chain, "-p udp -m conntrack --ctstate NEW --dport 5404:5405 -j ACCEPT");
-    ruleset_addrule($ruleset, $chain, "-p udp -m udp --dport 9000 -j ACCEPT"); #corosync
 
     # we use RETURN because we may want to check other thigs later
     $accept_action = 'RETURN';
