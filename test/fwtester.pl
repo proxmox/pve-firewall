@@ -500,7 +500,7 @@ sub simulate_firewall {
 
     my $start_state;
 
-    my $host_ip = '10.11.12.13';
+    my $host_ip = '172.16.1.2';
 
     if ($from eq 'host') {
 	$from_info->{type} = 'host';
@@ -594,6 +594,8 @@ sub run_tests {
     $testfile = 'tests' if !$testfile;
 
     $vmdata->{testdir} = $testdir;
+
+    PVE::Firewall::cluster_network('172.16.1.0/24');
 
     my ($ruleset, $ipset_ruleset) = 
 	PVE::Firewall::compile(undef, undef, $vmdata);
