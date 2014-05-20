@@ -705,11 +705,14 @@ my $ipv4_mask_hash_clusternet = {
     '255.255.255.252' => 30,
 };
 
-my $cluster_network;
+my $__cluster_network;
 
-sub get_cluster_network {
+sub cluster_network {
+    my ($new_value) = @_;
 
-    return $cluster_network if defined($cluster_network);
+    $__cluster_network = $new_value if defined($new_value);
+
+    return $__cluster_network if defined($__cluster_network);
 
     eval {
 	my $nodename = PVE::INotify::nodename();
@@ -726,14 +729,14 @@ sub get_cluster_network {
 	    my $cidr = "$entry->{dest}/$mask";
 	    my $testnet = Net::IP->new($cidr);
 	    if ($testnet->overlaps($testip)) {
-		$cluster_network = $cidr;
+		$__cluster_network = $cidr;
 		return;
 	    }
 	}
     };
     warn $@ if $@;
 
-    return $cluster_network;
+    return $__cluster_network;
 }
 
 sub parse_address_list {
@@ -1699,7 +1702,7 @@ sub enable_host_firewall {
 	delete $rule->{iface_in};
     }
    
-    my $clusternet = get_cluster_network();
+    my $clusternet = cluster_network();
 
     # allow standard traffic on cluster network
     if ($clusternet) {
