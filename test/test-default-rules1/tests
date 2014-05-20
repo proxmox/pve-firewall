@@ -1,0 +1,37 @@
+{ from => 'outside', to => 'host', action => 'DROP' }
+{ from => 'host', to => 'outside', action => 'DROP' }
+
+# traffic to other node
+{ from => 'host', to => 'outside', dest => '172.16.1.3', dport => 21, action => 'DROP' }
+{ from => 'host', to => 'outside', dest => '172.16.1.3', dport => 22, action => 'ACCEPT' }
+{ from => 'host', to => 'outside', dest => '172.16.1.3', dport => 3128, action => 'ACCEPT' }
+{ from => 'host', to => 'outside', dest => '172.16.1.3', dport => 8006, action => 'ACCEPT' }
+{ from => 'host', to => 'outside', dest => '172.16.1.3', dport => 5900, action => 'ACCEPT' }
+{ from => 'host', to => 'outside', dest => '172.16.1.3', dport => 5999, action => 'ACCEPT' }
+{ from => 'host', to => 'outside', dest => '172.16.1.3', dport => 6000, action => 'DROP' }
+{ from => 'host', to => 'outside', dest => '172.16.1.3', proto => 'udp', dport => 5404, action => 'ACCEPT' }
+{ from => 'host', to => 'outside', dest => '172.16.1.3', proto => 'udp', dport => 5405, action => 'ACCEPT' }
+{ from => 'host', to => 'outside', dest => '172.16.1.3', proto => 'udp', dport => 5406, action => 'DROP' }
+
+
+# traffic from other node
+
+{ from => 'outside', to => 'host', source => '172.16.1.3', dport => 21, action => 'DROP' }
+{ from => 'outside', to => 'host', source => '172.16.1.3', dport => 22, action => 'ACCEPT' }
+{ from => 'outside', to => 'host', source => '172.16.1.3', dport => 3128, action => 'ACCEPT' }
+{ from => 'outside', to => 'host', source => '172.16.1.3', dport => 8006, action => 'ACCEPT' }
+{ from => 'outside', to => 'host', source => '172.16.1.3', dport => 5900, action => 'ACCEPT' }
+{ from => 'outside', to => 'host', source => '172.16.1.3', dport => 5999, action => 'ACCEPT' }
+{ from => 'outside', to => 'host', source => '172.16.1.3', dport => 6000, action => 'DROP' }
+{ from => 'outside', to => 'host', source => '172.16.1.3', proto => 'udp', dport => 5404, action => 'ACCEPT' }
+{ from => 'outside', to => 'host', source => '172.16.1.3', proto => 'udp', dport => 5405, action => 'ACCEPT' }
+{ from => 'outside', to => 'host', source => '172.16.1.3', proto => 'udp', dport => 5406, action => 'DROP' }
+
+
+{ from => 'host', to => 'ct200', action => 'DROP' }
+{ from => 'outside', to => 'ct200', action => 'ACCEPT' }
+{ to => 'ct201', action => 'DROP' }
+{ from => 'host', to => 'vm100', action => 'DROP' }
+{ from => 'outside', to => 'vm100', action => 'ACCEPT' }
+{ to => 'vm101', action => 'DROP' }
+
