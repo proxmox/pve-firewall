@@ -70,8 +70,15 @@ sub rule_match {
 
     while (length($rule)) {
 
-	if ($rule =~ s/^-m conntrack\s*//) {
-	    return undef; # simply ignore
+	if ($rule =~ s/^-m conntrack --ctstate (\S+)\s*//) {
+	    my $cstate = $1;
+
+	    return undef if $cstate eq 'INVALID'; # no match
+	    return undef if $cstate eq 'RELATED,ESTABLISHED'; # no match
+	    
+	    next if $cstate =~ m/NEW/;
+	    
+	    die "please implement cstate test '$cstate'";
 	}
 
 	if ($rule =~ s/^-m addrtype\s*//) {
@@ -493,9 +500,12 @@ sub simulate_firewall {
 
     my $start_state;
 
+    my $host_ip = '10.11.12.13';
+
     if ($from eq 'host') {
 	$from_info->{type} = 'host';
 	$start_state = 'host';
+	$pkg->{source} = $host_ip if !defined($pkg->{source});
     } elsif ($from =~ m|^(vmbr\d+)/(\S+)$|) {
 	$from_info->{type} = 'bport';
 	$from_info->{bridge} = $1;
@@ -529,13 +539,12 @@ sub simulate_firewall {
 	die "unable to parse \"from => '$from'\"\n";
     }
 
-    $pkg->{source} = '100.200.3.4' if !defined($pkg->{source});
-
     my $target;
 
     if ($to eq 'host') {
 	$target->{type} = 'host';
 	$target->{iface} = 'host';
+	$pkg->{dest} = $host_ip if !defined($pkg->{dest});
     } elsif ($to =~ m|^(vmbr\d+)/(\S+)$|) {
 	$target->{type} = 'bport';
 	$target->{bridge} = $1;
@@ -565,6 +574,9 @@ sub simulate_firewall {
     } else {
 	die "unable to parse \"to => '$to'\"\n";
     }
+
+    $pkg->{source} = '100.100.1.2' if !defined($pkg->{source});
+    $pkg->{dest} = '100.200.3.4' if !defined($pkg->{dest});
 
     my ($res, $ic, $rc) = route_packet($ruleset, $ipset_ruleset, $pkg, 
 				       $from_info, $target, $start_state);
