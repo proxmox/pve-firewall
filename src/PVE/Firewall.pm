@@ -1703,13 +1703,13 @@ sub enable_host_firewall {
 
     # allow standard traffic on cluster network
     if ($clusternet) {
-	ruleset_addrule($ruleset, $chain, "-s $clusternet -p tcp --dport 8006 -j ACCEPT");  # PVE API
-	ruleset_addrule($ruleset, $chain, "-s $clusternet -p tcp --dport 5900:5999 -j ACCEPT");  # PVE VNC Console 
-	ruleset_addrule($ruleset, $chain, "-s $clusternet -p tcp --dport 3128 -j ACCEPT");  # SPICE Proxy
-	ruleset_addrule($ruleset, $chain, "-s $clusternet -p tcp --dport 22 -j ACCEPT");  # SSH
+	ruleset_addrule($ruleset, $chain, "-s $clusternet -p tcp --dport 8006 -j $accept_action");  # PVE API
+	ruleset_addrule($ruleset, $chain, "-s $clusternet -p tcp --dport 5900:5999 -j $accept_action");  # PVE VNC Console 
+	ruleset_addrule($ruleset, $chain, "-s $clusternet -p tcp --dport 3128 -j $accept_action");  # SPICE Proxy
+	ruleset_addrule($ruleset, $chain, "-s $clusternet -p tcp --dport 22 -j $accept_action");  # SSH
  
 	# corosync
-	my $corosync_rule = "-p udp -m conntrack --ctstate NEW --dport 5404:5405 -j ACCEPT"
+	my $corosync_rule = "-p udp -m conntrack --ctstate NEW --dport 5404:5405 -j $accept_action"
 	ruleset_addrule($ruleset, $chain, "-s $clusternet -d $clusternet $corosync_rule");
 	ruleset_addrule($ruleset, $chain, "-s $clusternet -m addrtype --dst-type MULTICAST $corosync_rule");
     }
@@ -1745,10 +1745,10 @@ sub enable_host_firewall {
 
     # allow standard traffic on cluster network
     if ($clusternet) {
-	ruleset_addrule($ruleset, $chain, "-d $clusternet -p tcp --dport 8006 -j ACCEPT");  # PVE API
-	ruleset_addrule($ruleset, $chain, "-d $clusternet -p tcp --dport 22 -j ACCEPT");  # SSH
+	ruleset_addrule($ruleset, $chain, "-d $clusternet -p tcp --dport 8006 -j $accept_action");  # PVE API
+	ruleset_addrule($ruleset, $chain, "-d $clusternet -p tcp --dport 22 -j $accept_action");  # SSH
  
-	my $corosync_rule = "-p udp -m conntrack --ctstate NEW --dport 5404:5405 -j ACCEPT";
+	my $corosync_rule = "-p udp -m conntrack --ctstate NEW --dport 5404:5405 -j $accept_action";
 	ruleset_addrule($ruleset, $chain, "-s $clusternet -d $clusternet $corosync_rule");
 	ruleset_addrule($ruleset, $chain, "-s $clusternet -m addrtype --dst-type MULTICAST $corosync_rule");
     }
