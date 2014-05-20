@@ -1,3 +1,7 @@
+[OPTIONS]
+
+enable: 1
+
 [RULES]
 
 IN ACCEPT -source 192.168.2.1 -p tcp -dport 22 

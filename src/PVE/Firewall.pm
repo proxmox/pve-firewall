@@ -2665,7 +2665,7 @@ sub compile {
 	my $conf = $vmdata->{qemu}->{$vmid};
 	my $vmfw_conf = $vmfw_configs->{$vmid};
 	next if !$vmfw_conf;
-	next if defined($vmfw_conf->{options}->{enable}) && ($vmfw_conf->{options}->{enable} == 0);
+	next if !$vmfw_conf->{options}->{enable};
 
 	foreach my $netid (keys %$conf) {
 	    next if $netid !~ m/^net(\d+)$/;
@@ -2687,7 +2687,7 @@ sub compile {
 
 	my $vmfw_conf = $vmfw_configs->{$vmid};
 	next if !$vmfw_conf;
-	next if defined($vmfw_conf->{options}->{enable}) && ($vmfw_conf->{options}->{enable} == 0);
+	next if !$vmfw_conf->{options}->{enable};
 
 	if ($conf->{ip_address} && $conf->{ip_address}->{value}) {
 	    my $ip = $conf->{ip_address}->{value};
