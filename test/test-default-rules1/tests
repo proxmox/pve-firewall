@@ -12,6 +12,8 @@
 { from => 'host', to => 'outside', dest => '172.16.1.3', proto => 'udp', dport => 5404, action => 'ACCEPT' }
 { from => 'host', to => 'outside', dest => '172.16.1.3', proto => 'udp', dport => 5405, action => 'ACCEPT' }
 { from => 'host', to => 'outside', dest => '172.16.1.3', proto => 'udp', dport => 5406, action => 'DROP' }
+{ from => 'host', to => 'outside', dest => '239.192.158.83', proto => 'udp', dport => 5404, dsttype => 'UNICAST', action => 'DROP' }
+{ from => 'host', to => 'outside', dest => '239.192.158.83', proto => 'udp', dport => 5404, dsttype => 'MULTICAST', action => 'ACCEPT' }
 
 
 # traffic from other node
@@ -26,6 +28,8 @@
 { from => 'outside', to => 'host', source => '172.16.1.3', proto => 'udp', dport => 5404, action => 'ACCEPT' }
 { from => 'outside', to => 'host', source => '172.16.1.3', proto => 'udp', dport => 5405, action => 'ACCEPT' }
 { from => 'outside', to => 'host', source => '172.16.1.3', proto => 'udp', dport => 5406, action => 'DROP' }
+{ from => 'outside', to => 'host', source => '172.16.1.3', dest => '239.192.158.83', proto => 'udp', dport => 5404, dsttype => 'UNICAST', action => 'DROP' }
+{ from => 'outside', to => 'host', source => '172.16.1.3', dest => '239.192.158.83', proto => 'udp', dport => 5404, dsttype => 'MULTICAST', action => 'ACCEPT' }
 
 
 { from => 'host', to => 'ct200', action => 'DROP' }

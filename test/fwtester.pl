@@ -81,8 +81,16 @@ sub rule_match {
 	    die "please implement cstate test '$cstate'";
 	}
 
-	if ($rule =~ s/^-m addrtype\s*//) {
-	    return undef; # simply ignore
+	if ($rule =~ s/^-m addrtype --src-type (\S+)\s*//) {
+	    my $atype = $1;
+	    die "missing srctype" if !$pkg->{srctype};
+	    return undef if $atype ne $pkg->{srctype};
+	}
+
+	if ($rule =~ s/^-m addrtype --dst-type (\S+)\s*//) {
+	    my $atype = $1;
+	    die "missing dsttype" if !$pkg->{dsttype};
+	    return undef if $atype ne $pkg->{dsttype};
 	}
 
 	if ($rule =~ s/^-i (\S+)\s*//) {
@@ -485,6 +493,8 @@ sub simulate_firewall {
 	dport => undef,
 	source => undef,
 	dest => undef,
+	srctype => 'UNICAST',
+	dsttype => 'UNICAST',
     };
 
     while (my ($k,$v) = each %$test) {
