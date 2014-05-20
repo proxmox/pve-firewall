@@ -1,5 +1,6 @@
 
 LIB_SOURCES=			\
+	FirewallSimulator.pm	\
 	Firewall.pm
 
 all:
