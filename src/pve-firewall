@@ -444,6 +444,8 @@ __PACKAGE__->register_method ({
     code => sub {
 	my ($param) = @_;
 
+	local $SIG{'__WARN__'} = 'DEFAULT'; # do not fill up syslog
+
 	my ($ruleset, $ipset_ruleset) = PVE::Firewall::compile();
 
 	PVE::FirewallSimulator::debug($param->{verbose} || 0);
