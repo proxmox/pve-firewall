@@ -13,6 +13,8 @@ use PVE::Cluster qw(cfs_read_file);
 use PVE::RPCEnvironment;
 use PVE::CLIHandler;
 use PVE::Firewall;
+use PVE::FirewallSimulator;
+use Data::Dumper;
 
 use base qw(PVE::CLIHandler);
 
@@ -40,6 +42,8 @@ my $rpcenv = PVE::RPCEnvironment->init('cli');
 $rpcenv->init_request();
 $rpcenv->set_language($ENV{LANG});
 $rpcenv->set_user('root@pam');
+
+my $nodename = PVE::INotify::nodename();
 
 my $commandline = [$0, @ARGV];
 
@@ -375,12 +379,122 @@ __PACKAGE__->register_method ({
 	return undef;
     }});
 
-my $nodename = PVE::INotify::nodename();
+__PACKAGE__->register_method ({
+    name => 'simulate',
+    path => 'simulate',
+    method => 'POST',
+    description => "Simulate firewall rules.",
+    parameters => {
+    	additionalProperties => 0,
+	properties => {
+	    verbose => {
+		description => "Verbose output.",
+		type => 'boolean',
+		optional => 1,
+		default => 0,
+	    },
+	    from => {
+		description => "Source zone.",
+		type => 'string',
+		pattern => '(host|outside|vm\d+|ct\d+|vmbr\d+/\S+)',
+		optional => 1,
+		default => 'outside',
+	    },
+	    to => {
+		description => "Destination zone.",
+		type => 'string',
+		pattern => '(host|outside|vm\d+|ct\d+|vmbr\d+/\S+)',
+		optional => 1,
+		default => 'host',
+	    },
+	    protocol => {
+		description => "Protocol.",
+		type => 'string',
+		pattern => '(tcp|udp)',
+		optional => 1,
+		default => 'tcp',
+	    },
+	    dport => {
+		description => "Destination port.",
+		type => 'integer',
+		minValue => 1,
+		maxValue => 65535,
+		optional => 1,
+	    },
+	    sport => {
+		description => "Source port.",
+		type => 'integer',
+		minValue => 1,
+		maxValue => 65535,
+		optional => 1,
+	    },
+	    source => {
+		description => "Source IP address.",
+		type => 'string', format => 'ipv4',
+		optional => 1,
+	    },
+	    dest => {
+		description => "Destination IP address.",
+		type => 'string', format => 'ipv4',
+		optional => 1,
+	    },
+	},
+    },
+    returns => { type => 'null' },
+    code => sub {
+	my ($param) = @_;
+
+	my ($ruleset, $ipset_ruleset) = PVE::Firewall::compile();
+
+	PVE::FirewallSimulator::debug($param->{verbose} || 0);
+	
+	my $host_ip = PVE::Cluster::remote_node_ip($nodename);
+
+	PVE::FirewallSimulator::reset_trace();
+	print Dumper($ruleset) if $param->{verbose};
+
+	my $test = {
+	    from => $param->{from},
+	    to => $param->{to},
+	    proto => $param->{protocol} || 'tcp',
+	    source => $param->{source},
+	    dest => $param->{dest},
+	    dport => $param->{dport},
+	    sport => $param->{sport},
+	};
+
+	if (!defined($test->{to})) {
+	    $test->{to} = 'host';
+	    PVE::FirewallSimulator::add_trace("Set Zone: to => '$test->{to}'\n"); 
+	} 
+	if (!defined($test->{from})) {
+	    $test->{from} = 'outside',
+	    PVE::FirewallSimulator::add_trace("Set Zone: from => '$test->{from}'\n"); 
+	}
+
+	my $vmdata = PVE::Firewall::read_local_vm_config();
+
+	print "Test packet:\n";
+
+	foreach my $k (qw(from to proto source dest dport sport)) {
+	    printf("  %-8s: %s\n", $k, $test->{$k}) if defined($test->{$k});
+	}
+
+	$test->{action} = 'QUERY';
+
+	my $res = PVE::FirewallSimulator::simulate_firewall($ruleset, $ipset_ruleset, 
+							    $host_ip, $vmdata, $test);
+	
+	print "ACTION: $res\n";
+
+	return undef;
+    }});
 
 my $cmddef = {
     start => [ __PACKAGE__, 'start', []],
     stop => [ __PACKAGE__, 'stop', []],
     compile => [ __PACKAGE__, 'compile', []],
+    simulate => [ __PACKAGE__, 'simulate', []],
     status => [ __PACKAGE__, 'status', [], undef, sub {
 	my $res = shift;
 	if ($res->{changes}) {

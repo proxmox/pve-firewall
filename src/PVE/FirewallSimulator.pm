@@ -593,6 +593,8 @@ sub simulate_firewall {
 
     add_trace("IPT statistics: invocation = $ic, checks = $rc\n");
  
+    return $res if $action eq 'QUERY';
+
     die "test failed ($res != $action)\n" if $action ne $res;
 
     return undef; 
