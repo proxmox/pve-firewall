@@ -2603,11 +2603,9 @@ sub compile {
     if ($vmdata) { # test mode
 	my $testdir = $vmdata->{testdir} || die "no test directory specified";
 	my $filename = "$testdir/cluster.fw";
-	die "missing test file '$filename'\n" if ! -f $filename;
 	$cluster_conf = load_clusterfw_conf($filename);
 
 	$filename = "$testdir/host.fw";
-	die "missing test file '$filename'\n" if ! -f $filename;
 	$hostfw_conf = load_hostfw_conf($filename);
 
 	$vmfw_configs = read_vm_firewall_configs($vmdata, $testdir);
