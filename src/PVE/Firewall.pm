@@ -1318,8 +1318,8 @@ sub ruleset_generate_cmdstr {
 	    }
 	}
     } elsif ($rule->{dport} || $rule->{sport}) {
-	warn "ignoring destination port '$rule->{dport}' - no protocol specified\n" if $rule->{dport};
-	warn "ignoring source port '$rule->{sport}' - no protocol specified\n" if $rule->{sport};
+	die "destination port '$rule->{dport}', but no protocol specified\n" if $rule->{dport};
+	die "source port '$rule->{sport}', but no protocol specified\n" if $rule->{sport};
     }
 
     push @cmd, "-m addrtype --dst-type $rule->{dsttype}" if $rule->{dsttype};

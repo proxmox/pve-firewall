@@ -4,6 +4,8 @@ enable: 1
 
 [RULES]
 
-# rule with dport but missing protocol
+# rule with dport but missing protocol - should be ignored
 IN ACCEPT -dport 80
+# correct rule
+IN ACCEPT -p tcp -dport 82
 
