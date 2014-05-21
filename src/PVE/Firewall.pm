@@ -1695,12 +1695,15 @@ sub enable_host_firewall {
     # add host rules first, so that cluster wide rules can be overwritten
     foreach my $rule (@$rules, @$cluster_rules) {
 	$rule->{iface_in} = $rule->{iface} if $rule->{iface};
-	if ($rule->{type} eq 'group') {
-	    ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, 'IN', $accept_action);
-	} elsif ($rule->{type} eq 'in') {
-	    ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" }, 
-				  undef, $cluster_conf);
-	}
+	eval {
+	    if ($rule->{type} eq 'group') {
+		ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, 'IN', $accept_action);
+	    } elsif ($rule->{type} eq 'in') {
+		ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" }, 
+				      undef, $cluster_conf);
+	    }
+	};
+	warn $@ if $@;
 	delete $rule->{iface_in};
     }
 
@@ -1742,12 +1745,15 @@ sub enable_host_firewall {
     # add host rules first, so that cluster wide rules can be overwritten
     foreach my $rule (@$rules, @$cluster_rules) {
 	$rule->{iface_out} = $rule->{iface} if $rule->{iface};
-	if ($rule->{type} eq 'group') {
-	    ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, 'OUT', $accept_action);
-	} elsif ($rule->{type} eq 'out') {
-	    ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" }, 
-				  undef, $cluster_conf);
-	}
+	eval {
+	    if ($rule->{type} eq 'group') {
+		ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, 'OUT', $accept_action);
+	    } elsif ($rule->{type} eq 'out') {
+		ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" }, 
+				      undef, $cluster_conf);
+	    }
+	};
+	warn $@ if $@;
 	delete $rule->{iface_out};
     }
 
@@ -2687,69 +2693,78 @@ sub compile {
 
     my $hostfw_enable = !(defined($hostfw_options->{enable}) && ($hostfw_options->{enable} == 0));
 
-    enable_host_firewall($ruleset, $hostfw_conf, $cluster_conf) if $hostfw_enable;
+    if ($hostfw_enable) {
+	eval { enable_host_firewall($ruleset, $hostfw_conf, $cluster_conf); };
+	warn $@ if $@; # just to be sure - should not happen
+    }
 
     ruleset_addrule($ruleset, "PVEFW-OUTPUT", "-o venet0 -m set --match-set PVEFW-venet0 dst -j PVEFW-VENET-IN");
 
     # generate firewall rules for QEMU VMs
     foreach my $vmid (keys %{$vmdata->{qemu}}) {
-	my $conf = $vmdata->{qemu}->{$vmid};
-	my $vmfw_conf = $vmfw_configs->{$vmid};
-	next if !$vmfw_conf;
-	next if !$vmfw_conf->{options}->{enable};
+	eval {
+	    my $conf = $vmdata->{qemu}->{$vmid};
+	    my $vmfw_conf = $vmfw_configs->{$vmid};
+	    return if !$vmfw_conf;
+	    return if !$vmfw_conf->{options}->{enable};
 
-	foreach my $netid (keys %$conf) {
-	    next if $netid !~ m/^net(\d+)$/;
-	    my $net = PVE::QemuServer::parse_net($conf->{$netid});
-	    next if !$net->{firewall};
-	    my $iface = "tap${vmid}i$1";
+	    foreach my $netid (keys %$conf) {
+		next if $netid !~ m/^net(\d+)$/;
+		my $net = PVE::QemuServer::parse_net($conf->{$netid});
+		next if !$net->{firewall};
+		my $iface = "tap${vmid}i$1";
 
-	    my $macaddr = $net->{macaddr};
-	    generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
-					 $vmfw_conf, $vmid, 'IN');
-	    generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
-					 $vmfw_conf, $vmid, 'OUT');
-	}
-    }
-
-    # generate firewall rules for OpenVZ containers
-    foreach my $vmid (keys %{$vmdata->{openvz}}) {
-	my $conf = $vmdata->{openvz}->{$vmid};
-
-	my $vmfw_conf = $vmfw_configs->{$vmid};
-	next if !$vmfw_conf;
-	next if !$vmfw_conf->{options}->{enable};
-
-	if ($conf->{ip_address} && $conf->{ip_address}->{value}) {
-	    my $ip = $conf->{ip_address}->{value};
-	    $ip =~ s/\s+/,/g;
-	    parse_address_list($ip); # make sure we have a valid $ip list
-
-	    my @ips = split(',', $ip);
-
-	    foreach my $singleip (@ips) {
-		my $venet0ipset = {};
-		$venet0ipset->{cidr} = $singleip;
-		push @{$cluster_conf->{ipset}->{venet0}}, $venet0ipset;
-	    }
-
-	    generate_venet_rules_direction($ruleset, $cluster_conf, $vmfw_conf, $vmid, $ip, 'IN');
-	    generate_venet_rules_direction($ruleset, $cluster_conf, $vmfw_conf, $vmid, $ip, 'OUT');
-	}
-
-	if ($conf->{netif} && $conf->{netif}->{value}) {
-	    my $netif = PVE::OpenVZ::parse_netif($conf->{netif}->{value});
-	    foreach my $netid (keys %$netif) {
-		my $d = $netif->{$netid};
-
-		my $macaddr = $d->{mac};
-		my $iface = $d->{host_ifname};
+		my $macaddr = $net->{macaddr};
 		generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
 					     $vmfw_conf, $vmid, 'IN');
 		generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
 					     $vmfw_conf, $vmid, 'OUT');
 	    }
-	}
+	};
+	warn $@ if $@; # just to be sure - should not happen
+    }
+
+    # generate firewall rules for OpenVZ containers
+    foreach my $vmid (keys %{$vmdata->{openvz}}) {
+	eval {
+	    my $conf = $vmdata->{openvz}->{$vmid};
+
+	    my $vmfw_conf = $vmfw_configs->{$vmid};
+	    return if !$vmfw_conf;
+	    return if !$vmfw_conf->{options}->{enable};
+
+	    if ($conf->{ip_address} && $conf->{ip_address}->{value}) {
+		my $ip = $conf->{ip_address}->{value};
+		$ip =~ s/\s+/,/g;
+		parse_address_list($ip); # make sure we have a valid $ip list
+
+		my @ips = split(',', $ip);
+
+		foreach my $singleip (@ips) {
+		    my $venet0ipset = {};
+		    $venet0ipset->{cidr} = $singleip;
+		    push @{$cluster_conf->{ipset}->{venet0}}, $venet0ipset;
+		}
+
+		generate_venet_rules_direction($ruleset, $cluster_conf, $vmfw_conf, $vmid, $ip, 'IN');
+		generate_venet_rules_direction($ruleset, $cluster_conf, $vmfw_conf, $vmid, $ip, 'OUT');
+	    }
+
+	    if ($conf->{netif} && $conf->{netif}->{value}) {
+		my $netif = PVE::OpenVZ::parse_netif($conf->{netif}->{value});
+		foreach my $netid (keys %$netif) {
+		    my $d = $netif->{$netid};
+
+		    my $macaddr = $d->{mac};
+		    my $iface = $d->{host_ifname};
+		    generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
+						 $vmfw_conf, $vmid, 'IN');
+		    generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
+						 $vmfw_conf, $vmid, 'OUT');
+		}
+	    }
+	};
+	warn $@ if $@; # just to be sure - should not happen
     }
 
     if(ruleset_chain_exist($ruleset, "PVEFW-IPS")){
