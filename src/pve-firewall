@@ -349,7 +349,7 @@ __PACKAGE__->register_method ({
 __PACKAGE__->register_method ({
     name => 'compile',
     path => 'compile',
-    method => 'POST',
+    method => 'GET',
     description => "Compile and print firewall rules. This is useful for testing.",
     parameters => {
     	additionalProperties => 0,
@@ -416,7 +416,7 @@ __PACKAGE__->register_method ({
 __PACKAGE__->register_method ({
     name => 'simulate',
     path => 'simulate',
-    method => 'POST',
+    method => 'GET',
     description => "Simulate firewall rules. This does not simulate kernel 'routing' table. Instead, this simply assumes that routing from source zone to destination zone is possible.",
     parameters => {
     	additionalProperties => 0,
