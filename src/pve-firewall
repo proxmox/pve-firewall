@@ -380,6 +380,40 @@ __PACKAGE__->register_method ({
     }});
 
 __PACKAGE__->register_method ({
+    name => 'localnet',
+    path => 'localnet',
+    method => 'GET',
+    description => "Print information about local network.",
+    parameters => {
+    	additionalProperties => 0,
+	properties => {},
+    },
+    returns => { type => 'null' },
+    code => sub {
+	my ($param) = @_;
+
+	local $SIG{'__WARN__'} = 'DEFAULT'; # do not fill up syslog
+
+	my $nodename = PVE::INotify::nodename();
+	print "local hostname: $nodename\n";
+
+	my $ip = PVE::Cluster::remote_node_ip($nodename);
+	print "local IP address: $ip\n";
+
+	my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
+	
+	my $localnet = PVE::Firewall::local_network() || '127.0.0.0/8';
+	print "network auto detect: $localnet\n";
+	if ($cluster_conf->{aliases}->{local_network}) {
+	    print "using user defined local_network: $cluster_conf->{aliases}->{local_network}->{cidr}\n";
+	} else {
+	    print "using detected local_network: $localnet\n";
+	}
+
+	return undef;
+    }});
+
+__PACKAGE__->register_method ({
     name => 'simulate',
     path => 'simulate',
     method => 'POST',
@@ -497,6 +531,7 @@ my $cmddef = {
     stop => [ __PACKAGE__, 'stop', []],
     compile => [ __PACKAGE__, 'compile', []],
     simulate => [ __PACKAGE__, 'simulate', []],
+    localnet => [ __PACKAGE__, 'localnet', []],
     status => [ __PACKAGE__, 'status', [], undef, sub {
 	my $res = shift;
 	if ($res->{changes}) {
