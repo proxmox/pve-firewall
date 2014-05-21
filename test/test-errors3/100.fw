@@ -1,0 +1,8 @@
+[OPTIONS]
+
+enable: 1
+
+[RULES]
+
+IN ACCEPT -p tcp -dport 82
+

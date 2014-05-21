@@ -1,0 +1,5 @@
+[RULES]
+
+# rule without dport - should be skipped
+IN ACCEPT -dport 80
+
