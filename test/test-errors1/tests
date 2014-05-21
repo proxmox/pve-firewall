@@ -1,0 +1,2 @@
+{ from => 'outside', to => 'vm100', dport => 80, action => 'ACCEPT' }
+{ from => 'outside', to => 'vm100', dport => 81, action => 'DROP' }

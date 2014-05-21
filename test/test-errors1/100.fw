@@ -1,0 +1,9 @@
+[OPTIONS]
+
+enable: 1
+
+[RULES]
+
+# rule with dport but missing protocol
+IN ACCEPT -dport 80
+
