@@ -3,6 +3,10 @@
 myserveralias 10.2.0.111
 mynetworkalias 10.3.0.0/24
 
+[ipset management]
+
+192.168.128.2
+
 [ipset myipset]
 
 192.168.0.1 

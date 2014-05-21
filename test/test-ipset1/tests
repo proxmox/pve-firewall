@@ -1,4 +1,3 @@
-
 # blacklisted
 { from => 'outside', to => 'host', source => '192.168.0.1', dest => '1.2.3.4', dport => 22, action => 'DROP' }
 # accept in myipset
@@ -15,3 +14,10 @@
 # reject dmzhosts if from myipset
 { from => 'outside', to => 'host', source => '172.16.0.10', dest => '10.10.10.1', dport => 22, action => 'REJECT' }
 { from => 'outside', to => 'host', source => '172.16.0.10', dest => '10.10.11.1', dport => 22, action => 'REJECT' }
+
+# management ipset
+{ from => 'outside', to => 'host', source => '192.168.128.1', dport => 8006, action => 'DROP' }
+{ from => 'outside', to => 'host', source => '192.168.128.1', dport => 22, action => 'DROP' }
+{ from => 'outside', to => 'host', source => '192.168.128.2', dport => 8006, action => 'ACCEPT' }
+{ from => 'outside', to => 'host', source => '192.168.128.2', dport => 22, action => 'ACCEPT' }
+
