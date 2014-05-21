@@ -1690,6 +1690,8 @@ sub enable_host_firewall {
     # we use RETURN because we need to check also tap rules
     my $accept_action = 'RETURN';
 
+    ruleset_addrule($ruleset, $chain, "-p igmp -j $accept_action"); # important for multicast
+
     # add host rules first, so that cluster wide rules can be overwritten
     foreach my $rule (@$rules, @$cluster_rules) {
 	$rule->{iface_in} = $rule->{iface} if $rule->{iface};
@@ -1734,6 +1736,8 @@ sub enable_host_firewall {
 
     # we use RETURN because we may want to check other thigs later
     $accept_action = 'RETURN';
+
+    ruleset_addrule($ruleset, $chain, "-p igmp -j $accept_action"); # important for multicast
 
     # add host rules first, so that cluster wide rules can be overwritten
     foreach my $rule (@$rules, @$cluster_rules) {

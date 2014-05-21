@@ -111,7 +111,7 @@ sub rule_match {
 	    next;
 	}
 
-	if ($rule =~ s/^-p (tcp|udp)\s*//) {
+	if ($rule =~ s/^-p (tcp|udp|igmp|icmp)\s*//) {
 	    die "missing proto" if !$pkg->{proto};
 	    return undef if $pkg->{proto} ne $1; # no match
 	    next;
