@@ -687,7 +687,7 @@ sub get_etc_protocols {
     return $etc_protocols;
 }
 
-my $ipv4_mask_hash_clusternet = {
+my $ipv4_mask_hash_localnet = {
     '255.255.0.0' => 16,
     '255.255.128.0' => 17,
     '255.255.192.0' => 18,
@@ -705,14 +705,14 @@ my $ipv4_mask_hash_clusternet = {
     '255.255.255.252' => 30,
 };
 
-my $__cluster_network;
+my $__local_network;
 
-sub cluster_network {
+sub local_network {
     my ($new_value) = @_;
 
-    $__cluster_network = $new_value if defined($new_value);
+    $__local_network = $new_value if defined($new_value);
 
-    return $__cluster_network if defined($__cluster_network);
+    return $__local_network if defined($__local_network);
 
     eval {
 	my $nodename = PVE::INotify::nodename();
@@ -723,20 +723,20 @@ sub cluster_network {
    
 	my $routes = PVE::ProcFSTools::read_proc_net_route();
 	foreach my $entry (@$routes) {
-	    my $mask = $ipv4_mask_hash_clusternet->{$entry->{mask}};
+	    my $mask = $ipv4_mask_hash_localnet->{$entry->{mask}};
 	    next if !defined($mask);
 	    return if $mask eq '0.0.0.0';
 	    my $cidr = "$entry->{dest}/$mask";
 	    my $testnet = Net::IP->new($cidr);
 	    if ($testnet->overlaps($testip)) {
-		$__cluster_network = $cidr;
+		$__local_network = $cidr;
 		return;
 	    }
 	}
     };
     warn $@ if $@;
 
-    return $__cluster_network;
+    return $__local_network;
 }
 
 sub parse_address_list {
@@ -1709,13 +1709,13 @@ sub enable_host_firewall {
     ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 3128 -j $accept_action");  # SPICE Proxy
     ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 22 -j $accept_action");  # SSH
    
-    my $clusternet = cluster_network();
+    my $localnet = local_network();
 
     # corosync
-    if ($clusternet) {
+    if ($localnet) {
 	my $corosync_rule = "-p udp --dport 5404:5405 -j $accept_action";
-	ruleset_addrule($ruleset, $chain, "-s $clusternet -d $clusternet $corosync_rule");
-	ruleset_addrule($ruleset, $chain, "-s $clusternet -m addrtype --dst-type MULTICAST $corosync_rule");
+	ruleset_addrule($ruleset, $chain, "-s $localnet -d $localnet $corosync_rule");
+	ruleset_addrule($ruleset, $chain, "-s $localnet -m addrtype --dst-type MULTICAST $corosync_rule");
     }
 
     # implement input policy
@@ -1748,14 +1748,14 @@ sub enable_host_firewall {
     }
 
     # allow standard traffic on cluster network
-    if ($clusternet) {
-	ruleset_addrule($ruleset, $chain, "-d $clusternet -p tcp --dport 8006 -j $accept_action");  # PVE API
-	ruleset_addrule($ruleset, $chain, "-d $clusternet -p tcp --dport 22 -j $accept_action");  # SSH
-	ruleset_addrule($ruleset, $chain, "-d $clusternet -p tcp --dport 5900:5999 -j $accept_action");  # PVE VNC Console 
-	ruleset_addrule($ruleset, $chain, "-d $clusternet -p tcp --dport 3128 -j $accept_action");  # SPICE Proxy
+    if ($localnet) {
+	ruleset_addrule($ruleset, $chain, "-d $localnet -p tcp --dport 8006 -j $accept_action");  # PVE API
+	ruleset_addrule($ruleset, $chain, "-d $localnet -p tcp --dport 22 -j $accept_action");  # SSH
+	ruleset_addrule($ruleset, $chain, "-d $localnet -p tcp --dport 5900:5999 -j $accept_action");  # PVE VNC Console 
+	ruleset_addrule($ruleset, $chain, "-d $localnet -p tcp --dport 3128 -j $accept_action");  # SPICE Proxy
  
 	my $corosync_rule = "-p udp --dport 5404:5405 -j $accept_action";
-	ruleset_addrule($ruleset, $chain, "-d $clusternet $corosync_rule");
+	ruleset_addrule($ruleset, $chain, "-d $localnet $corosync_rule");
 	ruleset_addrule($ruleset, $chain, "-m addrtype --dst-type MULTICAST $corosync_rule");
     }
 
@@ -2638,8 +2638,15 @@ sub compile {
 
     $cluster_conf->{ipset}->{venet0} = [];
  
-    my $clusternet = cluster_network() || '127.0.0.0/8';
-    push @{$cluster_conf->{ipset}->{management}}, { cidr => $clusternet };
+    my $localnet;
+    if ($cluster_conf->{aliases}->{local_network}) {
+	$localnet = $cluster_conf->{aliases}->{local_network}->{cidr};
+    } else {
+	$localnet = local_network() || '127.0.0.0/8';
+	$cluster_conf->{aliases}->{local_network} = { cidr => $localnet };
+    }
+
+    push @{$cluster_conf->{ipset}->{management}}, { cidr => $localnet };
    
     my $ruleset = {};
 

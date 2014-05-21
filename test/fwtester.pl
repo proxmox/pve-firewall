@@ -34,7 +34,7 @@ sub run_tests {
 
     my $host_ip = '172.16.1.2';
 
-    PVE::Firewall::cluster_network('172.16.1.0/24');
+    PVE::Firewall::local_network('172.16.1.0/24');
 
     my ($ruleset, $ipset_ruleset) = 
 	PVE::Firewall::compile(undef, undef, $vmdata);
