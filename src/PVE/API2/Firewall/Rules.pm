@@ -231,11 +231,6 @@ sub register_update_rule {
 		push @$newrules, $rule if $moveto >= scalar(@$rules);
 		$rules = $newrules;
 	    } else {
-		raise_param_exc({ type => "property is missing"})
-		    if !defined($param->{type});
-		raise_param_exc({ action => "property is missing"})
-		    if !defined($param->{action});
-
 		PVE::Firewall::copy_rule_data($rule, $param);
 		
 		PVE::Firewall::delete_rule_properties($rule, $param->{'delete'}) if $param->{'delete'};

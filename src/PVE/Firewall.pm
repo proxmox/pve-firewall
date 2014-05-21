@@ -915,12 +915,10 @@ my $rule_properties = {
     sport => {
 	type => 'string', format => 'pve-fw-port-spec',
 	optional => 1,
-	requires => 'proto',
     },
     dport => {
 	type => 'string', format => 'pve-fw-port-spec',
 	optional => 1,
-	requires => 'proto',
     },
     comment => {
 	type => 'string',
@@ -1034,16 +1032,20 @@ sub verify_rule {
 	my $preferred_name = $pve_fw_preferred_macro_names->{lc($rule->{macro})};
 	raise_param_exc({ macro => "unknown macro '$rule->{macro}'"}) if !$preferred_name;
 	$rule->{macro} = $preferred_name;
-    }
+   }
 
     if ($rule->{dport}) {
 	eval { parse_port_name_number_or_range($rule->{dport}); };
 	raise_param_exc({ dport => $@ }) if $@;
-    }
+	raise_param_exc({ proto => "missing property - 'dport' requires this property"})
+	    if !$rule->{proto};
+     }
 
     if ($rule->{sport}) {
 	eval { parse_port_name_number_or_range($rule->{sport}); };
 	raise_param_exc({ sport => $@ }) if $@;
+	raise_param_exc({ proto => "missing property - 'sport' requires this property"})
+	    if !$rule->{proto};
     }
 
     if ($rule->{source}) {
@@ -1073,12 +1075,8 @@ sub copy_rule_data {
 	    } else {
 		$rule->{$k} = $v;
 	    }
-	} else {
-	    delete $rule->{$k};
 	}
     }
-
-    # verify rule now
 
     return $rule;
 }
