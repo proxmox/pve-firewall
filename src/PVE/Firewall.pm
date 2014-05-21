@@ -915,10 +915,12 @@ my $rule_properties = {
     sport => {
 	type => 'string', format => 'pve-fw-port-spec',
 	optional => 1,
+	requires => 'proto',
     },
     dport => {
 	type => 'string', format => 'pve-fw-port-spec',
 	optional => 1,
+	requires => 'proto',
     },
     comment => {
 	type => 'string',
