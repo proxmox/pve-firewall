@@ -1701,17 +1701,18 @@ sub enable_host_firewall {
 	}
 	delete $rule->{iface_in};
     }
+
+    # allow standard traffic for management ipset (includes cluster network)
+    my $mngmntsrc = "-m set --match-set PVEFW-management src";
+    ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 8006 -j $accept_action");  # PVE API
+    ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 5900:5999 -j $accept_action");  # PVE VNC Console 
+    ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 3128 -j $accept_action");  # SPICE Proxy
+    ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 22 -j $accept_action");  # SSH
    
     my $clusternet = cluster_network();
 
-    # allow standard traffic on cluster network
+    # corosync
     if ($clusternet) {
-	ruleset_addrule($ruleset, $chain, "-s $clusternet -p tcp --dport 8006 -j $accept_action");  # PVE API
-	ruleset_addrule($ruleset, $chain, "-s $clusternet -p tcp --dport 5900:5999 -j $accept_action");  # PVE VNC Console 
-	ruleset_addrule($ruleset, $chain, "-s $clusternet -p tcp --dport 3128 -j $accept_action");  # SPICE Proxy
-	ruleset_addrule($ruleset, $chain, "-s $clusternet -p tcp --dport 22 -j $accept_action");  # SSH
- 
-	# corosync
 	my $corosync_rule = "-p udp --dport 5404:5405 -j $accept_action";
 	ruleset_addrule($ruleset, $chain, "-s $clusternet -d $clusternet $corosync_rule");
 	ruleset_addrule($ruleset, $chain, "-s $clusternet -m addrtype --dst-type MULTICAST $corosync_rule");
@@ -2636,7 +2637,10 @@ sub compile {
 
 
     $cluster_conf->{ipset}->{venet0} = [];
-
+ 
+    my $clusternet = cluster_network() || '127.0.0.0/8';
+    push @{$cluster_conf->{ipset}->{management}}, { cidr => $clusternet };
+   
     my $ruleset = {};
 
     ruleset_create_chain($ruleset, "PVEFW-INPUT");

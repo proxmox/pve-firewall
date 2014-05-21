@@ -6,7 +6,7 @@
 { from => 'host', source => '192.168.2.1', dport => 80, action => 'REJECT' }
 { from => 'host', source => '127.0.0.1', dport => 80, action => 'ACCEPT' }
 
-{ to => 'host', source => '127.0.0.1', dport => 22, action => 'DROP' }
+{ to => 'host', source => '1.2.3.4', dport => 22, action => 'DROP' }
 { to => 'host', source => '192.168.2.1', dport => 22, action => 'ACCEPT' }
 { to => 'host', source => '192.168.2.1', dport => 80, action => 'REJECT' }
 
