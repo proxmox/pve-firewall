@@ -855,7 +855,8 @@ sub copy_list_with_digest {
 	    my $v = $entry->{$k};
 	    next if !defined($v);
 	    $data->{$k} = $v;
-	    $sha->add($k, ':', $v, "\n");
+	    # Note: digest ignores refs ($rule->{errors})
+	    $sha->add($k, ':', $v, "\n") if !ref($v); ;
 	}
 	push @$res, $data;
     }
@@ -1004,63 +1005,95 @@ my $apply_macro = sub {
 };
 
 sub verify_rule {
-    my ($rule, $allow_groups) = @_;
+    my ($rule, $allow_groups, $noerr) = @_;
+
+    my $errors = {};
+    my $error_count = 0;
+
+    my $add_error = sub {
+	my ($param, $msg)  = @_;
+	raise_param_exc({ $param => $msg }) if !$noerr;
+	$error_count++;
+	$errors->{$param} = $msg if !$errors->{$param};
+    };
 
     my $type = $rule->{type};
+    my $action = $rule->{action};
+    
+    &$add_error('type', "missing property") if !$type;
+    &$add_error('action', "missing property") if !$action;
 
-    raise_param_exc({ type => "missing property"}) if !$type;
-    raise_param_exc({ action => "missing property"}) if !$rule->{action};
-
-    if ($type eq  'in' || $type eq 'out') {
-	raise_param_exc({ action => "unknown action '$rule->{action}'"})
-	    if $rule->{action} !~ m/^(ACCEPT|DROP|REJECT)$/;
-    } elsif ($type eq 'group') {
-	raise_param_exc({ type => "security groups not allowed"})
-	    if !$allow_groups;
-	raise_param_exc({ action => "invalid characters in security group name"})
-	    if $rule->{action} !~ m/^${security_group_name_pattern}$/;
-    } else {
-	raise_param_exc({ type => "unknown rule type '$type'"});
+    if ($type) {
+	if ($type eq  'in' || $type eq 'out') {
+	    &$add_error('action', "unknown action '$action'")
+		if $action && ($action !~ m/^(ACCEPT|DROP|REJECT)$/);
+	} elsif ($type eq 'group') {
+	    &$add_error('type', "security groups not allowed")
+		if !$allow_groups;
+	    &$add_error('action', "invalid characters in security group name")
+		if $action && ($action !~ m/^${security_group_name_pattern}$/);
+	} else {
+	    &$add_error('type', "unknown rule type '$type'");
+	}
     }
 
     if ($rule->{iface}) {
 	eval { PVE::JSONSchema::pve_verify_iface($rule->{iface}); };
-	raise_param_exc({ iface => $@ }) if $@;
+	&$add_error('iface', $@) if $@;
     }	
 
     if ($rule->{macro}) {
-	my $preferred_name = $pve_fw_preferred_macro_names->{lc($rule->{macro})};
-	raise_param_exc({ macro => "unknown macro '$rule->{macro}'"}) if !$preferred_name;
-	$rule->{macro} = $preferred_name;
-   }
+	if (my $preferred_name = $pve_fw_preferred_macro_names->{lc($rule->{macro})}) {
+	    $rule->{macro} = $preferred_name;
+	} else {
+	    &$add_error('macro', "unknown macro '$rule->{macro}'");
+	}
+    }
+
+    if ($rule->{proto}) {
+	eval { pve_fw_verify_protocol_spec($rule->{proto}); };
+	&$add_error('proto', $@) if $@;
+    }
 
     if ($rule->{dport}) {
 	eval { parse_port_name_number_or_range($rule->{dport}); };
-	raise_param_exc({ dport => $@ }) if $@;
-	raise_param_exc({ proto => "missing property - 'dport' requires this property"})
+	&$add_error('dport', $@) if $@;
+	&$add_error('proto', "missing property - 'dport' requires this property")
 	    if !$rule->{proto};
-     }
+    }
 
     if ($rule->{sport}) {
 	eval { parse_port_name_number_or_range($rule->{sport}); };
-	raise_param_exc({ sport => $@ }) if $@;
-	raise_param_exc({ proto => "missing property - 'sport' requires this property"})
+	&$add_error('sport', $@) if $@;
+	&$add_error('proto', "missing property - 'sport' requires this property")
 	    if !$rule->{proto};
     }
 
     if ($rule->{source}) {
 	eval { parse_address_list($rule->{source}); };
-	raise_param_exc({ source => $@ }) if $@;
+	&$add_error('source', $@) if $@;
     }
 
     if ($rule->{dest}) {
 	eval { parse_address_list($rule->{dest}); };
-	raise_param_exc({ dest => $@ }) if $@;
+	&$add_error('dest', $@) if $@;
     }
 
     if ($rule->{macro}) {
-	&$apply_macro($rule->{macro}, $rule, 1);
+	eval { &$apply_macro($rule->{macro}, $rule, 1); };
+	if (my $err = $@) {
+	    if (ref($err) eq "PVE::Exception" && $err->{errors}) {
+		my $eh = $err->{errors};
+		foreach my $p (keys %$eh) {
+		    &$add_error($p, $eh->{$p});
+		}
+	    } else {
+		&$add_error('macro', "$err");
+	    }
+	}
     }
+
+    $rule->{errors} = $errors if $error_count;
 
     return $rule;
 }
@@ -1224,6 +1257,7 @@ sub ruleset_generate_cmdstr {
     my ($ruleset, $chain, $rule, $actions, $goto, $cluster_conf) = @_;
 
     return if defined($rule->{enable}) && !$rule->{enable};
+    return if $rule->{errors};
 
     die "unable to emit macro - internal error" if $rule->{macro}; # should not happen
 
@@ -1820,75 +1854,61 @@ for (my $i = 0; $i < $MAX_NETS; $i++)  {
 sub parse_fw_rule {
     my ($line, $allow_iface, $allow_groups) = @_;
 
-    my ($type, $action, $macro, $iface, $source, $dest, $proto, $dport, $sport);
-
     chomp $line;
 
+    my $rule = {};
+
     # we can add single line comments to the end of the rule
-    my $comment = decode('utf8', $1) if $line =~ s/#\s*(.*?)\s*$//;
+    if ($line =~ s/#\s*(.*?)\s*$//) {
+	$rule->{comment} = decode('utf8', $1);
+    }
 
     # we can disable a rule when prefixed with '|'
-    my $enable = 1;
 
-    $enable = 0 if $line =~ s/^\|//;
+    $rule->{enable} = $line =~ s/^\|// ? 0 : 1;
 
     $line =~ s/^(\S+)\s+(\S+)\s*// ||
  	die "unable to parse rule: $line\n";
-    
-    $type = lc($1);
-    $action = $2;
 
-    if ($type eq  'in' || $type eq 'out') {
-	if ($action =~ m/^(ACCEPT|DROP|REJECT)$/) {
-	    # OK
-	} elsif ($action =~ m/^(\S+)\((ACCEPT|DROP|REJECT)\)$/) {
-	    $action = $2;
-	    my $preferred_name = $pve_fw_preferred_macro_names->{lc($1)};
-	    die "unknown macro '$1'\n" if !$preferred_name;
-	    $macro = $preferred_name;
-	} else {
-	    die "unknown action '$action'\n";
+    $rule->{type} = lc($1);
+    $rule->{action} = $2;
+
+    if ($rule->{type} eq  'in' || $rule->{type} eq 'out') {
+	if ($rule->{action} =~ m/^(\S+)\((ACCEPT|DROP|REJECT)\)$/) {
+	    $rule->{macro} = $1;
+	    $rule->{action} = $2;
 	}
-    } elsif ($type eq 'group') {
-	die "groups disabled\n" if !$allow_groups;
-	die "invalid characters in group name\n" if $action !~ m/^${security_group_name_pattern}$/;
-    } else {
-	die "unknown rule type '$type'\n";
     }
 
     while (length($line)) {
 	if ($line =~ s/^-i (\S+)\s*//) {
 	    die "parameter -i not allowed\n" if !$allow_iface;
-	    $iface = $1;
-	    PVE::JSONSchema::pve_verify_iface($iface);
+	    $rule->{iface} = $1;
 	    next;
 	}
 
-	last if $type eq 'group';
+	last if $rule->{type} eq 'group';
 
 	if ($line =~ s/^-p (\S+)\s*//) {
-	    $proto = $1;
-	    pve_fw_verify_protocol_spec($proto);
+	    $rule->{proto} = $1;
 	    next;
 	}
+
 	if ($line =~ s/^-dport (\S+)\s*//) {
-	    $dport = $1;
-	    parse_port_name_number_or_range($dport);
+	    $rule->{dport} = $1;
 	    next;
 	}
+
 	if ($line =~ s/^-sport (\S+)\s*//) {
-	    $sport = $1;
-	    parse_port_name_number_or_range($sport);
+	    $rule->{sport} = $1;
 	    next;
 	}
 	if ($line =~ s/^-source (\S+)\s*//) {
-	    $source = $1;
-	    parse_address_list($source);
+	    $rule->{source} = $1;
 	    next;
 	}
 	if ($line =~ s/^-dest (\S+)\s*//) {
-	    $dest = $1;
-	    parse_address_list($dest);
+	    $rule->{dest} = $1;
 	    next;
 	}
 
@@ -1897,19 +1917,9 @@ sub parse_fw_rule {
 
     die "unable to parse rule parameters: $line\n" if length($line);
 
-    return {
-	type => $type,
-	enable => $enable,
-	comment => $comment,
-	action => $action,
-	macro => $macro,
-	iface => $iface,
-	source => $source,
-	dest => $dest,
-	proto => $proto,
-	dport => $dport,
-	sport => $sport,
-    };
+    $rule = verify_rule($rule, $allow_groups, 1);
+
+    return $rule;
 }
 
 sub parse_vmfw_option {
