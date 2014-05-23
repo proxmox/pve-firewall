@@ -37,7 +37,7 @@ sub run_tests {
     PVE::Firewall::local_network('172.16.1.0/24');
 
     my ($ruleset, $ipset_ruleset) = 
-	PVE::Firewall::compile(undef, undef, $vmdata);
+	PVE::Firewall::compile(undef, undef, $vmdata, 1);
 
     my $filename = "$testdir/$testfile";
     my $fh = IO::File->new($filename) ||

@@ -334,10 +334,13 @@ __PACKAGE__->register_method ({
 
 	    my $res = { status => $status };
 	    if ($status eq 'active') {
-		my ($ruleset, $ipset_ruleset) = PVE::Firewall::compile();
+		
+		my $verbose = 1; # show syntax errors 
+		my ($ruleset, $ipset_ruleset) = PVE::Firewall::compile(undef, undef, undef, $verbose);
 
-		my (undef, undef, $ipset_changes) = PVE::Firewall::get_ipset_cmdlist($ipset_ruleset);
-		my (undef, $ruleset_changes) = PVE::Firewall::get_ruleset_cmdlist($ruleset);
+		$verbose = 0; # do not show iptables details
+		my (undef, undef, $ipset_changes) = PVE::Firewall::get_ipset_cmdlist($ipset_ruleset, $verbose);
+		my (undef, $ruleset_changes) = PVE::Firewall::get_ruleset_cmdlist($ruleset, $verbose);
 	      
 		$res->{changes} = ($ipset_changes || $ruleset_changes) ? 1 : 0;
 	    }
@@ -365,10 +368,13 @@ __PACKAGE__->register_method ({
 	local $SIG{'__WARN__'} = 'DEFAULT'; # do not fill up syslog
 
 	my $code = sub {
-	    my ($ruleset, $ipset_ruleset) = PVE::Firewall::compile();
 
-	    my (undef, undef, $ipset_changes) = PVE::Firewall::get_ipset_cmdlist($ipset_ruleset, 1);
-	    my (undef, $ruleset_changes) = PVE::Firewall::get_ruleset_cmdlist($ruleset, 1);
+	    my $verbose = 1;
+
+	    my ($ruleset, $ipset_ruleset) = PVE::Firewall::compile(undef, undef, undef, $verbose);
+
+	    my (undef, undef, $ipset_changes) = PVE::Firewall::get_ipset_cmdlist($ipset_ruleset, $verbose);
+	    my (undef, $ruleset_changes) = PVE::Firewall::get_ruleset_cmdlist($ruleset, $verbose);
 	    if ($ipset_changes || $ruleset_changes) {
 		print "detected changes\n";
 	    } else {
@@ -482,7 +488,7 @@ __PACKAGE__->register_method ({
 
 	local $SIG{'__WARN__'} = 'DEFAULT'; # do not fill up syslog
 
-	my ($ruleset, $ipset_ruleset) = PVE::Firewall::compile();
+	my ($ruleset, $ipset_ruleset) = PVE::Firewall::compile(undef, undef, undef, $param->{verbose});
 
 	PVE::FirewallSimulator::debug($param->{verbose} || 0);
 	
