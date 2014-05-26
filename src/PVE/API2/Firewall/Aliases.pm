@@ -324,7 +324,38 @@ __PACKAGE__->additional_parameters({
 sub load_config {
     my ($class, $param) = @_;
 
-    my $fw_conf = PVE::Firewall::load_vmfw_conf($param->{vmid});
+    my $fw_conf = PVE::Firewall::load_vmfw_conf('vm', $param->{vmid});
+    my $aliases = $fw_conf->{aliases};
+
+    return ($fw_conf, $aliases);
+}
+
+sub save_aliases {
+    my ($class, $param, $fw_conf, $aliases) = @_;
+
+    $fw_conf->{aliases} = $aliases;
+    PVE::Firewall::save_vmfw_conf($param->{vmid}, $fw_conf);
+}
+
+__PACKAGE__->register_handlers();
+
+package PVE::API2::Firewall::CTAliases;
+
+use strict;
+use warnings;
+use PVE::JSONSchema qw(get_standard_option);
+
+use base qw(PVE::API2::Firewall::AliasesBase);
+
+__PACKAGE__->additional_parameters({ 
+    node => get_standard_option('pve-node'),
+    vmid => get_standard_option('pve-vmid'),				   
+});
+
+sub load_config {
+    my ($class, $param) = @_;
+
+    my $fw_conf = PVE::Firewall::load_vmfw_conf('ct', $param->{vmid});
     my $aliases = $fw_conf->{aliases};
 
     return ($fw_conf, $aliases);

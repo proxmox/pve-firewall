@@ -33,8 +33,10 @@ sub save_rules {
 
 my $additional_param_hash = {};
 
-sub allow_groups {
-    return 1;
+sub rule_env {
+    my ($class, $param) = @_;
+    
+    die "implement this in subclass";
 }
 
 sub additional_parameters {
@@ -161,7 +163,7 @@ sub register_create_rule {
 	    my $rule = {};
 
 	    PVE::Firewall::copy_rule_data($rule, $param);
-	    PVE::Firewall::verify_rule($rule, $class->allow_groups());
+	    PVE::Firewall::verify_rule($rule, $class->rule_env());
 
 	    $rule->{enable} = 0 if !defined($param->{enable});
 
@@ -235,7 +237,7 @@ sub register_update_rule {
 		
 		PVE::Firewall::delete_rule_properties($rule, $param->{'delete'}) if $param->{'delete'};
 
-		PVE::Firewall::verify_rule($rule, $class->allow_groups());
+		PVE::Firewall::verify_rule($rule, $class->rule_env());
 	    }
 
 	    $class->save_rules($param, $fw_conf, $rules);
@@ -302,8 +304,10 @@ use base qw(PVE::API2::Firewall::RulesBase);
 
 __PACKAGE__->additional_parameters({ group => get_standard_option('pve-security-group-name') });
 
-sub allow_groups {
-    return 0;
+sub rule_env {
+    my ($class, $param) = @_;
+    
+    return 'group';
 }
 
 sub load_config {
@@ -332,6 +336,12 @@ use warnings;
 
 use base qw(PVE::API2::Firewall::RulesBase);
 
+sub rule_env {
+    my ($class, $param) = @_;
+    
+    return 'cluster';
+}
+
 sub load_config {
     my ($class, $param) = @_;
 
@@ -359,6 +369,12 @@ use PVE::JSONSchema qw(get_standard_option);
 use base qw(PVE::API2::Firewall::RulesBase);
 
 __PACKAGE__->additional_parameters({ node => get_standard_option('pve-node')});
+
+sub rule_env {
+    my ($class, $param) = @_;
+    
+    return 'host';
+}
 
 sub load_config {
     my ($class, $param) = @_;
@@ -391,10 +407,53 @@ __PACKAGE__->additional_parameters({
     vmid => get_standard_option('pve-vmid'),				   
 });
 
+sub rule_env {
+    my ($class, $param) = @_;
+    
+    return 'vm';
+}
+
 sub load_config {
     my ($class, $param) = @_;
 
-    my $fw_conf = PVE::Firewall::load_vmfw_conf($param->{vmid});
+    my $fw_conf = PVE::Firewall::load_vmfw_conf('vm', $param->{vmid});
+    my $rules = $fw_conf->{rules};
+
+    return ($fw_conf, $rules);
+}
+
+sub save_rules {
+    my ($class, $param, $fw_conf, $rules) = @_;
+
+    $fw_conf->{rules} = $rules;
+    PVE::Firewall::save_vmfw_conf($param->{vmid}, $fw_conf);
+}
+
+__PACKAGE__->register_handlers();
+
+package PVE::API2::Firewall::CTRules;
+
+use strict;
+use warnings;
+use PVE::JSONSchema qw(get_standard_option);
+
+use base qw(PVE::API2::Firewall::RulesBase);
+
+__PACKAGE__->additional_parameters({ 
+    node => get_standard_option('pve-node'),
+    vmid => get_standard_option('pve-vmid'),				   
+});
+
+sub rule_env {
+    my ($class, $param) = @_;
+    
+    return 'ct';
+}
+
+sub load_config {
+    my ($class, $param) = @_;
+
+    my $fw_conf = PVE::Firewall::load_vmfw_conf('ct', $param->{vmid});
     my $rules = $fw_conf->{rules};
 
     return ($fw_conf, $rules);

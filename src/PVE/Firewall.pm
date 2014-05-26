@@ -1004,8 +1004,21 @@ my $apply_macro = sub {
     return $rules;
 };
 
+my $rule_env_iface_lookup = {
+    'ct' => 1,
+    'vm' => 1,
+    'group' => 0,
+    'cluster' => 1,
+    'host' => 1,
+};
+
 sub verify_rule {
-    my ($rule, $allow_groups, $noerr) = @_;
+    my ($rule, $rule_env, $noerr) = @_;
+
+    my $allow_groups = $rule_env eq 'group' ? 0 : 1;
+    
+    my $allow_iface = $rule_env_iface_lookup->{$rule_env};
+    die "unknown rule_env '$rule_env'\n" if !defined($allow_iface); # should not happen
 
     my $errors = {};
     my $error_count = 0;
@@ -1039,9 +1052,18 @@ sub verify_rule {
     }
 
     if ($rule->{iface}) {
+	&$add_error('type', "parameter -i not allowed for this rule type") 
+	    if !$allow_iface;
 	eval { PVE::JSONSchema::pve_verify_iface($rule->{iface}); };
 	&$add_error('iface', $@) if $@;
-    }	
+    	if ($rule_env eq 'vm') {
+	    &$add_error('iface', "value does not match the regex pattern 'net\\d+'")
+		if $rule->{iface} !~  m/^net(\d+)$/;
+	} elsif ($rule_env eq 'ct') {
+	    &$add_error('iface', "value does not match the regex pattern '(venet|eth\\d+)'")
+		if $rule->{iface} !~  m/^(venet|eth(\d+))$/;
+	}
+    }
 
     if ($rule->{macro}) {
 	if (my $preferred_name = $pve_fw_preferred_macro_names->{lc($rule->{macro})}) {
@@ -1853,7 +1875,7 @@ for (my $i = 0; $i < $MAX_NETS; $i++)  {
 }
 
 sub parse_fw_rule {
-    my ($prefix, $line, $allow_iface, $allow_groups, $verbose) = @_;
+    my ($prefix, $line, $rule_env, $verbose) = @_;
 
     chomp $line;
 
@@ -1885,7 +1907,6 @@ sub parse_fw_rule {
 
     while (length($line)) {
 	if ($line =~ s/^-i (\S+)\s*//) {
-	    die "parameter -i not allowed\n" if !$allow_iface;
 	    $rule->{iface} = $1;
 	    next;
 	}
@@ -1920,7 +1941,7 @@ sub parse_fw_rule {
 
     die "unable to parse rule parameters: $line\n" if length($line);
 
-    $rule = verify_rule($rule, $allow_groups, 1);
+    $rule = verify_rule($rule, $rule_env, 1);
     if ($verbose && $rule->{errors}) {
 	warn "$prefix - errors in rule parameters: $orig_line\n";
 	foreach my $p (keys %{$rule->{errors}}) {
@@ -2023,7 +2044,7 @@ sub parse_alias {
 }
 
 sub parse_vm_fw_rules {
-    my ($filename, $fh, $verbose) = @_;
+    my ($filename, $fh, $rule_env, $verbose) = @_;
 
     my $res = { 
 	rules => [], 
@@ -2071,7 +2092,7 @@ sub parse_vm_fw_rules {
 	}
 
 	my $rule;
-	eval { $rule = parse_fw_rule($prefix, $line, 1, 1, $verbose); };
+	eval { $rule = parse_fw_rule($prefix, $line, $rule_env, $verbose); };
 	if (my $err = $@) {
 	    warn "$prefix: $err";
 	    next;
@@ -2119,7 +2140,7 @@ sub parse_host_fw_rules {
 	}
 
 	my $rule;
-	eval { $rule = parse_fw_rule($prefix, $line, 1, 1, $verbose); };
+	eval { $rule = parse_fw_rule($prefix, $line, 'host', $verbose); };
 	if (my $err = $@) {
 	    warn "$prefix: $err";
 	    next;
@@ -2208,7 +2229,7 @@ sub parse_cluster_fw_rules {
 	    warn "$prefix: $@" if $@;
 	} elsif ($section eq 'rules') {
 	    my $rule;
-	    eval { $rule = parse_fw_rule($prefix, $line, 1, 1, $verbose); };
+	    eval { $rule = parse_fw_rule($prefix, $line, 'cluster', $verbose); };
 	    if (my $err = $@) {
 		warn "$prefix: $err";
 		next;
@@ -2216,7 +2237,7 @@ sub parse_cluster_fw_rules {
 	    push @{$res->{$section}}, $rule;
 	} elsif ($section eq 'groups') {
 	    my $rule;
-	    eval { $rule = parse_fw_rule($prefix, $line, 0, 0, $verbose); };
+	    eval { $rule = parse_fw_rule($prefix, $line, 'group', $verbose); };
 	    if (my $err = $@) {
 		warn "$prefix: $err";
 		next;
@@ -2300,7 +2321,7 @@ sub read_local_vm_config {
 };
 
 sub load_vmfw_conf {
-    my ($vmid, $dir, $verbose) = @_;
+    my ($rule_env, $vmid, $dir, $verbose) = @_;
 
     my $vmfw_conf = {};
 
@@ -2308,7 +2329,7 @@ sub load_vmfw_conf {
 
     my $filename = "$dir/$vmid.fw";
     if (my $fh = IO::File->new($filename, O_RDONLY)) {
-	$vmfw_conf = parse_vm_fw_rules($filename, $fh, $verbose);
+	$vmfw_conf = parse_vm_fw_rules($filename, $fh, $rule_env, $verbose);
     }
 
     return $vmfw_conf;
@@ -2432,8 +2453,13 @@ sub read_vm_firewall_configs {
 
     my $vmfw_configs = {};
 
-    foreach my $vmid (keys %{$vmdata->{qemu}}, keys %{$vmdata->{openvz}}) {
-	my $vmfw_conf = load_vmfw_conf($vmid, $dir, $verbose);
+    foreach my $vmid (keys %{$vmdata->{qemu}}) {
+	my $vmfw_conf = load_vmfw_conf('vm', $vmid, $dir, $verbose);
+	next if !$vmfw_conf->{options}; # skip if file does not exists
+	$vmfw_configs->{$vmid} = $vmfw_conf;
+    }
+    foreach my $vmid (keys %{$vmdata->{openvz}}) {
+	my $vmfw_conf = load_vmfw_conf('ct', $vmid, $dir, $verbose);
 	next if !$vmfw_conf->{options}; # skip if file does not exists
 	$vmfw_configs->{$vmid} = $vmfw_conf;
     }
