@@ -1610,7 +1610,7 @@ sub ruleset_generate_vm_rules {
 
     foreach my $rule (@$rules) {
 	next if $rule->{iface} && $rule->{iface} ne $netid;
-	next if !$rule->{enable};
+	next if !$rule->{enable} || $rule->{errors};
 	if ($rule->{type} eq 'group') {
 	    ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, $direction,
 				   $direction eq 'OUT' ? 'RETURN' : $in_accept);
