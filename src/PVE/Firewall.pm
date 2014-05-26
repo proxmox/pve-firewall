@@ -1774,7 +1774,10 @@ sub enable_host_firewall {
 
     # add host rules first, so that cluster wide rules can be overwritten
     foreach my $rule (@$rules, @$cluster_rules) {
+	next if !$rule->{enable} || $rule->{errors};
+	
 	$rule->{iface_in} = $rule->{iface} if $rule->{iface};
+
 	eval {
 	    if ($rule->{type} eq 'group') {
 		ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, 'IN', $accept_action);
@@ -1824,6 +1827,8 @@ sub enable_host_firewall {
 
     # add host rules first, so that cluster wide rules can be overwritten
     foreach my $rule (@$rules, @$cluster_rules) {
+	next if !$rule->{enable} || $rule->{errors};
+
 	$rule->{iface_out} = $rule->{iface} if $rule->{iface};
 	eval {
 	    if ($rule->{type} eq 'group') {
