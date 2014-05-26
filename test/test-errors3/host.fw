@@ -1,5 +1,5 @@
 [RULES]
 
-# rule without dport - should be skipped
+# rule with dport but missing protocol - should be ignored
 IN ACCEPT -dport 80
 
