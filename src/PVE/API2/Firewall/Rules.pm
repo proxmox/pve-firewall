@@ -22,7 +22,7 @@ sub load_config {
 
     die "implement this in subclass";
 
-    #return ($fw_conf, $rules);
+    #return ($cluster_conf, $fw_conf, $rules);
 }
 
 sub save_rules {
@@ -82,7 +82,7 @@ sub register_get_rules {
 	code => sub {
 	    my ($param) = @_;
 
-	    my ($fw_conf, $rules) = $class->load_config($param);
+	    my ($cluster_conf, $fw_conf, $rules) = $class->load_config($param);
 
 	    my ($list, $digest) = PVE::Firewall::copy_list_with_digest($rules);
 
@@ -122,7 +122,7 @@ sub register_get_rule {
 	code => sub {
 	    my ($param) = @_;
 
-	    my ($fw_conf, $rules) = $class->load_config($param);
+	    my ($cluster_conf, $fw_conf, $rules) = $class->load_config($param);
 
 	    my ($list, $digest) = PVE::Firewall::copy_list_with_digest($rules);
 	
@@ -158,12 +158,12 @@ sub register_create_rule {
 	code => sub {
 	    my ($param) = @_;
 
-	    my ($fw_conf, $rules) = $class->load_config($param);
+	    my ($cluster_conf, $fw_conf, $rules) = $class->load_config($param);
 
 	    my $rule = {};
 
 	    PVE::Firewall::copy_rule_data($rule, $param);
-	    PVE::Firewall::verify_rule($rule, $class->rule_env());
+	    PVE::Firewall::verify_rule($rule, $cluster_conf, $fw_conf, $class->rule_env());
 
 	    $rule->{enable} = 0 if !defined($param->{enable});
 
@@ -211,7 +211,7 @@ sub register_update_rule {
 	code => sub {
 	    my ($param) = @_;
 
-	    my ($fw_conf, $rules) = $class->load_config($param);
+	    my ($cluster_conf, $fw_conf, $rules) = $class->load_config($param);
 
 	    my (undef, $digest) = PVE::Firewall::copy_list_with_digest($rules);
 	    PVE::Tools::assert_if_modified($digest, $param->{digest});
@@ -237,7 +237,7 @@ sub register_update_rule {
 		
 		PVE::Firewall::delete_rule_properties($rule, $param->{'delete'}) if $param->{'delete'};
 
-		PVE::Firewall::verify_rule($rule, $class->rule_env());
+		PVE::Firewall::verify_rule($rule, $cluster_conf, $fw_conf, $class->rule_env());
 	    }
 
 	    $class->save_rules($param, $fw_conf, $rules);
@@ -269,7 +269,7 @@ sub register_delete_rule {
 	code => sub {
 	    my ($param) = @_;
 
-	    my ($fw_conf, $rules) = $class->load_config($param);
+	    my ($cluster_conf, $fw_conf, $rules) = $class->load_config($param);
 
 	    my (undef, $digest) = PVE::Firewall::copy_list_with_digest($rules);
 	    PVE::Tools::assert_if_modified($digest, $param->{digest});
@@ -317,7 +317,7 @@ sub load_config {
     my $rules = $fw_conf->{groups}->{$param->{group}};
     die "no such security group '$param->{group}'\n" if !defined($rules);
 
-    return ($fw_conf, $rules);
+    return (undef, $fw_conf, $rules);
 }
 
 sub save_rules {
@@ -348,7 +348,7 @@ sub load_config {
     my $fw_conf = PVE::Firewall::load_clusterfw_conf();
     my $rules = $fw_conf->{rules};
 
-    return ($fw_conf, $rules);
+    return (undef, $fw_conf, $rules);
 }
 
 sub save_rules {
@@ -379,10 +379,11 @@ sub rule_env {
 sub load_config {
     my ($class, $param) = @_;
 
-    my $fw_conf = PVE::Firewall::load_hostfw_conf();
+    my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
+    my $fw_conf = PVE::Firewall::load_hostfw_conf($cluster_conf);
     my $rules = $fw_conf->{rules};
 
-    return ($fw_conf, $rules);
+    return ($cluster_conf, $fw_conf, $rules);
 }
 
 sub save_rules {
@@ -416,10 +417,11 @@ sub rule_env {
 sub load_config {
     my ($class, $param) = @_;
 
-    my $fw_conf = PVE::Firewall::load_vmfw_conf('vm', $param->{vmid});
+    my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
+    my $fw_conf = PVE::Firewall::load_vmfw_conf($cluster_conf, 'vm', $param->{vmid});
     my $rules = $fw_conf->{rules};
 
-    return ($fw_conf, $rules);
+    return ($cluster_conf, $fw_conf, $rules);
 }
 
 sub save_rules {
@@ -453,10 +455,11 @@ sub rule_env {
 sub load_config {
     my ($class, $param) = @_;
 
-    my $fw_conf = PVE::Firewall::load_vmfw_conf('ct', $param->{vmid});
+    my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
+    my $fw_conf = PVE::Firewall::load_vmfw_conf($cluster_conf, 'ct', $param->{vmid});
     my $rules = $fw_conf->{rules};
 
-    return ($fw_conf, $rules);
+    return ($cluster_conf, $fw_conf, $rules);
 }
 
 sub save_rules {

@@ -1013,14 +1013,15 @@ my $rule_env_iface_lookup = {
 };
 
 sub verify_rule {
-    my ($rule, $rule_env, $noerr) = @_;
+    my ($rule, $cluster_conf, $fw_conf, $rule_env, $noerr) = @_;
 
     my $allow_groups = $rule_env eq 'group' ? 0 : 1;
     
     my $allow_iface = $rule_env_iface_lookup->{$rule_env};
     die "unknown rule_env '$rule_env'\n" if !defined($allow_iface); # should not happen
 
-    my $errors = {};
+    my $errors = $rule->{errors} || {};
+
     my $error_count = 0;
 
     my $add_error = sub {
@@ -1029,6 +1030,26 @@ sub verify_rule {
 	raise_param_exc({ $param => $msg }) if !$noerr;
 	$error_count++;
 	$errors->{$param} = $msg if !$errors->{$param};
+    };
+
+    my $check_ipset_or_alias_property = sub {
+	my ($name) = @_;
+
+	if (my $value = $rule->{$name}) {
+	    if ($value =~ m/^\+/) {
+		if ($value =~ m/^\+(${security_group_name_pattern})$/) {
+		    &$add_error($name, "no such ipset '$1'") 
+			if !($cluster_conf->{ipset}->{$1} || ($fw_conf && $fw_conf->{ipset}->{$1}));
+				 
+		} else {
+		    &$add_error($name, "invalid security group name '$value'");
+		}
+	    } elsif ($value =~ m/^${ip_alias_pattern}$/){
+		my $alias = lc($value);
+		&$add_error($name, "no such alias '$value'") 
+		    if !($cluster_conf->{aliases}->{$alias} || ($fw_conf && $fw_conf->{aliases}->{$alias}))
+	    }
+	}
     };
 
     my $type = $rule->{type};
@@ -1095,14 +1116,16 @@ sub verify_rule {
     if ($rule->{source}) {
 	eval { parse_address_list($rule->{source}); };
 	&$add_error('source', $@) if $@;
+	&$check_ipset_or_alias_property('source');
     }
 
     if ($rule->{dest}) {
 	eval { parse_address_list($rule->{dest}); };
 	&$add_error('dest', $@) if $@;
+	&$check_ipset_or_alias_property('dest');
     }
 
-    if ($rule->{macro}) {
+    if ($rule->{macro} && !$error_count) {
 	eval { &$apply_macro($rule->{macro}, $rule, 1); };
 	if (my $err = $@) {
 	    if (ref($err) eq "PVE::Exception" && $err->{errors}) {
@@ -1875,7 +1898,7 @@ for (my $i = 0; $i < $MAX_NETS; $i++)  {
 }
 
 sub parse_fw_rule {
-    my ($prefix, $line, $rule_env, $verbose) = @_;
+    my ($prefix, $line, $cluster_conf, $fw_conf, $rule_env, $verbose) = @_;
 
     chomp $line;
 
@@ -1941,7 +1964,7 @@ sub parse_fw_rule {
 
     die "unable to parse rule parameters: $line\n" if length($line);
 
-    $rule = verify_rule($rule, $rule_env, 1);
+    $rule = verify_rule($rule, $cluster_conf, $fw_conf, $rule_env, 1);
     if ($verbose && $rule->{errors}) {
 	warn "$prefix - errors in rule parameters: $orig_line\n";
 	foreach my $p (keys %{$rule->{errors}}) {
@@ -2044,7 +2067,7 @@ sub parse_alias {
 }
 
 sub parse_vm_fw_rules {
-    my ($filename, $fh, $rule_env, $verbose) = @_;
+    my ($filename, $fh, $cluster_conf, $rule_env, $verbose) = @_;
 
     my $res = { 
 	rules => [], 
@@ -2092,7 +2115,7 @@ sub parse_vm_fw_rules {
 	}
 
 	my $rule;
-	eval { $rule = parse_fw_rule($prefix, $line, $rule_env, $verbose); };
+	eval { $rule = parse_fw_rule($prefix, $line, $cluster_conf, $res, $rule_env, $verbose); };
 	if (my $err = $@) {
 	    warn "$prefix: $err";
 	    next;
@@ -2105,7 +2128,7 @@ sub parse_vm_fw_rules {
 }
 
 sub parse_host_fw_rules {
-    my ($filename, $fh, $verbose) = @_;
+    my ($filename, $fh, $cluster_conf, $verbose) = @_;
 
     my $res = { rules => [], options => {}};
 
@@ -2140,7 +2163,7 @@ sub parse_host_fw_rules {
 	}
 
 	my $rule;
-	eval { $rule = parse_fw_rule($prefix, $line, 'host', $verbose); };
+	eval { $rule = parse_fw_rule($prefix, $line, $cluster_conf, $res, 'host', $verbose); };
 	if (my $err = $@) {
 	    warn "$prefix: $err";
 	    next;
@@ -2229,7 +2252,7 @@ sub parse_cluster_fw_rules {
 	    warn "$prefix: $@" if $@;
 	} elsif ($section eq 'rules') {
 	    my $rule;
-	    eval { $rule = parse_fw_rule($prefix, $line, 'cluster', $verbose); };
+	    eval { $rule = parse_fw_rule($prefix, $line, $res, undef, 'cluster', $verbose); };
 	    if (my $err = $@) {
 		warn "$prefix: $err";
 		next;
@@ -2237,7 +2260,7 @@ sub parse_cluster_fw_rules {
 	    push @{$res->{$section}}, $rule;
 	} elsif ($section eq 'groups') {
 	    my $rule;
-	    eval { $rule = parse_fw_rule($prefix, $line, 'group', $verbose); };
+	    eval { $rule = parse_fw_rule($prefix, $line, $res, undef, 'group', $verbose); };
 	    if (my $err = $@) {
 		warn "$prefix: $err";
 		next;
@@ -2321,7 +2344,7 @@ sub read_local_vm_config {
 };
 
 sub load_vmfw_conf {
-    my ($rule_env, $vmid, $dir, $verbose) = @_;
+    my ($cluster_conf, $rule_env, $vmid, $dir, $verbose) = @_;
 
     my $vmfw_conf = {};
 
@@ -2329,7 +2352,7 @@ sub load_vmfw_conf {
 
     my $filename = "$dir/$vmid.fw";
     if (my $fh = IO::File->new($filename, O_RDONLY)) {
-	$vmfw_conf = parse_vm_fw_rules($filename, $fh, $rule_env, $verbose);
+	$vmfw_conf = parse_vm_fw_rules($filename, $fh, $cluster_conf, $rule_env, $verbose);
     }
 
     return $vmfw_conf;
@@ -2449,17 +2472,17 @@ sub save_vmfw_conf {
 }
 
 sub read_vm_firewall_configs {
-    my ($vmdata, $dir, $verbose) = @_;
+    my ($cluster_conf, $vmdata, $dir, $verbose) = @_;
 
     my $vmfw_configs = {};
 
     foreach my $vmid (keys %{$vmdata->{qemu}}) {
-	my $vmfw_conf = load_vmfw_conf('vm', $vmid, $dir, $verbose);
+	my $vmfw_conf = load_vmfw_conf($cluster_conf, 'vm', $vmid, $dir, $verbose);
 	next if !$vmfw_conf->{options}; # skip if file does not exists
 	$vmfw_configs->{$vmid} = $vmfw_conf;
     }
     foreach my $vmid (keys %{$vmdata->{openvz}}) {
-	my $vmfw_conf = load_vmfw_conf('ct', $vmid, $dir, $verbose);
+	my $vmfw_conf = load_vmfw_conf($cluster_conf, 'ct', $vmid, $dir, $verbose);
 	next if !$vmfw_conf->{options}; # skip if file does not exists
 	$vmfw_configs->{$vmid} = $vmfw_conf;
     }
@@ -2638,13 +2661,13 @@ sub save_clusterfw_conf {
 }
 
 sub load_hostfw_conf {
-    my ($filename, $verbose) = @_;
+    my ($cluster_conf, $filename, $verbose) = @_;
 
     $filename = $hostfw_conf_filename if !defined($filename);
 
     my $hostfw_conf = {};
     if (my $fh = IO::File->new($filename, O_RDONLY)) {
-	$hostfw_conf = parse_host_fw_rules($filename, $fh, $verbose);
+	$hostfw_conf = parse_host_fw_rules($filename, $fh, $cluster_conf, $verbose);
     }
     return $hostfw_conf;
 }
@@ -2678,18 +2701,17 @@ sub compile {
 	$cluster_conf = load_clusterfw_conf($filename, $verbose);
 
 	$filename = "$testdir/host.fw";
-	$hostfw_conf = load_hostfw_conf($filename, $verbose);
+	$hostfw_conf = load_hostfw_conf($cluster_conf, $filename, $verbose);
 
-	$vmfw_configs = read_vm_firewall_configs($vmdata, $testdir, $verbose);
+	$vmfw_configs = read_vm_firewall_configs($cluster_conf, $vmdata, $testdir, $verbose);
     } else { # normal operation
 	$cluster_conf = load_clusterfw_conf(undef, $verbose) if !$cluster_conf;
 
-	$hostfw_conf = load_hostfw_conf(undef, $verbose) if !$hostfw_conf;
+	$hostfw_conf = load_hostfw_conf($cluster_conf, undef, $verbose) if !$hostfw_conf;
 
 	$vmdata = read_local_vm_config();
-	$vmfw_configs = read_vm_firewall_configs($vmdata, undef, $verbose);
+	$vmfw_configs = read_vm_firewall_configs($cluster_conf, $vmdata, undef, $verbose);
     }
-
 
     $cluster_conf->{ipset}->{venet0} = [];
  
