@@ -1544,8 +1544,12 @@ sub ruleset_chain_add_input_filters {
     my ($ruleset, $chain, $options, $cluster_conf, $loglevel) = @_;
 
     if ($cluster_conf->{ipset}->{blacklist}){
-	ruleset_addlog($ruleset, $chain, 0, "DROP: ", $loglevel, "-m set --match-set PVEFW-blacklist src");
-	ruleset_addrule($ruleset, $chain, "-m set --match-set PVEFW-blacklist src -j DROP");
+	if (!ruleset_chain_exist($ruleset, "PVEFW-blacklist")) {
+	    ruleset_create_chain($ruleset, "PVEFW-blacklist");
+	    ruleset_addlog($ruleset, "PVEFW-blacklist", 0, "DROP: ", $loglevel) if $loglevel;
+	    ruleset_addrule($ruleset, "PVEFW-blacklist", "-j DROP");
+	}
+	ruleset_addrule($ruleset, $chain, "-m set --match-set PVEFW-blacklist src -j PVEFW-blacklist");
     }
 
     if (!(defined($options->{nosmurfs}) && $options->{nosmurfs} == 0)) {
