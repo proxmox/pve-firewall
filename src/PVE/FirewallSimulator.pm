@@ -37,6 +37,14 @@ sub add_trace {
     }
 }
 
+$SIG{'__WARN__'} = sub {
+    my $err = $@;
+    my $t = $_[0];
+    chomp $t;
+    add_trace("$t\n");
+    $@ = $err;
+};
+
 sub nf_dev_match {
     my ($devre, $dev) = @_;
 
