@@ -720,7 +720,7 @@ sub local_network {
 	my $ip = PVE::Cluster::remote_node_ip($nodename);
 
 	my $testip = Net::IP->new($ip);
-   
+
 	my $routes = PVE::ProcFSTools::read_proc_net_route();
 	foreach my $entry (@$routes) {
 	    my $mask = $ipv4_mask_hash_localnet->{$entry->{mask}};
@@ -1016,7 +1016,7 @@ sub verify_rule {
     my ($rule, $cluster_conf, $fw_conf, $rule_env, $noerr) = @_;
 
     my $allow_groups = $rule_env eq 'group' ? 0 : 1;
-    
+
     my $allow_iface = $rule_env_iface_lookup->{$rule_env};
     die "unknown rule_env '$rule_env'\n" if !defined($allow_iface); # should not happen
 
@@ -1038,15 +1038,15 @@ sub verify_rule {
 	if (my $value = $rule->{$name}) {
 	    if ($value =~ m/^\+/) {
 		if ($value =~ m/^\+(${security_group_name_pattern})$/) {
-		    &$add_error($name, "no such ipset '$1'") 
+		    &$add_error($name, "no such ipset '$1'")
 			if !($cluster_conf->{ipset}->{$1} || ($fw_conf && $fw_conf->{ipset}->{$1}));
-				 
+
 		} else {
 		    &$add_error($name, "invalid security group name '$value'");
 		}
 	    } elsif ($value =~ m/^${ip_alias_pattern}$/){
 		my $alias = lc($value);
-		&$add_error($name, "no such alias '$value'") 
+		&$add_error($name, "no such alias '$value'")
 		    if !($cluster_conf->{aliases}->{$alias} || ($fw_conf && $fw_conf->{aliases}->{$alias}))
 	    }
 	}
@@ -1054,7 +1054,7 @@ sub verify_rule {
 
     my $type = $rule->{type};
     my $action = $rule->{action};
-    
+
     &$add_error('type', "missing property") if !$type;
     &$add_error('action', "missing property") if !$action;
 
@@ -1073,7 +1073,7 @@ sub verify_rule {
     }
 
     if ($rule->{iface}) {
-	&$add_error('type', "parameter -i not allowed for this rule type") 
+	&$add_error('type', "parameter -i not allowed for this rule type")
 	    if !$allow_iface;
 	eval { PVE::JSONSchema::pve_verify_iface($rule->{iface}); };
 	&$add_error('iface', $@) if $@;
@@ -1334,7 +1334,7 @@ sub ruleset_generate_cmdstr {
 	    }
 	} elsif ($source =~ m/^${ip_alias_pattern}$/){
 	    my $alias = lc($source);
-	    my $e = $fw_conf->{aliases}->{$alias} if $fw_conf; 
+	    my $e = $fw_conf->{aliases}->{$alias} if $fw_conf;
 	    $e = $cluster_conf->{aliases}->{$alias} if !$e && $cluster_conf;
 	    die "no such alias '$source'\n" if !$e;
 	    push @cmd, "-s $e->{cidr}";
@@ -1361,13 +1361,12 @@ sub ruleset_generate_cmdstr {
 	    }
 	} elsif ($dest =~ m/^${ip_alias_pattern}$/){
 	    my $alias = lc($dest);
-	    my $e = $fw_conf->{aliases}->{$alias} if $fw_conf; 
+	    my $e = $fw_conf->{aliases}->{$alias} if $fw_conf;
 	    $e = $cluster_conf->{aliases}->{$alias} if !$e && $cluster_conf;
 	    die "no such alias '$dest'\n" if !$e;
 	    push @cmd, "-d $e->{cidr}";
         } elsif ($dest =~ m/^(\d+)\.(\d+).(\d+).(\d+)\-(\d+)\.(\d+).(\d+).(\d+)$/){
 	    push @cmd, "-m iprange --dst-range $dest";
-
 	} else {
 	    push @cmd, "-d $dest";
         }
@@ -1606,7 +1605,7 @@ sub ruleset_add_group_rule {
     if(!ruleset_chain_exist($ruleset, $group_chain)){
 	generate_group_rules($ruleset, $cluster_conf, $group);
     }
-	
+
     if ($direction eq 'OUT' && $rule->{iface_out}) {
 	ruleset_addrule($ruleset, $chain, "-o $rule->{iface_out} -j $group_chain");
     } elsif ($direction eq 'IN' && $rule->{iface_in}) {
@@ -1792,14 +1791,14 @@ sub enable_host_firewall {
     # add host rules first, so that cluster wide rules can be overwritten
     foreach my $rule (@$rules, @$cluster_rules) {
 	next if !$rule->{enable} || $rule->{errors};
-	
+
 	$rule->{iface_in} = $rule->{iface} if $rule->{iface};
 
 	eval {
 	    if ($rule->{type} eq 'group') {
 		ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, 'IN', $accept_action);
 	    } elsif ($rule->{type} eq 'in') {
-		ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" }, 
+		ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" },
 				      undef, $cluster_conf, $hostfw_conf);
 	    }
 	};
@@ -1810,10 +1809,10 @@ sub enable_host_firewall {
     # allow standard traffic for management ipset (includes cluster network)
     my $mngmntsrc = "-m set --match-set PVEFW-management src";
     ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 8006 -j $accept_action");  # PVE API
-    ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 5900:5999 -j $accept_action");  # PVE VNC Console 
+    ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 5900:5999 -j $accept_action");  # PVE VNC Console
     ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 3128 -j $accept_action");  # SPICE Proxy
     ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 22 -j $accept_action");  # SSH
-   
+
     my $localnet = local_network();
 
     # corosync
@@ -1851,7 +1850,7 @@ sub enable_host_firewall {
 	    if ($rule->{type} eq 'group') {
 		ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, 'OUT', $accept_action);
 	    } elsif ($rule->{type} eq 'out') {
-		ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" }, 
+		ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" },
 				      undef, $cluster_conf, $hostfw_conf);
 	    }
 	};
@@ -1863,9 +1862,9 @@ sub enable_host_firewall {
     if ($localnet) {
 	ruleset_addrule($ruleset, $chain, "-d $localnet -p tcp --dport 8006 -j $accept_action");  # PVE API
 	ruleset_addrule($ruleset, $chain, "-d $localnet -p tcp --dport 22 -j $accept_action");  # SSH
-	ruleset_addrule($ruleset, $chain, "-d $localnet -p tcp --dport 5900:5999 -j $accept_action");  # PVE VNC Console 
+	ruleset_addrule($ruleset, $chain, "-d $localnet -p tcp --dport 5900:5999 -j $accept_action");  # PVE VNC Console
 	ruleset_addrule($ruleset, $chain, "-d $localnet -p tcp --dport 3128 -j $accept_action");  # SPICE Proxy
- 
+
 	my $corosync_rule = "-p udp --dport 5404:5405 -j $accept_action";
 	ruleset_addrule($ruleset, $chain, "-d $localnet $corosync_rule");
 	ruleset_addrule($ruleset, $chain, "-m addrtype --dst-type MULTICAST $corosync_rule");
@@ -2091,8 +2090,8 @@ sub parse_alias {
 sub parse_vm_fw_rules {
     my ($filename, $fh, $cluster_conf, $rule_env, $verbose) = @_;
 
-    my $res = { 
-	rules => [], 
+    my $res = {
+	rules => [],
 	options => {},
 	aliases => {},
     };
@@ -2736,7 +2735,7 @@ sub compile {
     }
 
     $cluster_conf->{ipset}->{venet0} = [];
- 
+
     my $localnet;
     if ($cluster_conf->{aliases}->{local_network}) {
 	$localnet = $cluster_conf->{aliases}->{local_network}->{cidr};
@@ -2746,7 +2745,7 @@ sub compile {
     }
 
     push @{$cluster_conf->{ipset}->{management}}, { cidr => $localnet };
-   
+
     my $ruleset = {};
 
     ruleset_create_chain($ruleset, "PVEFW-INPUT");
