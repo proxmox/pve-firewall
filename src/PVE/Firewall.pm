@@ -1300,7 +1300,7 @@ sub ipset_get_chains {
 }
 
 sub ruleset_generate_cmdstr {
-    my ($ruleset, $chain, $rule, $actions, $goto, $cluster_conf) = @_;
+    my ($ruleset, $chain, $rule, $actions, $goto, $cluster_conf, $fw_conf) = @_;
 
     return if defined($rule->{enable}) && !$rule->{enable};
     return if $rule->{errors};
@@ -1321,19 +1321,25 @@ sub ruleset_generate_cmdstr {
     if ($source) {
         if ($source =~ m/^\+/) {
 	    if ($source =~ m/^\+(${security_group_name_pattern})$/) {
-		die "no such ipset '$1'\n" if !$cluster_conf->{ipset}->{$1};
-		push @cmd, "-m set --match-set PVEFW-$1 src";
+		my $name = $1;
+		if ($fw_conf && $fw_conf->{ipset}->{$name}) {
+		    die "implement me";
+		} elsif ($cluster_conf && $cluster_conf->{ipset}->{$name}) {
+		    push @cmd, "-m set --match-set PVEFW-$1 src";
+		} else {
+		    die "no such ipset '$name'\n";
+		}
 	    } else {
 		die "invalid security group name '$source'\n";
 	    }
 	} elsif ($source =~ m/^${ip_alias_pattern}$/){
 	    my $alias = lc($source);
-	    my $e = $cluster_conf->{aliases}->{$alias};
-	    die "no such alias $source\n" if !$e;
+	    my $e = $fw_conf->{aliases}->{$alias} if $fw_conf; 
+	    $e = $cluster_conf->{aliases}->{$alias} if !$e && $cluster_conf;
+	    die "no such alias '$source'\n" if !$e;
 	    push @cmd, "-s $e->{cidr}";
         } elsif ($source =~ m/\-/){
 	    push @cmd, "-m iprange --src-range $source";
-
 	} else {
 	    push @cmd, "-s $source";
         }
@@ -1342,15 +1348,22 @@ sub ruleset_generate_cmdstr {
     if ($dest) {
         if ($dest =~ m/^\+/) {
 	    if ($dest =~ m/^\+(${security_group_name_pattern})$/) {
-		die "no such ipset '$1'\n" if !$cluster_conf->{ipset}->{$1};
-		push @cmd, "-m set --match-set PVEFW-$1 dst";
+		my $name = $1;
+		if ($fw_conf && $fw_conf->{ipset}->{$name}) {
+		    die "implement me";
+		} elsif ($cluster_conf && $cluster_conf->{ipset}->{$name}) {
+		    push @cmd, "-m set --match-set PVEFW-$1 dst";
+		} else {
+		    die "no such ipset '$name'\n";
+		}
 	    } else {
 		die "invalid security group name '$dest'\n";
 	    }
 	} elsif ($dest =~ m/^${ip_alias_pattern}$/){
 	    my $alias = lc($dest);
-	    my $e = $cluster_conf->{aliases}->{$alias};
-	    die "no such alias $dest" if !$e;
+	    my $e = $fw_conf->{aliases}->{$alias} if $fw_conf; 
+	    $e = $cluster_conf->{aliases}->{$alias} if !$e && $cluster_conf;
+	    die "no such alias '$dest'\n" if !$e;
 	    push @cmd, "-d $e->{cidr}";
         } elsif ($dest =~ m/^(\d+)\.(\d+).(\d+).(\d+)\-(\d+)\.(\d+).(\d+).(\d+)$/){
 	    push @cmd, "-m iprange --dst-range $dest";
@@ -1414,7 +1427,7 @@ sub ruleset_generate_cmdstr {
 }
 
 sub ruleset_generate_rule {
-    my ($ruleset, $chain, $rule, $actions, $goto, $cluster_conf) = @_;
+    my ($ruleset, $chain, $rule, $actions, $goto, $cluster_conf, $fw_conf) = @_;
 
     my $rules;
 
@@ -1428,7 +1441,7 @@ sub ruleset_generate_rule {
 
     my @cmds = ();
     foreach my $tmp (@$rules) {
-	if (my $cmdstr = ruleset_generate_cmdstr($ruleset, $chain, $tmp, $actions, $goto, $cluster_conf)) {
+	if (my $cmdstr = ruleset_generate_cmdstr($ruleset, $chain, $tmp, $actions, $goto, $cluster_conf, $fw_conf)) {
 	    push @cmds, $cmdstr;
 	}
     }
@@ -1606,7 +1619,7 @@ sub ruleset_add_group_rule {
 }
 
 sub ruleset_generate_vm_rules {
-    my ($ruleset, $rules, $cluster_conf, $chain, $netid, $direction, $options) = @_;
+    my ($ruleset, $rules, $cluster_conf, $vmfw_conf, $chain, $netid, $direction, $options) = @_;
 
     my $lc_direction = lc($direction);
 
@@ -1624,11 +1637,11 @@ sub ruleset_generate_vm_rules {
 		if ($direction eq 'OUT') {
 		    ruleset_generate_rule($ruleset, $chain, $rule,
 					  { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" },
-					  undef, $cluster_conf);
+					  undef, $cluster_conf, $vmfw_conf);
 		} else {
 		    ruleset_generate_rule($ruleset, $chain, $rule,
 					  { ACCEPT => $in_accept , REJECT => "PVEFW-reject" },
-					  undef, $cluster_conf);
+					  undef, $cluster_conf, $vmfw_conf);
 		}
 	    };
 	    warn $@ if $@;
@@ -1683,7 +1696,7 @@ sub generate_venet_rules_direction {
 
     ruleset_create_vm_chain($ruleset, $chain, $options, undef, $direction);
 
-    ruleset_generate_vm_rules($ruleset, $rules, $cluster_conf, $chain, 'venet', $direction);
+    ruleset_generate_vm_rules($ruleset, $rules, $cluster_conf, $vmfw_conf, $chain, 'venet', $direction);
 
     # implement policy
     my $policy;
@@ -1725,7 +1738,7 @@ sub generate_tap_rules_direction {
 
     ruleset_create_vm_chain($ruleset, $tapchain, $options, $macaddr, $direction);
 
-    ruleset_generate_vm_rules($ruleset, $rules, $cluster_conf, $tapchain, $netid, $direction, $options);
+    ruleset_generate_vm_rules($ruleset, $rules, $cluster_conf, $vmfw_conf, $tapchain, $netid, $direction, $options);
 
     ruleset_generate_vm_ipsrules($ruleset, $options, $direction, $iface);
 
@@ -1787,7 +1800,7 @@ sub enable_host_firewall {
 		ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, 'IN', $accept_action);
 	    } elsif ($rule->{type} eq 'in') {
 		ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" }, 
-				      undef, $cluster_conf);
+				      undef, $cluster_conf, $hostfw_conf);
 	    }
 	};
 	warn $@ if $@;
@@ -1839,7 +1852,7 @@ sub enable_host_firewall {
 		ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, 'OUT', $accept_action);
 	    } elsif ($rule->{type} eq 'out') {
 		ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" }, 
-				      undef, $cluster_conf);
+				      undef, $cluster_conf, $hostfw_conf);
 	    }
 	};
 	warn $@ if $@;
