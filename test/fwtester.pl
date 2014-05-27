@@ -39,8 +39,6 @@ sub run_tests {
     my ($ruleset, $ipset_ruleset) = 
 	PVE::Firewall::compile(undef, undef, $vmdata, 1);
 
-    print PVE::FirewallSimulator::get_trace() . "\n" if !$debug;
-
     my $filename = "$testdir/$testfile";
     my $fh = IO::File->new($filename) ||
 	die "unable to open '$filename' - $!\n";
