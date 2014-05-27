@@ -1,0 +1,13 @@
+[OPTIONS]
+
+enable: 1
+
+[ALIASES]
+
+testip1 1.2.3.4
+testip2 1.2.3.5
+
+[RULES]
+
+OUT DROP -source testip1
+OUT DROP -dest testip2

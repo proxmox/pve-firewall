@@ -1,0 +1,4 @@
+{ from => 'vm100', to => 'outside', source => '1.2.3.4', action => 'DROP' }
+{ from => 'vm100', to => 'outside', source => '1.2.3.5', action => 'ACCEPT' }
+{ from => 'vm100', to => 'outside', dest => '1.2.3.4', action => 'ACCEPT' }
+{ from => 'vm100', to => 'outside', dest => '1.2.3.5', action => 'DROP' }
