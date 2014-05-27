@@ -2087,130 +2087,13 @@ sub parse_alias {
     return undef;
 }
 
-sub parse_vm_fw_rules {
-    my ($filename, $fh, $cluster_conf, $rule_env, $verbose) = @_;
-
-    my $res = {
-	rules => [],
-	options => {},
-	aliases => {},
-    };
-
-    my $section;
-
-    while (defined(my $line = <$fh>)) {
-	next if $line =~ m/^#/;
-	next if $line =~ m/^\s*$/;
-
-	my $linenr = $fh->input_line_number();
-	my $prefix = "$filename (line $linenr)";
-
-	if ($line =~ m/^\[(\S+)\]\s*$/i) {
-	    $section = lc($1);
-	    warn "$prefix: ignore unknown section '$section'\n" if !$res->{$section};
-	    next;
-	}
-	if (!$section) {
-	    warn "$prefix: skip line - no section";
-	    next;
-	}
-
-	next if !$res->{$section}; # skip undefined section
-
-	if ($section eq 'options') {
-	    eval {
-		my ($opt, $value) = parse_vmfw_option($line);
-		$res->{options}->{$opt} = $value;
-	    };
-	    warn "$prefix: $@" if $@;
-	    next;
-	}
-
-	if ($section eq 'aliases') {
-	    eval {
-		my $data = parse_alias($line);
-		$res->{aliases}->{lc($data->{name})} = $data;
-	    };
-	    warn "$prefix: $@" if $@;
-	    next;
-	}
-
-	my $rule;
-	eval { $rule = parse_fw_rule($prefix, $line, $cluster_conf, $res, $rule_env, $verbose); };
-	if (my $err = $@) {
-	    warn "$prefix: $err";
-	    next;
-	}
-
-	push @{$res->{$section}}, $rule;
-    }
-
-    return $res;
-}
-
-sub parse_host_fw_rules {
-    my ($filename, $fh, $cluster_conf, $verbose) = @_;
-
-    my $res = { rules => [], options => {}};
-
-    my $section;
-
-    while (defined(my $line = <$fh>)) {
-	next if $line =~ m/^#/;
-	next if $line =~ m/^\s*$/;
-
-	my $linenr = $fh->input_line_number();
-	my $prefix = "$filename (line $linenr)";
-
-	if ($line =~ m/^\[(\S+)\]\s*$/i) {
-	    $section = lc($1);
-	    warn "$prefix: ignore unknown section '$section'\n" if !$res->{$section};
-	    next;
-	}
-	if (!$section) {
-	    warn "$prefix: skip line - no section";
-	    next;
-	}
-
-	next if !$res->{$section}; # skip undefined section
-
-	if ($section eq 'options') {
-	    eval {
-		my ($opt, $value) = parse_hostfw_option($line);
-		$res->{options}->{$opt} = $value;
-	    };
-	    warn "$prefix: $@" if $@;
-	    next;
-	}
-
-	my $rule;
-	eval { $rule = parse_fw_rule($prefix, $line, $cluster_conf, $res, 'host', $verbose); };
-	if (my $err = $@) {
-	    warn "$prefix: $err";
-	    next;
-	}
-
-	push @{$res->{$section}}, $rule;
-    }
-
-    return $res;
-}
-
-sub parse_cluster_fw_rules {
-    my ($filename, $fh, $verbose) = @_;
+sub generic_fw_rules_parser {
+    my ($filename, $fh, $verbose, $cluster_conf, $empty_conf, $rule_env) = @_;
 
     my $section;
     my $group;
 
-    my $res = {
-	rules => [],
-	options => {},
-	aliases => {},
-	groups => {},
-	group_comments => {},
-	ipset => {} ,
-	ipset_comments => {},
-    };
+    my $res = $empty_conf;
 
     while (defined(my $line = <$fh>)) {
 	next if $line =~ m/^#/;
@@ -2219,17 +2102,17 @@ sub parse_cluster_fw_rules {
 	my $linenr = $fh->input_line_number();
 	my $prefix = "$filename (line $linenr)";
 
-	if ($line =~ m/^\[options\]$/i) {
+	if ($empty_conf->{options} && ($line =~ m/^\[options\]$/i)) {
 	    $section = 'options';
 	    next;
 	}
 
-	if ($line =~ m/^\[aliases\]$/i) {
+	if ($empty_conf->{aliases} && ($line =~ m/^\[aliases\]$/i)) {
 	    $section = 'aliases';
 	    next;
 	}
 
-	if ($line =~ m/^\[group\s+(\S+)\]\s*(?:#\s*(.*?)\s*)?$/i) {
+	if ($empty_conf->{groups} && ($line =~ m/^\[group\s+(\S+)\]\s*(?:#\s*(.*?)\s*)?$/i)) {
 	    $section = 'groups';
 	    $group = lc($1);
 	    my $comment = $2;
@@ -2239,12 +2122,12 @@ sub parse_cluster_fw_rules {
 	    next;
 	}
 
-	if ($line =~ m/^\[rules\]$/i) {
+	if ($empty_conf->{rules} && ($line =~ m/^\[rules\]$/i)) {
 	    $section = 'rules';
 	    next;
 	}
 
-	if ($line =~ m/^\[ipset\s+(\S+)\]\s*(?:#\s*(.*?)\s*)?$/i) {
+	if ($empty_conf->{ipset} && ($line =~ m/^\[ipset\s+(\S+)\]\s*(?:#\s*(.*?)\s*)?$/i)) {
 	    $section = 'ipset';
 	    $group = lc($1);
 	    my $comment = $2;
@@ -2261,7 +2144,14 @@ sub parse_cluster_fw_rules {
 
 	if ($section eq 'options') {
 	    eval {
-		my ($opt, $value) = parse_clusterfw_option($line);
+		my ($opt, $value);
+		if ($rule_env eq 'cluster') {
+		    ($opt, $value) = parse_clusterfw_option($line);
+		} elsif ($rule_env eq 'host') {
+		    ($opt, $value) = parse_hostfw_option($line);
+		} else {
+		    ($opt, $value) = parse_vmfw_option($line);
+		}
 		$res->{options}->{$opt} = $value;
 	    };
 	    warn "$prefix: $@" if $@;
@@ -2273,7 +2163,7 @@ sub parse_cluster_fw_rules {
 	    warn "$prefix: $@" if $@;
 	} elsif ($section eq 'rules') {
 	    my $rule;
-	    eval { $rule = parse_fw_rule($prefix, $line, $res, undef, 'cluster', $verbose); };
+	    eval { $rule = parse_fw_rule($prefix, $line, $cluster_conf, $res, $rule_env, $verbose); };
 	    if (my $err = $@) {
 		warn "$prefix: $err";
 		next;
@@ -2281,7 +2171,7 @@ sub parse_cluster_fw_rules {
 	    push @{$res->{$section}}, $rule;
 	} elsif ($section eq 'groups') {
 	    my $rule;
-	    eval { $rule = parse_fw_rule($prefix, $line, $res, undef, 'group', $verbose); };
+	    eval { $rule = parse_fw_rule($prefix, $line, $cluster_conf, undef, 'group', $verbose); };
 	    if (my $err = $@) {
 		warn "$prefix: $err";
 		next;
@@ -2310,10 +2200,54 @@ sub parse_cluster_fw_rules {
 	    $entry->{comment} = $comment if $comment;
 
 	    push @{$res->{$section}->{$group}}, $entry;
+	} else {
+	    warn "$prefix: skip line - unknown section\n";
+	    next;
 	}
     }
 
     return $res;
+}
+
+sub parse_host_fw_rules {
+    my ($filename, $fh, $cluster_conf, $verbose) = @_;
+
+    my $empty_conf = { rules => [], options => {}};
+
+    return generic_fw_rules_parser($filename, $fh, $verbose, $cluster_conf, $empty_conf, 'host');
+}
+
+sub parse_vm_fw_rules {
+    my ($filename, $fh, $cluster_conf, $rule_env, $verbose) = @_;
+
+    my $empty_conf = {
+	rules => [],
+	options => {},
+	aliases => {},
+	ipset => {} ,
+	ipset_comments => {},
+    };
+
+    return generic_fw_rules_parser($filename, $fh, $verbose, $cluster_conf, $empty_conf, $rule_env);
+}
+
+sub parse_cluster_fw_rules {
+    my ($filename, $fh, $verbose) = @_;
+
+    my $section;
+    my $group;
+
+    my $empty_conf = {
+	rules => [],
+	options => {},
+	aliases => {},
+	groups => {},
+	group_comments => {},
+	ipset => {} ,
+	ipset_comments => {},
+    };
+
+    return generic_fw_rules_parser($filename, $fh, $verbose, $empty_conf, $empty_conf, 'cluster');
 }
 
 sub run_locked {
@@ -2448,23 +2382,35 @@ my $format_aliases = sub {
     return $raw;
 };
 
-my $format_ipset = sub {
-    my ($options) = @_;
-
+my $format_ipsets = sub {
+    my ($fw_conf) = @_;
+    
     my $raw = '';
 
-    my $nethash = {};
-    foreach my $entry (@$options) {
-	$nethash->{$entry->{cidr}} = $entry;
-    }
+    foreach my $ipset (sort keys %{$fw_conf->{ipset}}) {
+	if (my $comment = $fw_conf->{ipset_comments}->{$ipset}) {
+	    my $utf8comment = encode('utf8', $comment);
+	    $raw .= "[IPSET $ipset] # $utf8comment\n\n";
+	} else {
+	    $raw .= "[IPSET $ipset]\n\n";
+	}
+	my $options = $fw_conf->{ipset}->{$ipset};
 
-    foreach my $cidr (sort keys %$nethash) {
-	my $entry = $nethash->{$cidr};
-	my $line = $entry->{nomatch} ? '!' : '';
-	$line .= $entry->{cidr};
-	$line .= " # " . encode('utf8', $entry->{comment})
-	    if $entry->{comment} && $entry->{comment} !~ m/^\s*$/;
-	$raw .= "$line\n";
+	my $nethash = {};
+	foreach my $entry (@$options) {
+	    $nethash->{$entry->{cidr}} = $entry;
+	}
+
+	foreach my $cidr (sort keys %$nethash) {
+	    my $entry = $nethash->{$cidr};
+	    my $line = $entry->{nomatch} ? '!' : '';
+	    $line .= $entry->{cidr};
+	    $line .= " # " . encode('utf8', $entry->{comment})
+		if $entry->{comment} && $entry->{comment} !~ m/^\s*$/;
+	    $raw .= "$line\n";
+	}
+
+	$raw .= "\n";
     }
 
     return $raw;
@@ -2480,6 +2426,8 @@ sub save_vmfw_conf {
 
     my $aliases = $vmfw_conf->{aliases};
     $raw .= &$format_aliases($aliases) if scalar(keys %$aliases);
+
+    $raw .= &$format_ipsets($vmfw_conf);
 
     my $rules = $vmfw_conf->{rules} || [];
     if (scalar(@$rules)) {
@@ -2646,18 +2594,8 @@ sub save_clusterfw_conf {
     my $aliases = $cluster_conf->{aliases};
     $raw .= &$format_aliases($aliases) if scalar(keys %$aliases);
 
-    foreach my $ipset (sort keys %{$cluster_conf->{ipset}}) {
-	if (my $comment = $cluster_conf->{ipset_comments}->{$ipset}) {
-	    my $utf8comment = encode('utf8', $comment);
-	    $raw .= "[IPSET $ipset] # $utf8comment\n\n";
-	} else {
-	    $raw .= "[IPSET $ipset]\n\n";
-	}
-	my $options = $cluster_conf->{ipset}->{$ipset};
-	$raw .= &$format_ipset($options);
-	$raw .= "\n";
-    }
-
+    $raw .= &$format_ipsets($cluster_conf);
+ 
     my $rules = $cluster_conf->{rules};
     if (scalar(@$rules)) {
 	$raw .= "[RULES]\n\n";

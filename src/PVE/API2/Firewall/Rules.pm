@@ -304,6 +304,7 @@ use base qw(PVE::API2::Firewall::RulesBase);
 
 __PACKAGE__->additional_parameters({ group => get_standard_option('pve-security-group-name') });
 
+
 sub rule_env {
     my ($class, $param) = @_;
     
@@ -323,9 +324,40 @@ sub load_config {
 sub save_rules {
     my ($class, $param, $fw_conf, $rules) = @_;
 
-    $fw_conf->{groups}->{$param->{group}} = $rules;
+    if (!defined($rules)) {
+	delete $fw_conf->{groups}->{$param->{group}};
+    } else {
+	$fw_conf->{groups}->{$param->{group}} = $rules;
+    }
+
     PVE::Firewall::save_clusterfw_conf($fw_conf);
 }
+
+__PACKAGE__->register_method({
+    name => 'delete_security_group',
+    path => '',
+    method => 'DELETE',
+    description => "Delete security group.",
+    protected => 1,
+    parameters => {
+	additionalProperties => 0,
+	properties => { 
+	    group => get_standard_option('pve-security-group-name'),
+	},
+    },
+    returns => { type => 'null' },
+    code => sub {
+	my ($param) = @_;
+	    
+	my (undef, $cluster_conf, $rules) = __PACKAGE__->load_config($param);
+
+	die "Security group '$param->{group}' is not empty\n" 
+	    if scalar(@$rules);
+
+	__PACKAGE__->save_rules($param, $cluster_conf, undef);
+
+	return undef;
+    }});
 
 __PACKAGE__->register_handlers();
 

@@ -248,6 +248,11 @@ __PACKAGE__->register_method ({
     path => 'aliases',
 });
 
+__PACKAGE__->register_method ({
+    subclass => "PVE::API2::Firewall::VMIPSetList",  
+    path => 'ipset',
+});
+
 __PACKAGE__->register_handlers('vm');
 
 package PVE::API2::Firewall::CT;
@@ -265,6 +270,11 @@ __PACKAGE__->register_method ({
 __PACKAGE__->register_method ({
     subclass => "PVE::API2::Firewall::CTAliases",  
     path => 'aliases',
+});
+
+__PACKAGE__->register_method ({
+    subclass => "PVE::API2::Firewall::CTIPSetList",  
+    path => 'ipset',
 });
 
 __PACKAGE__->register_handlers('vm');

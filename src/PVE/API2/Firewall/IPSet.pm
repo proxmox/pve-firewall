@@ -29,12 +29,26 @@ sub load_config {
     my ($class, $param) = @_;
 
     die "implement this in subclass";
+
+    #return ($cluster_conf, $fw_conf, $ipset);
+}
+
+sub save_config {
+    my ($class, $param, $fw_conf) = @_;
+
+    die "implement this in subclass";
 }
 
 sub save_ipset {
-    my ($class, $param, $fw_conf, $rules) = @_;
+    my ($class, $param, $fw_conf, $ipset) = @_;
 
-    die "implement this in subclass";
+    if (!defined($ipset)) {
+	delete $fw_conf->{ipset}->{$param->{name}};
+    } else {
+	$fw_conf->{ipset}->{$param->{name}} = $ipset;
+    }
+
+    $class->save_config($param, $fw_conf);
 }
 
 my $additional_param_hash = {};
@@ -93,9 +107,41 @@ sub register_get_ipset {
 	code => sub {
 	    my ($param) = @_;
 
-	    my ($fw_conf, $ipset) = $class->load_config($param);
+	    my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
 
 	    return PVE::Firewall::copy_list_with_digest($ipset);
+	}});
+}
+
+sub register_delete_ipset {
+    my ($class) = @_;
+
+    my $properties = $class->additional_parameters();
+
+    $properties->{name} = get_standard_option('ipset-name');
+
+    $class->register_method({
+	name => 'delete_ipset',
+	path => '',
+	method => 'DELETE',
+	description => "Delete IPSet",
+	protected => 1,
+	parameters => {
+	    additionalProperties => 0,
+	    properties => $properties,
+	},
+	returns => { type => 'null' },
+	code => sub {
+	    my ($param) = @_;
+	    
+	    my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
+
+	    die "IPSet '$param->{name}' is not empty\n" 
+		if scalar(@$ipset);
+
+	    $class->save_ipset($param, $fw_conf, undef);
+
+	    return undef;
 	}});
 }
 
@@ -123,7 +169,7 @@ sub register_create_ip {
 	code => sub {
 	    my ($param) = @_;
 
-	    my ($fw_conf, $ipset) = $class->load_config($param);
+	    my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
 
 	    my $cidr = $param->{cidr};
 	    
@@ -166,7 +212,7 @@ sub register_read_ip {
 	code => sub {
 	    my ($param) = @_;
 
-	    my ($fw_conf, $ipset) = $class->load_config($param);
+	    my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
 
 	    my $list = PVE::Firewall::copy_list_with_digest($ipset);
 
@@ -205,7 +251,7 @@ sub register_update_ip {
 	code => sub {
 	    my ($param) = @_;
 
-	    my ($fw_conf, $ipset) = $class->load_config($param);
+	    my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
 
 	    my (undef, $digest) = PVE::Firewall::copy_list_with_digest($ipset);
 	    PVE::Tools::assert_if_modified($digest, $param->{digest});
@@ -246,7 +292,7 @@ sub register_delete_ip {
 	code => sub {
 	    my ($param) = @_;
 
-	    my ($fw_conf, $ipset) = $class->load_config($param);
+	    my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
 
 	    my (undef, $digest) = PVE::Firewall::copy_list_with_digest($ipset);
 	    PVE::Tools::assert_if_modified($digest, $param->{digest});
@@ -266,6 +312,7 @@ sub register_delete_ip {
 sub register_handlers {
     my ($class) = @_;
 
+    $class->register_delete_ipset();
     $class->register_get_ipset();
     $class->register_create_ip();
     $class->register_read_ip();
@@ -287,14 +334,77 @@ sub load_config {
     my $ipset = $fw_conf->{ipset}->{$param->{name}};
     die "no such IPSet '$param->{name}'\n" if !defined($ipset);
 
-    return ($fw_conf, $ipset);
+    return (undef, $fw_conf, $ipset);
 }
 
-sub save_ipset {
-    my ($class, $param, $fw_conf, $ipset) = @_;
+sub save_config {
+    my ($class, $param, $fw_conf) = @_;
 
-    $fw_conf->{ipset}->{$param->{name}} = $ipset;
     PVE::Firewall::save_clusterfw_conf($fw_conf);
+}
+
+__PACKAGE__->register_handlers();
+
+package PVE::API2::Firewall::VMIPset;
+
+use strict;
+use warnings;
+use PVE::JSONSchema qw(get_standard_option);
+
+use base qw(PVE::API2::Firewall::IPSetBase);
+
+__PACKAGE__->additional_parameters({ 
+    node => get_standard_option('pve-node'),
+    vmid => get_standard_option('pve-vmid'),				   
+});
+
+sub load_config {
+    my ($class, $param) = @_;
+
+    my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
+    my $fw_conf = PVE::Firewall::load_vmfw_conf($cluster_conf, 'vm', $param->{vmid});
+    my $ipset = $fw_conf->{ipset}->{$param->{name}};
+    die "no such IPSet '$param->{name}'\n" if !defined($ipset);
+
+    return ($cluster_conf, $fw_conf, $ipset);
+}
+
+sub save_config {
+    my ($class, $param, $fw_conf) = @_;
+
+    PVE::Firewall::save_vmfw_conf($param->{vmid}, $fw_conf);
+}
+
+__PACKAGE__->register_handlers();
+
+package PVE::API2::Firewall::CTIPset;
+
+use strict;
+use warnings;
+use PVE::JSONSchema qw(get_standard_option);
+
+use base qw(PVE::API2::Firewall::IPSetBase);
+
+__PACKAGE__->additional_parameters({ 
+    node => get_standard_option('pve-node'),
+    vmid => get_standard_option('pve-vmid'),				   
+});
+
+sub load_config {
+    my ($class, $param) = @_;
+
+    my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
+    my $fw_conf = PVE::Firewall::load_vmfw_conf($cluster_conf, 'ct', $param->{vmid});
+    my $ipset = $fw_conf->{ipset}->{$param->{name}};
+    die "no such IPSet '$param->{name}'\n" if !defined($ipset);
+
+    return ($cluster_conf, $fw_conf, $ipset);
+}
+
+sub save_config {
+    my ($class, $param, $fw_conf) = @_;
+
+    PVE::Firewall::save_vmfw_conf($param->{vmid}, $fw_conf);
 }
 
 __PACKAGE__->register_handlers();
@@ -308,6 +418,36 @@ use PVE::Exception qw(raise_param_exc);
 use PVE::Firewall;
 
 use base qw(PVE::RESTHandler);
+
+sub load_config {
+    my ($class, $param) = @_;
+ 
+    die "implement this in subclass";
+
+    #return ($cluster_conf, $fw_conf);
+}
+
+sub save_config {
+    my ($class, $param, $fw_conf) = @_;
+
+    die "implement this in subclass";
+}
+
+my $additional_param_hash_list = {};
+
+sub additional_parameters {
+    my ($class, $new_value) = @_;
+
+    if (defined($new_value)) {
+	$additional_param_hash_list->{$class} = $new_value;
+    }
+
+    # return a copy
+    my $copy = {};
+    my $org = $additional_param_hash_list->{$class} || {};
+    foreach my $p (keys %$org) { $copy->{$p} = $org->{$p}; }
+    return $copy;
+}
 
 my $get_ipset_list = sub {
     my ($fw_conf) = @_;
@@ -331,6 +471,8 @@ my $get_ipset_list = sub {
 sub register_index {
     my ($class) = @_;
 
+    my $properties = $class->additional_parameters();
+
     $class->register_method({
 	name => 'ipset_index',
 	path => '',
@@ -338,6 +480,7 @@ sub register_index {
 	description => "List IPSets",
 	parameters => {
 	    additionalProperties => 0,
+	    properties => $properties,
 	},
 	returns => {
 	    type => 'array',
@@ -357,7 +500,7 @@ sub register_index {
 	code => sub {
 	    my ($param) = @_;
 	    
-	    my $fw_conf = $class->load_config();
+	    my ($cluster_conf, $fw_conf) = $class->load_config($param);
 
 	    return &$get_ipset_list($fw_conf); 
 	}});
@@ -365,6 +508,18 @@ sub register_index {
 
 sub register_create {
     my ($class) = @_;
+
+    my $properties = $class->additional_parameters();
+
+    $properties->{name} = get_standard_option('ipset-name');
+
+    $properties->{comment} = { type => 'string', optional => 1 };
+
+    $properties->{digest} = get_standard_option('pve-config-digest');
+
+    $properties->{rename} = get_standard_option('ipset-name', {
+	description => "Rename an existing IPSet. You can set 'rename' to the same value as 'name' to update the 'comment' of an existing IPSet.",
+	optional => 1 });
 
     $class->register_method({
 	name => 'create_ipset',
@@ -374,24 +529,13 @@ sub register_create {
 	protected => 1,
 	parameters => {
 	    additionalProperties => 0,
-	    properties => { 
-		name => get_standard_option('ipset-name'),
-		comment => {
-		    type => 'string',
-		    optional => 1,
-		},
-		rename => get_standard_option('ipset-name', {
-		    description => "Rename an existing IPSet. You can set 'rename' to the same value as 'name' to update the 'comment' of an existing IPSet.",
-		    optional => 1,
-		}),
-		digest => get_standard_option('pve-config-digest'),
-	    }
+	    properties => $properties,
 	},
 	returns => { type => 'null' },
 	code => sub {
 	    my ($param) = @_;
 	    
-	    my $fw_conf = $class->load_config();
+	    my ($cluster_conf, $fw_conf) = $class->load_config($param);
 
 	    if ($param->{rename}) {
 		my (undef, $digest) = &$get_ipset_list($fw_conf);
@@ -416,45 +560,7 @@ sub register_create {
 		$fw_conf->{ipset_comments}->{$param->{name}} = $param->{comment} if defined($param->{comment});
 	    }
 
-	    $class->save_config($fw_conf);
-
-	    return undef;
-	}});
-}
-
-sub register_delete {
-    my ($class) = @_;
-
-    $class->register_method({
-	name => 'delete_ipset',
-	path => '{name}',
-	method => 'DELETE',
-	description => "Delete IPSet",
-	protected => 1,
-	parameters => {
-	    additionalProperties => 0,
-	    properties => { 
-		name => get_standard_option('ipset-name'),
-		digest => get_standard_option('pve-config-digest'),
-	    },
-	},
-	returns => { type => 'null' },
-	code => sub {
-	    my ($param) = @_;
-	    
-	    my $fw_conf = $class->load_config();
-
-	    return undef if !$fw_conf->{ipset}->{$param->{name}};
-
-	    my (undef, $digest) = &$get_ipset_list($fw_conf);
-	    PVE::Tools::assert_if_modified($digest, $param->{digest});
-
-	    die "IPSet '$param->{name}' is not empty\n" 
-		if scalar(@{$fw_conf->{ipset}->{$param->{name}}});
-
-	    delete $fw_conf->{ipset}->{$param->{name}};
-
-	    $class->save_config($fw_conf);
+	    $class->save_config($param, $fw_conf);
 
 	    return undef;
 	}});
@@ -465,7 +571,6 @@ sub register_handlers {
 
     $class->register_index();
     $class->register_create();
-    $class->register_delete();
 }
 
 package PVE::API2::Firewall::ClusterIPSetList;
@@ -477,13 +582,14 @@ use PVE::Firewall;
 use base qw(PVE::API2::Firewall::BaseIPSetList);
 
 sub load_config {
-    my ($class) = @_;
+    my ($class, $param) = @_;
  
-    return PVE::Firewall::load_clusterfw_conf();
+    my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
+    return (undef, $cluster_conf);
 }
 
 sub save_config {
-    my ($class, $fw_conf) = @_;
+    my ($class, $param, $fw_conf) = @_;
 
     PVE::Firewall::save_clusterfw_conf($fw_conf);
 }
@@ -492,6 +598,80 @@ __PACKAGE__->register_handlers();
 
 __PACKAGE__->register_method ({
     subclass => "PVE::API2::Firewall::ClusterIPset",  
+    path => '{name}',
+    # set fragment delimiter (no subdirs) - we need that, because CIDR address contain a slash '/' 
+    fragmentDelimiter => '', 
+});
+
+package PVE::API2::Firewall::VMIPSetList;
+
+use strict;
+use warnings;
+use PVE::JSONSchema qw(get_standard_option);
+use PVE::Firewall;
+
+use base qw(PVE::API2::Firewall::BaseIPSetList);
+
+__PACKAGE__->additional_parameters({ 
+    node => get_standard_option('pve-node'),
+    vmid => get_standard_option('pve-vmid'),				   
+});
+
+sub load_config {
+    my ($class, $param) = @_;
+ 
+    my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
+    my $fw_conf = PVE::Firewall::load_vmfw_conf($cluster_conf, 'vm', $param->{vmid});
+    return ($cluster_conf, $fw_conf);
+}
+
+sub save_config {
+    my ($class, $param, $fw_conf) = @_;
+
+    PVE::Firewall::save_vmfw_conf($param->{vmid}, $fw_conf);
+}
+
+__PACKAGE__->register_handlers();
+
+__PACKAGE__->register_method ({
+    subclass => "PVE::API2::Firewall::VMIPset",  
+    path => '{name}',
+    # set fragment delimiter (no subdirs) - we need that, because CIDR address contain a slash '/' 
+    fragmentDelimiter => '', 
+});
+
+package PVE::API2::Firewall::CTIPSetList;
+
+use strict;
+use warnings;
+use PVE::JSONSchema qw(get_standard_option);
+use PVE::Firewall;
+
+use base qw(PVE::API2::Firewall::BaseIPSetList);
+
+__PACKAGE__->additional_parameters({ 
+    node => get_standard_option('pve-node'),
+    vmid => get_standard_option('pve-vmid'),				   
+});
+
+sub load_config {
+    my ($class, $param) = @_;
+ 
+    my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
+    my $fw_conf = PVE::Firewall::load_vmfw_conf($cluster_conf, 'ct', $param->{vmid});
+    return ($cluster_conf, $fw_conf);
+}
+
+sub save_config {
+    my ($class, $param, $fw_conf) = @_;
+
+    PVE::Firewall::save_vmfw_conf($param->{vmid}, $fw_conf);
+}
+
+__PACKAGE__->register_handlers();
+
+__PACKAGE__->register_method ({
+    subclass => "PVE::API2::Firewall::CTIPset",  
     path => '{name}',
     # set fragment delimiter (no subdirs) - we need that, because CIDR address contain a slash '/' 
     fragmentDelimiter => '', 

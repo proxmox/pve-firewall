@@ -118,40 +118,6 @@ __PACKAGE__->register_method({
 	return undef;
     }});
 
-__PACKAGE__->register_method({
-    name => 'delete_security_group',
-    path => '{group}',
-    method => 'DELETE',
-    description => "Delete security group.",
-    protected => 1,
-    parameters => {
-	additionalProperties => 0,
-	properties => { 
-	    group => get_standard_option('pve-security-group-name'),
-	    digest => get_standard_option('pve-config-digest'),
-	},
-    },
-    returns => { type => 'null' },
-    code => sub {
-	my ($param) = @_;
-	    
-	my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
-
-	return undef if !$cluster_conf->{groups}->{$param->{group}};
-
-	my (undef, $digest) = &$get_security_group_list($cluster_conf);
-	PVE::Tools::assert_if_modified($digest, $param->{digest});
-
-	die "Security group '$param->{group}' is not empty\n" 
-	    if scalar(@{$cluster_conf->{groups}->{$param->{group}}});
-
-	delete $cluster_conf->{groups}->{$param->{group}};
-
-	PVE::Firewall::save_clusterfw_conf($cluster_conf);
-
-	return undef;
-    }});
-
 __PACKAGE__->register_method ({
     subclass => "PVE::API2::Firewall::GroupRules",  
     path => '{group}',
