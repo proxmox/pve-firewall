@@ -324,7 +324,8 @@ __PACKAGE__->additional_parameters({
 sub load_config {
     my ($class, $param) = @_;
 
-    my $fw_conf = PVE::Firewall::load_vmfw_conf('vm', $param->{vmid});
+    my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
+    my $fw_conf = PVE::Firewall::load_vmfw_conf($cluster_conf, 'vm', $param->{vmid});
     my $aliases = $fw_conf->{aliases};
 
     return ($fw_conf, $aliases);
@@ -355,7 +356,8 @@ __PACKAGE__->additional_parameters({
 sub load_config {
     my ($class, $param) = @_;
 
-    my $fw_conf = PVE::Firewall::load_vmfw_conf('ct', $param->{vmid});
+    my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
+    my $fw_conf = PVE::Firewall::load_vmfw_conf($cluster_conf, 'ct', $param->{vmid});
     my $aliases = $fw_conf->{aliases};
 
     return ($fw_conf, $aliases);

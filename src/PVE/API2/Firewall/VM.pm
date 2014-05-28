@@ -115,7 +115,8 @@ sub register_handlers {
 	code => sub {
 	    my ($param) = @_;
 
-	    my $vmfw_conf = PVE::Firewall::load_vmfw_conf($rule_env, $param->{vmid});
+	    my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
+	    my $vmfw_conf = PVE::Firewall::load_vmfw_conf($cluster_conf, $rule_env, $param->{vmid});
 
 	    return PVE::Firewall::copy_opject_with_digest($vmfw_conf->{options});
 	}});
@@ -144,7 +145,9 @@ sub register_handlers {
 	code => sub {
 	    my ($param) = @_;
 
-	    my $vmfw_conf = PVE::Firewall::load_vmfw_conf($rule_env, $param->{vmid});
+
+	    my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
+	    my $vmfw_conf = PVE::Firewall::load_vmfw_conf($cluster_conf, $rule_env, $param->{vmid});
 
 	    my (undef, $digest) = PVE::Firewall::copy_opject_with_digest($vmfw_conf->{options});
 	    PVE::Tools::assert_if_modified($digest, $param->{digest});
