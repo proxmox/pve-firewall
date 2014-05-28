@@ -74,6 +74,10 @@ PVE::JSONSchema::register_standard_option('pve-fw-loglevel' => {
 my $security_group_name_pattern = '[A-Za-z][A-Za-z0-9\-\_]+';
 my $ip_alias_pattern = '[A-Za-z][A-Za-z0-9\-\_]+';
 
+my $max_alias_name_length = 64;
+my $max_ipset_name_length = 64;
+
+
 PVE::JSONSchema::register_standard_option('pve-security-group-name', {
     description => "Security Group name.",
     type => 'string',
@@ -739,7 +743,7 @@ sub local_network {
     return $__local_network;
 }
 
-my $max_ipset_name_length = 27;
+my $max_iptables_ipset_name_length = 27;
 
 sub compute_ipset_chain_name {
     my ($vmid, $ipset_name) = @_;
@@ -749,7 +753,7 @@ sub compute_ipset_chain_name {
     my $id = "$vmid-${ipset_name}";
 
    
-    if ((length($id) + 6) > $max_ipset_name_length) {
+    if ((length($id) + 6) > $max_iptables_ipset_name_length) {
 	$id = PVE::Tools::fnv31a_hex($id);
     }
 
@@ -759,8 +763,15 @@ sub compute_ipset_chain_name {
 sub parse_address_list {
     my ($str) = @_;
 
-    return if $str =~ m/^(\+)(\S+)$/; # ipset ref
-    return if $str =~ m/^${ip_alias_pattern}$/;
+    if ($str =~ m/^(\+)(\S+)$/) { # ipset ref
+	die "ipset name too long\n" if length($str) > ($max_ipset_name_length + 1);
+	return;
+    }
+
+    if ($str =~ m/^${ip_alias_pattern}$/) {
+	die "alias name too long\n" if length($str) > $max_alias_name_length;
+	return;
+    }
 
     my $count = 0;
     my $iprange = 0;
