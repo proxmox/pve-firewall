@@ -72,6 +72,7 @@ PVE::JSONSchema::register_standard_option('pve-fw-loglevel' => {
 });
 
 my $security_group_name_pattern = '[A-Za-z][A-Za-z0-9\-\_]+';
+my $ipset_name_pattern = '[A-Za-z][A-Za-z0-9\-\_]+';
 my $ip_alias_pattern = '[A-Za-z][A-Za-z0-9\-\_]+';
 
 my $max_alias_name_length = 64;
@@ -1065,7 +1066,7 @@ sub verify_rule {
 
 	if (my $value = $rule->{$name}) {
 	    if ($value =~ m/^\+/) {
-		if ($value =~ m/^\+(${security_group_name_pattern})$/) {
+		if ($value =~ m/^\+(${ipset_name_pattern})$/) {
 		    &$add_error($name, "no such ipset '$1'")
 			if !($cluster_conf->{ipset}->{$1} || ($fw_conf && $fw_conf->{ipset}->{$1}));
 
@@ -1348,7 +1349,7 @@ sub ruleset_generate_cmdstr {
 
     if ($source) {
         if ($source =~ m/^\+/) {
-	    if ($source =~ m/^\+(${security_group_name_pattern})$/) {
+	    if ($source =~ m/^\+(${ipset_name_pattern})$/) {
 		my $name = $1;
 		if ($fw_conf && $fw_conf->{ipset}->{$name}) {
 		    my $ipset_chain = compute_ipset_chain_name($fw_conf->{vmid}, $name);
@@ -1377,7 +1378,7 @@ sub ruleset_generate_cmdstr {
 
     if ($dest) {
         if ($dest =~ m/^\+/) {
-	    if ($dest =~ m/^\+(${security_group_name_pattern})$/) {
+	    if ($dest =~ m/^\+(${ipset_name_pattern})$/) {
 		my $name = $1;
 		if ($fw_conf && $fw_conf->{ipset}->{$name}) {
 		    my $ipset_chain = compute_ipset_chain_name($fw_conf->{vmid}, $name);
