@@ -1,0 +1,12 @@
+[options]
+
+enable: 1
+
+[ipset a-longer-name-which-translates-into-fnv-digest]
+1.2.3.4
+1.2.3.5
+
+
+[rules]
+
+IN ACCEPT -p tcp -dport 80 -dest +a-longer-name-which-translates-into-fnv-digest
