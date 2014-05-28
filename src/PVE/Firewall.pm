@@ -1370,7 +1370,7 @@ sub ruleset_generate_cmdstr {
 		my $name = $1;
 		if ($fw_conf && $fw_conf->{ipset}->{$name}) {
 		    my $ipset_chain = compute_ipset_chain_name($fw_conf->{vmid}, $name);
-		    push @cmd, "-m set --match-set ${ipset_chain} src";
+		    push @cmd, "-m set --match-set ${ipset_chain} dst";
 		} elsif ($cluster_conf && $cluster_conf->{ipset}->{$name}) {
 		    my $ipset_chain = compute_ipset_chain_name(0, $name);
 		    push @cmd, "-m set --match-set ${ipset_chain} dst";
