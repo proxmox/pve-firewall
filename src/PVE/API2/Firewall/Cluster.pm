@@ -18,22 +18,22 @@ use Data::Dumper; # fixme: remove
 use base qw(PVE::RESTHandler);
 
 __PACKAGE__->register_method ({
-    subclass => "PVE::API2::Firewall::Groups",  
+    subclass => "PVE::API2::Firewall::Groups",
     path => 'groups',
 });
 
 __PACKAGE__->register_method ({
-    subclass => "PVE::API2::Firewall::ClusterRules",  
+    subclass => "PVE::API2::Firewall::ClusterRules",
     path => 'rules',
 });
 
 __PACKAGE__->register_method ({
-    subclass => "PVE::API2::Firewall::ClusterIPSetList",  
+    subclass => "PVE::API2::Firewall::ClusterIPSetList",
     path => 'ipset',
 });
 
 __PACKAGE__->register_method ({
-    subclass => "PVE::API2::Firewall::ClusterAliases",  
+    subclass => "PVE::API2::Firewall::ClusterAliases",
     path => 'aliases',
 });
 
@@ -65,6 +65,7 @@ __PACKAGE__->register_method({
 	    { name => 'groups' },
 	    { name => 'ipset' },
 	    { name => 'macros' },
+	    { name => 'refs' },
 	    ];
 
 	return $result;
@@ -81,7 +82,7 @@ my $option_properties = {
 	optional => 1,
 	enum => ['ACCEPT', 'REJECT', 'DROP'],
     },
-    policy_out => { 
+    policy_out => {
 	description => "Output policy.",
 	type => 'string',
 	optional => 1,
@@ -95,7 +96,7 @@ my $add_option_properties = sub {
     foreach my $k (keys %$option_properties) {
 	$properties->{$k} = $option_properties->{$k};
     }
-    
+
     return $properties;
 };
 
@@ -150,7 +151,7 @@ __PACKAGE__->register_method({
 
 	if ($param->{delete}) {
 	    foreach my $opt (PVE::Tools::split_list($param->{delete})) {
-		raise_param_exc({ delete => "no such option '$opt'" }) 
+		raise_param_exc({ delete => "no such option '$opt'" })
 		    if !$option_properties->{$opt};
 		delete $cluster_conf->{options}->{$opt};
 	    }
@@ -162,7 +163,7 @@ __PACKAGE__->register_method({
 
 	foreach my $k (keys %$option_properties) {
 	    next if !defined($param->{$k});
-	    $cluster_conf->{options}->{$k} = $param->{$k}; 
+	    $cluster_conf->{options}->{$k} = $param->{$k};
 	}
 
 	PVE::Firewall::save_clusterfw_conf($cluster_conf);
@@ -203,6 +204,70 @@ __PACKAGE__->register_method({
 
 	foreach my $macro (keys %$macros) {
 	    push @$res, { macro => $macro, descr => $descr->{$macro} || $macro };
+	}
+
+	return $res;
+    }});
+
+__PACKAGE__->register_method({
+    name => 'refs',
+    path => 'refs',
+    method => 'GET',
+    description => "Lists possible IPSet/Alias reference which are allowed in source/dest properties.",
+    parameters => {
+	additionalProperties => 0,
+	properties => {},
+    },
+    returns => {
+	type => 'array',
+	items => {
+	    type => "object",
+	    properties => {
+		type => {
+		    type => 'string',
+		    enum => ['alias', 'ipset'],
+		},
+		name => {
+		    type => 'string',
+		},
+		ref => {
+		    type => 'string',
+		},
+		comment => {
+		    type => 'string',
+		    optional => 1,
+		},
+	    },
+	},
+    },
+    code => sub {
+	my ($param) = @_;
+
+	my $conf = PVE::Firewall::load_clusterfw_conf();
+
+	my $res = [];
+
+	foreach my $name (keys %{$conf->{ipset}}) {
+	    my $data = {
+		type => 'ipset',
+		name => $name,
+		ref => "+$name",
+	    };
+	    if (my $comment = $conf->{ipset_comments}->{$name}) {
+		$data->{comment} = $comment;
+	    }
+	    push @$res, $data;
+	}
+
+	foreach my $name (keys %{$conf->{aliases}}) {
+	    my $e = $conf->{aliases}->{$name};
+	    my $data = {
+		type => 'alias',
+		name => $name,
+		ref => $name,
+	    };
+	    $data->{comment} = $e->{comment} if $e->{comment};
+	    push @$res, $data;
 	}
 
 	return $res;

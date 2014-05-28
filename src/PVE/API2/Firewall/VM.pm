@@ -87,6 +87,8 @@ sub register_handlers {
 	    my $result = [
 		{ name => 'rules' },
 		{ name => 'aliases' },
+		{ name => 'ipset' },
+		{ name => 'refs' },
 		{ name => 'options' },
 		];
 
@@ -231,6 +233,80 @@ sub register_handlers {
 	    $rpcenv->set_result_attrib('total', $count);
 	    
 	    return $lines; 
+	}});
+
+
+    $class->register_method({
+	name => 'refs',
+	path => 'refs',
+	method => 'GET',
+	description => "Lists possible IPSet/Alias reference which are allowed in source/dest properties.",
+	parameters => {
+	    additionalProperties => 0,
+	    properties => {
+		node => get_standard_option('pve-node'),
+		vmid => get_standard_option('pve-vmid'),
+	    },
+	},
+	returns => {
+	    type => 'array',
+	    items => {
+		type => "object",
+		properties => { 
+		    type => {
+			type => 'string',
+			enum => ['alias', 'ipset'],
+		    },
+		    name => {
+			type => 'string',
+		    },
+		    comment => { 
+			type => 'string',
+			optional => 1,
+		    },
+		},
+	    },
+	},
+	code => sub {
+	    my ($param) = @_;
+	    
+	    my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
+	    my $fw_conf = PVE::Firewall::load_vmfw_conf($cluster_conf, $rule_env, $param->{vmid});
+
+	    my $ipsets = {};
+	    my $aliases = {};
+
+	    foreach my $conf (($cluster_conf, $fw_conf)) {
+		next if !$conf;
+		foreach my $name (keys %{$conf->{ipset}}) {
+		    my $data = { 
+			type => 'ipset',
+			name => $name,
+			ref => "+$name",
+		    };
+		    if (my $comment = $conf->{ipset_comments}->{$name}) {
+			$data->{comment} = $comment;
+		    }
+		    $ipsets->{$name} = $data;
+		}
+
+		foreach my $name (keys %{$conf->{aliases}}) {
+		    my $e = $conf->{aliases}->{$name};
+		    my $data = { 
+			type => 'alias',
+			name => $name,
+			ref => $name,
+		    };
+		    $data->{comment} = $e->{comment} if $e->{comment};
+		    $aliases->{$name} = $data;
+		}
+	    }
+
+	    my $res = [];
+	    foreach my $e (values %$ipsets) { push @$res, $e; };
+	    foreach my $e (values %$aliases) { push @$res, $e; };
+	    
+	    return $res; 
 	}});
 }
 
