@@ -1,0 +1,9 @@
+[options]
+
+dafadfsdf: afda # unknown option - should be skipped
+
+enable: 1
+
+[rules]
+
+IN ACCEPT -p tcp -dport 80
