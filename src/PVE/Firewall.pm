@@ -35,6 +35,14 @@ eval {
     $have_pve_manager = 1;
 };
 
+my $security_group_name_pattern = '[A-Za-z][A-Za-z0-9\-\_]+';
+my $ipset_name_pattern = '[A-Za-z][A-Za-z0-9\-\_]+';
+my $ip_alias_pattern = '[A-Za-z][A-Za-z0-9\-\_]+';
+
+my $max_alias_name_length = 64;
+my $max_ipset_name_length = 64;
+my $max_group_name_length = 20;
+
 PVE::JSONSchema::register_format('IPv4orCIDR', \&pve_verify_ipv4_or_cidr);
 sub pve_verify_ipv4_or_cidr {
     my ($cidr, $noerr) = @_;
@@ -51,17 +59,17 @@ sub pve_verify_ipv4_or_cidr {
 PVE::JSONSchema::register_standard_option('ipset-name', {
     description => "IP set name.",
     type => 'string',
-    pattern => '[A-Za-z][A-Za-z0-9\-\_]+',
+    pattern => $ipset_name_pattern,
     minLength => 2,
-    maxLength => 20,
+    maxLength => $max_ipset_name_length,
 });
 
 PVE::JSONSchema::register_standard_option('pve-fw-alias', {
     description => "Alias name.",
     type => 'string',
-    pattern => '[A-Za-z][A-Za-z0-9\-\_]+',
+    pattern => $ip_alias_pattern,
     minLength => 2,
-    maxLength => 20,
+    maxLength => $max_alias_name_length,
 });
 
 PVE::JSONSchema::register_standard_option('pve-fw-loglevel' => {
@@ -71,20 +79,12 @@ PVE::JSONSchema::register_standard_option('pve-fw-loglevel' => {
     optional => 1,
 });
 
-my $security_group_name_pattern = '[A-Za-z][A-Za-z0-9\-\_]+';
-my $ipset_name_pattern = '[A-Za-z][A-Za-z0-9\-\_]+';
-my $ip_alias_pattern = '[A-Za-z][A-Za-z0-9\-\_]+';
-
-my $max_alias_name_length = 64;
-my $max_ipset_name_length = 64;
-
-
 PVE::JSONSchema::register_standard_option('pve-security-group-name', {
     description => "Security Group name.",
     type => 'string',
     pattern => $security_group_name_pattern,
     minLength => 2,
-    maxLength => 20,
+    maxLength => $max_group_name_length,
 });
 
 my $feature_ipset_nomatch = 0;
@@ -1071,7 +1071,7 @@ sub verify_rule {
 			if !($cluster_conf->{ipset}->{$1} || ($fw_conf && $fw_conf->{ipset}->{$1}));
 
 		} else {
-		    &$add_error($name, "invalid security group name '$value'");
+		    &$add_error($name, "invalid ipset name '$value'");
 		}
 	    } elsif ($value =~ m/^${ip_alias_pattern}$/){
 		my $alias = lc($value);
@@ -2130,6 +2130,8 @@ sub generic_fw_rules_parser {
 
     my $res = $empty_conf;
 
+    my $ipset_option = get_standard_option('ipset-name');
+
     while (defined(my $line = <$fh>)) {
 	next if $line =~ m/^#/;
 	next if $line =~ m/^\s*$/;
@@ -2151,6 +2153,16 @@ sub generic_fw_rules_parser {
 	    $section = 'groups';
 	    $group = lc($1);
 	    my $comment = $2;
+	    eval {
+		die "security group name too long\n" if length($group) > $max_group_name_length;
+		die "invalid security group name '$group'\n" if $group !~ m/^${security_group_name_pattern}$/;
+	    };
+	    if (my $err = $@) {
+		($section, $group, $comment) = undef;
+		warn "$prefix: $err";
+		next;
+	    }
+	    
 	    $res->{$section}->{$group} = [];
 	    $res->{group_comments}->{$group} =  decode('utf8', $comment)
 		if $comment;
@@ -2166,6 +2178,16 @@ sub generic_fw_rules_parser {
 	    $section = 'ipset';
 	    $group = lc($1);
 	    my $comment = $2;
+	    eval {	
+		die "ipset name too long\n" if length($group) > $max_ipset_name_length;
+		die "invalid ipset name '$group'\n" if $group !~ m/^${ipset_name_pattern}$/;
+	    };
+	    if (my $err = $@) {
+		($section, $group, $comment) = undef;
+		warn "$prefix: $err";
+		next;
+	    }
+
 	    $res->{$section}->{$group} = [];
 	    $res->{ipset_comments}->{$group} = decode('utf8', $comment)
 		if $comment;
