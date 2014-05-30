@@ -2137,7 +2137,7 @@ sub parse_alias {
     return undef;
 }
 
-sub generic_fw_rules_parser {
+sub generic_fw_config_parser {
     my ($filename, $fh, $verbose, $cluster_conf, $empty_conf, $rule_env) = @_;
 
     my $section;
@@ -2281,15 +2281,15 @@ sub generic_fw_rules_parser {
     return $res;
 }
 
-sub parse_host_fw_rules {
+sub parse_hostfw_config {
     my ($filename, $fh, $cluster_conf, $verbose) = @_;
 
     my $empty_conf = { rules => [], options => {}};
 
-    return generic_fw_rules_parser($filename, $fh, $verbose, $cluster_conf, $empty_conf, 'host');
+    return generic_fw_config_parser($filename, $fh, $verbose, $cluster_conf, $empty_conf, 'host');
 }
 
-sub parse_vm_fw_rules {
+sub parse_vmfw_config {
     my ($filename, $fh, $cluster_conf, $rule_env, $verbose) = @_;
 
     my $empty_conf = {
@@ -2300,10 +2300,10 @@ sub parse_vm_fw_rules {
 	ipset_comments => {},
     };
 
-    return generic_fw_rules_parser($filename, $fh, $verbose, $cluster_conf, $empty_conf, $rule_env);
+    return generic_fw_config_parser($filename, $fh, $verbose, $cluster_conf, $empty_conf, $rule_env);
 }
 
-sub parse_cluster_fw_rules {
+sub parse_clusterfw_config {
     my ($filename, $fh, $verbose) = @_;
 
     my $section;
@@ -2319,7 +2319,7 @@ sub parse_cluster_fw_rules {
 	ipset_comments => {},
     };
 
-    return generic_fw_rules_parser($filename, $fh, $verbose, $empty_conf, $empty_conf, 'cluster');
+    return generic_fw_config_parser($filename, $fh, $verbose, $empty_conf, $empty_conf, 'cluster');
 }
 
 sub run_locked {
@@ -2379,7 +2379,7 @@ sub load_vmfw_conf {
 
     my $filename = "$dir/$vmid.fw";
     if (my $fh = IO::File->new($filename, O_RDONLY)) {
-	$vmfw_conf = parse_vm_fw_rules($filename, $fh, $cluster_conf, $rule_env, $verbose);
+	$vmfw_conf = parse_vmfw_config($filename, $fh, $cluster_conf, $rule_env, $verbose);
 	$vmfw_conf->{vmid} = $vmid;
     }
 
@@ -2655,7 +2655,7 @@ sub load_clusterfw_conf {
 
     my $cluster_conf = {};
     if (my $fh = IO::File->new($filename, O_RDONLY)) {
-	$cluster_conf = parse_cluster_fw_rules($filename, $fh, $verbose);
+	$cluster_conf = parse_clusterfw_config($filename, $fh, $verbose);
     }
 
     return $cluster_conf;
@@ -2704,7 +2704,7 @@ sub load_hostfw_conf {
 
     my $hostfw_conf = {};
     if (my $fh = IO::File->new($filename, O_RDONLY)) {
-	$hostfw_conf = parse_host_fw_rules($filename, $fh, $cluster_conf, $verbose);
+	$hostfw_conf = parse_hostfw_config($filename, $fh, $cluster_conf, $verbose);
     }
     return $hostfw_conf;
 }
