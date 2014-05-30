@@ -145,17 +145,6 @@ sub register_delete_ipset {
 	}});
 }
 
-my $verify_alias_exists = sub {
-    my ($cluster_conf, $fw_conf, $cidr) = @_;
-
-    if ($cidr !~ m/^\d/) {
-	my $alias = lc($cidr);
-	die "no such alias '$cidr'\n"
-	    if !(($cluster_conf && $cluster_conf->{aliases}->{$alias}) || 
-		 ($fw_conf && $fw_conf->{aliases}->{$alias}));
-    }
-};
-
 sub register_create_ip {
     my ($class) = @_;
 
@@ -189,7 +178,8 @@ sub register_create_ip {
 		    if $entry->{cidr} eq $cidr;
 	    }
 
-	    &$verify_alias_exists($cluster_conf, $fw_conf, $cidr);
+	    # make sure alias exists (if $cidr is an alias)
+	    PVE::Firewall::resolve_alias($cluster_conf, $fw_conf, $cidr); 
 
 	    my $data = { cidr => $cidr };
 

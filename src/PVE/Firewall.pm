@@ -2116,6 +2116,21 @@ sub parse_clusterfw_option {
     return ($opt, $value);
 }
 
+sub resolve_alias {
+    my ($clusterfw_conf, $fw_conf, $cidr) = @_;
+
+    if ($cidr !~ m/^\d/) {
+	my $alias = lc($cidr);
+	my $e = $fw_conf->{aliases}->{$alias} if $fw_conf;
+	$e = $clusterfw_conf->{aliases}->{$alias} if !$e && $clusterfw_conf;
+	return $e->{cidr} if $e;
+	
+	die "no such alias '$cidr'\n";
+    }
+
+    return $cidr;
+}
+
 sub parse_alias {
     my ($line) = @_;
 
@@ -2259,7 +2274,6 @@ sub generic_fw_config_parser {
 
 	    if($cidr !~ m/^${ip_alias_pattern}$/) {
 		$cidr =~ s|/32$||;
-
 		eval { pve_verify_ipv4_or_cidr($cidr); };
 		if (my $err = $@) {
 		    warn "$prefix: $cidr - $err";
@@ -2608,20 +2622,11 @@ sub generate_ipset {
     # remove duplicates
     my $nethash = {};
     foreach my $entry (@$options) {
-	my $cidr = $entry->{cidr};
-	if ($cidr =~ m/^${ip_alias_pattern}$/) {
-	    my $alias = lc($cidr);
-	    my $e = $fw_conf->{aliases}->{$alias} if $fw_conf;
-	    $e = $clusterfw_conf->{aliases}->{$alias} if !$e && $clusterfw_conf;
-	    if ($e) {
-		$entry->{cidr} = $e->{cidr};
-		$nethash->{$entry->{cidr}} = $entry;
-	    } else {
-		warn "no such alias '$cidr'\n";
-	    }
-	} else {
-	    $nethash->{$entry->{cidr}} = $entry;
-	}
+	eval {
+	    my $cidr = resolve_alias($clusterfw_conf, $fw_conf, $entry->{cidr});
+	    $nethash->{$cidr} = { cidr => $cidr, nomatch => $entry->{nomatch} };
+	};
+	warn $@ if $@;
     }
 
     foreach my $cidr (sort keys %$nethash) {
