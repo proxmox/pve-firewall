@@ -2160,8 +2160,6 @@ sub generic_fw_config_parser {
 
     my $res = $empty_conf;
 
-    my $ipset_option = get_standard_option('ipset-name');
-
     while (defined(my $line = <$fh>)) {
 	next if $line =~ m/^#/;
 	next if $line =~ m/^\s*$/;
