@@ -12,7 +12,7 @@ use base qw(PVE::RESTHandler);
 my $api_properties = { 
     cidr => {
 	description => "Network/IP specification in CIDR format.",
-	type => 'string', format => 'IPv4orCIDR',
+	type => 'string', format => 'IPv4orCIDRorAlias',
     },
     name => get_standard_option('ipset-name'),
     comment => {
@@ -145,6 +145,17 @@ sub register_delete_ipset {
 	}});
 }
 
+my $verify_alias_exists = sub {
+    my ($cluster_conf, $fw_conf, $cidr) = @_;
+
+    if ($cidr !~ m/^\d/) {
+	my $alias = lc($cidr);
+	die "no such alias '$cidr'\n"
+	    if !(($cluster_conf && $cluster_conf->{aliases}->{$alias}) || 
+		 ($fw_conf && $fw_conf->{aliases}->{$alias}));
+    }
+};
+
 sub register_create_ip {
     my ($class) = @_;
 
@@ -178,7 +189,10 @@ sub register_create_ip {
 		    if $entry->{cidr} eq $cidr;
 	    }
 
+	    &$verify_alias_exists($cluster_conf, $fw_conf, $cidr);
+
 	    my $data = { cidr => $cidr };
+
 	    $data->{nomatch} = 1 if $param->{nomatch};
 	    $data->{comment} = $param->{comment} if $param->{comment};
 

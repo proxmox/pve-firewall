@@ -56,6 +56,21 @@ sub pve_verify_ipv4_or_cidr {
     die "value does not look like a valid IP address or CIDR network\n";
 }
 
+PVE::JSONSchema::register_format('IPv4orCIDRorAlias', \&pve_verify_ipv4_or_cidr_or_alias);
+sub pve_verify_ipv4_or_cidr_or_alias {
+    my ($cidr, $noerr) = @_;
+
+    return if $cidr =~ m/^(?:$ip_alias_pattern)$/;
+
+    if ($cidr =~ m!^(?:$IPV4RE)(/(\d+))?$!) {
+	return $cidr if Net::IP->new($cidr);
+	return undef if $noerr;
+	die Net::IP::Error() . "\n";
+    }
+    return undef if $noerr;
+    die "value does not look like a valid IP address or CIDR network\n";
+}
+
 PVE::JSONSchema::register_standard_option('ipset-name', {
     description => "IP set name.",
     type => 'string',
