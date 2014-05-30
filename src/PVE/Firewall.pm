@@ -2270,13 +2270,17 @@ sub generic_fw_config_parser {
 	    my $nomatch = $1;
 	    my $cidr = $2;
 
-	    if($cidr !~ m/^${ip_alias_pattern}$/) {
-		$cidr =~ s|/32$||;
-		eval { pve_verify_ipv4_or_cidr($cidr); };
-		if (my $err = $@) {
-		    warn "$prefix: $cidr - $err";
-		    next;
+	    eval { 
+		if ($cidr =~ m/^${ip_alias_pattern}$/) {
+		    resolve_alias($cluster_conf, $res, $cidr); # make sure alias exists
+		} else {
+		    $cidr =~ s|/32$||;
+		    pve_verify_ipv4_or_cidr($cidr);
 		}
+	    };
+	    if (my $err = $@) {
+		warn "$prefix: $cidr - $err";
+		next;
 	    }
 
 	    my $entry = { cidr => $cidr };
