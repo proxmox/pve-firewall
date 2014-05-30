@@ -2269,23 +2269,28 @@ sub generic_fw_config_parser {
 	    $line =~ m/^(\!)?\s*(\S+)\s*$/;
 	    my $nomatch = $1;
 	    my $cidr = $2;
+	    my $errors;
+
+	    if ($nomatch && !$feature_ipset_nomatch) {
+		$errors->{nomatch} = "nomatch not supported by kernel";
+	    }
 
 	    eval { 
 		if ($cidr =~ m/^${ip_alias_pattern}$/) {
 		    resolve_alias($cluster_conf, $res, $cidr); # make sure alias exists
 		} else {
 		    $cidr =~ s|/32$||;
-		    pve_verify_ipv4_or_cidr($cidr);
+		    pve_verify_ipv4_or_cidr_or_alias($cidr);
 		}
 	    };
 	    if (my $err = $@) {
-		warn "$prefix: $cidr - $err";
-		next;
+		$errors->{cidr} = $err;
 	    }
 
 	    my $entry = { cidr => $cidr };
 	    $entry->{nomatch} = 1 if $nomatch;
 	    $entry->{comment} = $comment if $comment;
+	    $entry->{errors} =  $errors if $errors;
 
 	    push @{$res->{$section}->{$group}}, $entry;
 	} else {
