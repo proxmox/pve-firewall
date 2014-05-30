@@ -246,6 +246,12 @@ sub register_handlers {
 	    properties => {
 		node => get_standard_option('pve-node'),
 		vmid => get_standard_option('pve-vmid'),
+		type => {
+		    description => "Only list references of specified type.",
+		    type => 'string',
+		    enum => ['alias', 'ipset'],
+		    optional => 1,
+		},
 	    },
 	},
 	returns => {
@@ -278,27 +284,31 @@ sub register_handlers {
 
 	    foreach my $conf (($cluster_conf, $fw_conf)) {
 		next if !$conf;
-		foreach my $name (keys %{$conf->{ipset}}) {
-		    my $data = { 
-			type => 'ipset',
-			name => $name,
-			ref => "+$name",
-		    };
-		    if (my $comment = $conf->{ipset_comments}->{$name}) {
-			$data->{comment} = $comment;
+		if (!$param->{type} || $param->{type} eq 'ipset') {
+		    foreach my $name (keys %{$conf->{ipset}}) {
+			my $data = { 
+			    type => 'ipset',
+			    name => $name,
+			    ref => "+$name",
+			};
+			if (my $comment = $conf->{ipset_comments}->{$name}) {
+			    $data->{comment} = $comment;
+			}
+			$ipsets->{$name} = $data;
 		    }
-		    $ipsets->{$name} = $data;
 		}
 
-		foreach my $name (keys %{$conf->{aliases}}) {
-		    my $e = $conf->{aliases}->{$name};
-		    my $data = { 
-			type => 'alias',
-			name => $name,
-			ref => $name,
-		    };
-		    $data->{comment} = $e->{comment} if $e->{comment};
-		    $aliases->{$name} = $data;
+		if (!$param->{type} || $param->{type} eq 'alias') {
+		    foreach my $name (keys %{$conf->{aliases}}) {
+			my $e = $conf->{aliases}->{$name};
+			my $data = { 
+			    type => 'alias',
+			    name => $name,
+			    ref => $name,
+			};
+			$data->{comment} = $e->{comment} if $e->{comment};
+			$aliases->{$name} = $data;
+		    }
 		}
 	    }
 

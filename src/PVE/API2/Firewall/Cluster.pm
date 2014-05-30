@@ -216,7 +216,14 @@ __PACKAGE__->register_method({
     description => "Lists possible IPSet/Alias reference which are allowed in source/dest properties.",
     parameters => {
 	additionalProperties => 0,
-	properties => {},
+	properties => {
+	    type => {
+		description => "Only list references of specified type.",
+		type => 'string',
+		enum => ['alias', 'ipset'],
+		optional => 1,
+	    },
+	},
     },
     returns => {
 	type => 'array',
@@ -247,27 +254,31 @@ __PACKAGE__->register_method({
 
 	my $res = [];
 
-	foreach my $name (keys %{$conf->{ipset}}) {
-	    my $data = {
-		type => 'ipset',
-		name => $name,
-		ref => "+$name",
-	    };
-	    if (my $comment = $conf->{ipset_comments}->{$name}) {
-		$data->{comment} = $comment;
+	if (!$param->{type} || $param->{type} eq 'ipset') {
+	    foreach my $name (keys %{$conf->{ipset}}) {
+		my $data = {
+		    type => 'ipset',
+		    name => $name,
+		    ref => "+$name",
+		};
+		if (my $comment = $conf->{ipset_comments}->{$name}) {
+		    $data->{comment} = $comment;
+		}
+		push @$res, $data;
 	    }
-	    push @$res, $data;
 	}
 
-	foreach my $name (keys %{$conf->{aliases}}) {
-	    my $e = $conf->{aliases}->{$name};
-	    my $data = {
-		type => 'alias',
-		name => $name,
-		ref => $name,
-	    };
-	    $data->{comment} = $e->{comment} if $e->{comment};
-	    push @$res, $data;
+	if (!$param->{type} || $param->{type} eq 'alias') {
+	    foreach my $name (keys %{$conf->{aliases}}) {
+		my $e = $conf->{aliases}->{$name};
+		my $data = {
+		    type => 'alias',
+		    name => $name,
+		    ref => $name,
+		};
+		$data->{comment} = $e->{comment} if $e->{comment};
+		push @$res, $data;
+	    }
 	}
 
 	return $res;
