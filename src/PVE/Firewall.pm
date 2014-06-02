@@ -1971,8 +1971,6 @@ for (my $i = 0; $i < $MAX_NETS; $i++)  {
 sub parse_fw_rule {
     my ($prefix, $line, $cluster_conf, $fw_conf, $rule_env, $verbose) = @_;
 
-    chomp $line;
-
     my $orig_line = $line;
 
     my $rule = {};
@@ -2066,7 +2064,6 @@ sub parse_vmfw_option {
 	$opt = lc($1);
 	$value = $2;
     } else {
-	chomp $line;
 	die "can't parse option '$line'\n"
     }
 
@@ -2090,7 +2087,6 @@ sub parse_hostfw_option {
 	$opt = lc($1);
 	$value = int($2);
     } else {
-	chomp $line;
 	die "can't parse option '$line'\n"
     }
 
@@ -2109,7 +2105,6 @@ sub parse_clusterfw_option {
 	$opt = lc($1);
 	$value = uc($3);
     } else {
-	chomp $line;
 	die "can't parse option '$line'\n"
     }
 
@@ -2163,6 +2158,8 @@ sub generic_fw_config_parser {
     while (defined(my $line = <$fh>)) {
 	next if $line =~ m/^#/;
 	next if $line =~ m/^\s*$/;
+
+	chomp $line;
 
 	my $linenr = $fh->input_line_number();
 	my $prefix = "$filename (line $linenr)";
@@ -2284,6 +2281,7 @@ sub generic_fw_config_parser {
 		}
 	    };
 	    if (my $err = $@) {
+		chomp $err;
 		$errors->{cidr} = $err;
 	    }
 
@@ -2291,6 +2289,13 @@ sub generic_fw_config_parser {
 	    $entry->{nomatch} = 1 if $nomatch;
 	    $entry->{comment} = $comment if $comment;
 	    $entry->{errors} =  $errors if $errors;
+
+	    if ($verbose && $errors) {
+		warn "$prefix - errors in ipset: $line\n";
+		foreach my $p (keys %{$errors}) {
+		    warn "  $p: $errors->{$p}\n";
+		}
+	    }
 
 	    push @{$res->{$section}->{$group}}, $entry;
 	} else {
@@ -2629,6 +2634,7 @@ sub generate_ipset {
     # remove duplicates
     my $nethash = {};
     foreach my $entry (@$options) {
+	next if $entry->{errors}; # skip entries with errors
 	eval {
 	    my $cidr = resolve_alias($clusterfw_conf, $fw_conf, $entry->{cidr});
 	    $nethash->{$cidr} = { cidr => $cidr, nomatch => $entry->{nomatch} };
