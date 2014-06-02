@@ -2291,7 +2291,7 @@ sub generic_fw_config_parser {
 	    $entry->{errors} =  $errors if $errors;
 
 	    if ($verbose && $errors) {
-		warn "$prefix - errors in ipset: $line\n";
+		warn "$prefix - errors in ipset '$group': $line\n";
 		foreach my $p (keys %{$errors}) {
 		    warn "  $p: $errors->{$p}\n";
 		}
