@@ -8,6 +8,6 @@ Standards-Version: 3.8.4
 Package: pve-firewall
 Architecture: any
 Conflicts: ulogd
-Depends: ${shlibs:Depends}, ${perl:Depends}, ${misc:Depends}, libpve-common-perl, pve-cluster, libpve-access-control
+Depends: ${shlibs:Depends}, ${perl:Depends}, ${misc:Depends}, libpve-common-perl, pve-cluster, libpve-access-control, iptables, ipset
 Description: Proxmox VE Firewall
  This package contains the Proxmox VE Firewall.
