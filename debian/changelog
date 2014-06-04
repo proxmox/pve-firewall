@@ -1,3 +1,9 @@
+pve-firewall (1.0-3) unstable; urgency=low
+
+  * change dh_installinit order (register pvefw-logger before pve-firewall)
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 04 Jun 2014 06:24:21 +0200
+
 pve-firewall (1.0-2) unstable; urgency=low
 
   * add experimental nflog logging daemon
