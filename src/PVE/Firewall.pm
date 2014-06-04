@@ -2521,15 +2521,15 @@ sub save_vmfw_conf {
     my $raw = '';
 
     my $options = $vmfw_conf->{options};
-    $raw .= &$format_options($options) if scalar(keys %$options);
+    $raw .= &$format_options($options) if $options && scalar(keys %$options);
 
     my $aliases = $vmfw_conf->{aliases};
-    $raw .= &$format_aliases($aliases) if scalar(keys %$aliases);
+    $raw .= &$format_aliases($aliases) if $aliases && scalar(keys %$aliases);
 
-    $raw .= &$format_ipsets($vmfw_conf);
+    $raw .= &$format_ipsets($vmfw_conf) if $vmfw_conf->{ipset};
 
     my $rules = $vmfw_conf->{rules} || [];
-    if (scalar(@$rules)) {
+    if ($rules && scalar(@$rules)) {
 	$raw .= "[RULES]\n\n";
 	$raw .= &$format_rules($rules, 1);
 	$raw .= "\n";
@@ -2685,31 +2685,33 @@ sub save_clusterfw_conf {
     my $raw = '';
 
     my $options = $cluster_conf->{options};
-    $raw .= &$format_options($options) if scalar(keys %$options);
+    $raw .= &$format_options($options) if $options && scalar(keys %$options);
 
     my $aliases = $cluster_conf->{aliases};
-    $raw .= &$format_aliases($aliases) if scalar(keys %$aliases);
+    $raw .= &$format_aliases($aliases) if $aliases && scalar(keys %$aliases);
 
-    $raw .= &$format_ipsets($cluster_conf);
+    $raw .= &$format_ipsets($cluster_conf) if $cluster_conf->{ipset};
  
     my $rules = $cluster_conf->{rules};
-    if (scalar(@$rules)) {
+    if ($rules && scalar(@$rules)) {
 	$raw .= "[RULES]\n\n";
 	$raw .= &$format_rules($rules, 1);
 	$raw .= "\n";
     }
 
-    foreach my $group (sort keys %{$cluster_conf->{groups}}) {
-	my $rules = $cluster_conf->{groups}->{$group};
-	if (my $comment = $cluster_conf->{group_comments}->{$group}) {
-	    my $utf8comment = encode('utf8', $comment);
-	    $raw .= "[group $group] # $utf8comment\n\n";
-	} else {
-	    $raw .= "[group $group]\n\n";
-	}
+    if ($cluster_conf->{groups}) {
+	foreach my $group (sort keys %{$cluster_conf->{groups}}) {
+	    my $rules = $cluster_conf->{groups}->{$group};
+	    if (my $comment = $cluster_conf->{group_comments}->{$group}) {
+		my $utf8comment = encode('utf8', $comment);
+		$raw .= "[group $group] # $utf8comment\n\n";
+	    } else {
+		$raw .= "[group $group]\n\n";
+	    }
 
-	$raw .= &$format_rules($rules, 0);
-	$raw .= "\n";
+	    $raw .= &$format_rules($rules, 0);
+	    $raw .= "\n";
+	}
     }
 
     PVE::Tools::file_set_contents($clusterfw_conf_filename, $raw);
@@ -2733,10 +2735,10 @@ sub save_hostfw_conf {
     my $raw = '';
 
     my $options = $hostfw_conf->{options};
-    $raw .= &$format_options($options) if scalar(keys %$options);
+    $raw .= &$format_options($options) if $options && scalar(keys %$options);
 
     my $rules = $hostfw_conf->{rules};
-    if (scalar(@$rules)) {
+    if ($rules && scalar(@$rules)) {
 	$raw .= "[RULES]\n\n";
 	$raw .= &$format_rules($rules, 1);
 	$raw .= "\n";
