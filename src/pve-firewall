@@ -311,7 +311,11 @@ __PACKAGE__->register_method ({
 	properties => {
 	    status => {
 		type => 'string',
-		enum => ['unknown', 'stopped', 'active'],
+		enum => ['unknown', 'stopped', 'running'],
+	    },
+	    enable => {
+		description => "Firewall is enabled (in 'cluster.fw')",
+		type => 'boolean',
 	    },
 	    changes => {
 		description => "Set when there are pending changes.",
@@ -330,17 +334,21 @@ __PACKAGE__->register_method ({
 	    my $pid = int(PVE::Tools::file_read_firstline($pve_firewall_pidfile) || 0);
 	    my $running = PVE::ProcFSTools::check_process_running($pid);
 
-	    my $status = $running ? 'active' : 'stopped';
+	    my $status = $running ? 'running' : 'stopped';
 
 	    my $res = { status => $status };
-	    if ($status eq 'active') {
+
+	    my $verbose = 1; # show syntax errors 
+	    my $cluster_conf = PVE::Firewall::load_clusterfw_conf(undef, $verbose); 
+	    $res->{enable} = $cluster_conf->{options}->{enable} ? 1 : 0;
+
+	    if ($status eq 'running') {
 		
-		my $verbose = 1; # show syntax errors 
-		my ($ruleset, $ipset_ruleset) = PVE::Firewall::compile(undef, undef, undef, $verbose);
+		my ($ruleset, $ipset_ruleset) = PVE::Firewall::compile($cluster_conf, undef, undef, $verbose);
 
 		$verbose = 0; # do not show iptables details
 		my (undef, undef, $ipset_changes) = PVE::Firewall::get_ipset_cmdlist($ipset_ruleset, $verbose);
-		my (undef, $ruleset_changes) = PVE::Firewall::get_ruleset_cmdlist($ruleset, $verbose);
+		my ($test, $ruleset_changes) = PVE::Firewall::get_ruleset_cmdlist($ruleset, $verbose);
 	      
 		$res->{changes} = ($ipset_changes || $ruleset_changes) ? 1 : 0;
 	    }
@@ -371,15 +379,21 @@ __PACKAGE__->register_method ({
 
 	    my $verbose = 1;
 
-	    my ($ruleset, $ipset_ruleset) = PVE::Firewall::compile(undef, undef, undef, $verbose);
+	    my $cluster_conf = PVE::Firewall::load_clusterfw_conf(undef, $verbose); 
+	    my ($ruleset, $ipset_ruleset) = PVE::Firewall::compile($cluster_conf, undef, undef, $verbose);
 
 	    my (undef, undef, $ipset_changes) = PVE::Firewall::get_ipset_cmdlist($ipset_ruleset, $verbose);
 	    my (undef, $ruleset_changes) = PVE::Firewall::get_ruleset_cmdlist($ruleset, $verbose);
+
 	    if ($ipset_changes || $ruleset_changes) {
 		print "detected changes\n";
 	    } else {
 		print "no changes\n";
 	    }
+	    if (!$cluster_conf->{options}->{enable}) {
+		print "firewall disabled\n";
+	    }
+
 	};
 
 	PVE::Firewall::run_locked($code);
@@ -542,10 +556,12 @@ my $cmddef = {
     localnet => [ __PACKAGE__, 'localnet', []],
     status => [ __PACKAGE__, 'status', [], undef, sub {
 	my $res = shift;
+	my $status = ($res->{enable} ? "enabled" : "disabled") . '/' . $res->{status};
+	
 	if ($res->{changes}) {
-	    print "Status: $res->{status} (pending changes)\n";
+	    print "Status: $status (pending changes)\n";
 	} else {
-	    print "Status: $res->{status}\n";
+	    print "Status: $status\n";
 	}
     }],
  };

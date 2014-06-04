@@ -2971,8 +2971,9 @@ sub get_ruleset_cmdlist {
     }
 
     foreach my $h (qw(INPUT OUTPUT FORWARD)) {
-	if (!$hooks->{$h}) {
-	    $cmdlist .= "-A $h -j PVEFW-$h\n";
+	my $chain = "PVEFW-$h";
+	if ($ruleset->{$chain} && !$hooks->{$h}) {
+	    $cmdlist .= "-A $h -j $chain\n";
 	}
     }
 
@@ -3172,6 +3173,17 @@ sub remove_pvefw_chains {
     $cmdlist .= "COMMIT\n";
 
     iptables_restore_cmdlist($cmdlist);
+
+    my $ipset_chains = ipset_get_chains();
+
+    $cmdlist = "";
+ 
+    foreach my $chain (keys %$ipset_chains) {
+       $cmdlist .= "flush $chain\n";
+       $cmdlist .= "destroy $chain\n";
+    }
+
+    ipset_restore_cmdlist($cmdlist) if $cmdlist; 
 }
 
 sub init {
@@ -3190,11 +3202,7 @@ sub update {
 	my $cluster_conf = load_clusterfw_conf();
 	my $cluster_options = $cluster_conf->{options};
 
-	my $enable = $cluster_options->{enable};
-
-	die "Firewall is disabled - cannot start\n" if !$enable;
-
-	if (!$enable) {
+	if (!$cluster_options->{enable}) {
 	    PVE::Firewall::remove_pvefw_chains();
 	    return;
 	}
