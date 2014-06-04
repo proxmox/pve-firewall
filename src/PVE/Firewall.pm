@@ -19,7 +19,8 @@ use PVE::Tools qw(run_command lock_file dir_glob_foreach);
 use Encode;
 
 my $hostfw_conf_filename = "/etc/pve/local/host.fw";
-my $clusterfw_conf_filename = "/etc/pve/firewall/cluster.fw";
+my $pvefw_conf_dir = "/etc/pve/firewall";
+my $clusterfw_conf_filename = "$pvefw_conf_dir/cluster.fw";
 
 # dynamically include PVE::QemuServer and PVE::OpenVZ
 # to avoid dependency problems
@@ -2401,7 +2402,7 @@ sub load_vmfw_conf {
 
     my $vmfw_conf = {};
 
-    $dir = "/etc/pve/firewall" if !defined($dir);
+    $dir = $pvefw_conf_dir if !defined($dir);
 
     my $filename = "$dir/$vmid.fw";
     if (my $fh = IO::File->new($filename, O_RDONLY)) {
@@ -2535,7 +2536,9 @@ sub save_vmfw_conf {
 	$raw .= "\n";
     }
 
-    my $filename = "/etc/pve/firewall/$vmid.fw";
+    mkdir $pvefw_conf_dir;
+
+    my $filename = "$pvefw_conf_dir/$vmid.fw";
     PVE::Tools::file_set_contents($filename, $raw);
 }
 
@@ -2714,6 +2717,7 @@ sub save_clusterfw_conf {
 	}
     }
 
+    mkdir $pvefw_conf_dir;
     PVE::Tools::file_set_contents($clusterfw_conf_filename, $raw);
 }
 
