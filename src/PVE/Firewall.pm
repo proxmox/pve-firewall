@@ -2781,6 +2781,8 @@ sub compile {
 
     push @{$cluster_conf->{ipset}->{management}}, { cidr => $localnet };
 
+    return ({}, {}) if !$cluster_conf->{options}->{enable};
+
     my $ruleset = {};
 
     ruleset_create_chain($ruleset, "PVEFW-INPUT");

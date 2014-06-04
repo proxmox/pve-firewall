@@ -1,3 +1,4 @@
 [OPTIONS]
 
+enable: 1
 policy_out: DROP
