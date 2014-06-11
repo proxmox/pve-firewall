@@ -1624,7 +1624,7 @@ sub ruleset_chain_add_input_filters {
 }
 
 sub ruleset_create_vm_chain {
-    my ($ruleset, $chain, $options, $macaddr, $direction) = @_;
+    my ($ruleset, $chain, $options, $macaddr, $ipfilter_ipset, $direction) = @_;
 
     ruleset_create_chain($ruleset, $chain);
     my $accept = generate_nfqueue($options);
@@ -1642,6 +1642,9 @@ sub ruleset_create_vm_chain {
     if ($direction eq 'OUT') {
 	if (defined($macaddr) && !(defined($options->{macfilter}) && $options->{macfilter} == 0)) {
 	    ruleset_addrule($ruleset, $chain, "-m mac ! --mac-source $macaddr -j DROP");
+	}
+	if ($ipfilter_ipset) {
+	    ruleset_addrule($ruleset, $chain, "-m set ! --match-set $ipfilter_ipset src -j DROP");
 	}
 	ruleset_addrule($ruleset, $chain, "-j MARK --set-mark 0"); # clear mark
     }
@@ -1743,7 +1746,10 @@ sub generate_venet_rules_direction {
 
     my $chain = "venet0-$vmid-$direction";
 
-    ruleset_create_vm_chain($ruleset, $chain, $options, undef, $direction);
+    my $ipfilter_ipset = compute_ipset_chain_name($vmid, 'ipfilter')
+	if $vmfw_conf->{ipset}->{ipfilter};	
+
+    ruleset_create_vm_chain($ruleset, $chain, $options, undef, $ipfilter_ipset, $direction);
 
     ruleset_generate_vm_rules($ruleset, $rules, $cluster_conf, $vmfw_conf, $chain, 'venet', $direction);
 
@@ -1785,7 +1791,10 @@ sub generate_tap_rules_direction {
 
     my $tapchain = "$iface-$direction";
 
-    ruleset_create_vm_chain($ruleset, $tapchain, $options, $macaddr, $direction);
+    my $ipfilter_ipset = compute_ipset_chain_name($vmid, 'ipfilter')
+	if $vmfw_conf->{ipset}->{ipfilter};	
+
+    ruleset_create_vm_chain($ruleset, $tapchain, $options, $macaddr, $ipfilter_ipset, $direction);
 
     ruleset_generate_vm_rules($ruleset, $rules, $cluster_conf, $vmfw_conf, $tapchain, $netid, $direction, $options);
 
