@@ -1,0 +1,13 @@
+[options]
+
+enable: 1
+
+[ipset ipfilter-net0]
+1.2.3.4
+1.2.3.5
+
+[ipset ipfilter-net2] # empty, allow nothing
+
+[rules]
+
+IN ACCEPT -p tcp -dport 80

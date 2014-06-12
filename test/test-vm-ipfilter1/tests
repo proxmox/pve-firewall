@@ -1,0 +1,15 @@
+{ from => 'vm100i1', source => '1.2.3.3', dport => 80, action => 'ACCEPT' }
+{ from => 'vm100i1', source => '1.2.3.4', dport => 80, action => 'ACCEPT' }
+{ from => 'vm100i1', source => '1.2.3.5', dport => 80, action => 'ACCEPT' }
+{ from => 'vm100i1', source => '1.2.3.6', dport => 80, action => 'ACCEPT' }
+
+
+{ from => 'vm100', source => '1.2.3.3', dport => 80, action => 'DROP' }
+{ from => 'vm100', source => '1.2.3.4', dport => 80, action => 'ACCEPT' }
+{ from => 'vm100', source => '1.2.3.5', dport => 80, action => 'ACCEPT' }
+{ from => 'vm100', source => '1.2.3.6', dport => 80, action => 'DROP' }
+
+{ from => 'vm100i2', source => '1.2.3.3', dport => 80, action => 'DROP' }
+{ from => 'vm100i2', source => '1.2.3.4', dport => 80, action => 'DROP' }
+{ from => 'vm100i2', source => '1.2.3.5', dport => 80, action => 'DROP' }
+{ from => 'vm100i2', source => '1.2.3.6', dport => 80, action => 'DROP' }
