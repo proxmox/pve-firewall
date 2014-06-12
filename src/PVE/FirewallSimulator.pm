@@ -151,11 +151,16 @@ sub rule_match {
 	    next;
 	}
 
-	if ($rule =~ s/^-m set --match-set (\S+) src\s*//) {
+	if ($rule =~ s/^-m set (!\s+)?--match-set (\S+) src\s*//) {
 	    die "missing source" if !$pkg->{source};
-	    my $ipset = $ipset_ruleset->{$1};
-	    die "no such ip set '$1'" if !$ipset;
-	    return undef if !ipset_match($1, $ipset, $pkg->{source});
+	    my $neg = $1;
+	    my $ipset = $ipset_ruleset->{$2};
+	    die "no such ip set '$2'" if !$ipset;
+	    if ($neg) {
+		return undef if ipset_match($1, $ipset, $pkg->{source});
+	    } else {
+		return undef if !ipset_match($1, $ipset, $pkg->{source});
+	    }
 	    next;
 	}
 
@@ -472,18 +477,18 @@ sub extract_ct_info {
 }
 
 sub extract_vm_info {
-    my ($vmdata, $vmid) = @_;
+    my ($vmdata, $vmid, $netnum) = @_;
 
     my $info = { type => 'vm', vmid => $vmid };
 
     my $conf = $vmdata->{qemu}->{$vmid} || die "no such VM '$vmid'";
-    my $net = PVE::QemuServer::parse_net($conf->{net0});
+    my $net = PVE::QemuServer::parse_net($conf->{"net$netnum"});
     $info->{macaddr} = $net->{macaddr} || die "unable to get mac address";
     $info->{bridge} = $net->{bridge} || die "unable to get bridge";
-    $info->{fwbr} = "fwbr${vmid}i0";
-    $info->{tapdev} = "tap${vmid}i0";
-    $info->{fwln} = "fwln${vmid}i0";
-    $info->{fwpr} = "fwpr${vmid}p0";
+    $info->{fwbr} = "fwbr${vmid}i$netnum";
+    $info->{tapdev} = "tap${vmid}i$netnum";
+    $info->{fwln} = "fwln${vmid}i$netnum";
+    $info->{fwpr} = "fwpr${vmid}p$netnum";
 
     return $info;
 }
@@ -550,9 +555,10 @@ sub simulate_firewall {
 	} else {
 	    die "implement me";
 	}
-    } elsif ($from =~ m/^vm(\d+)$/) {
+    } elsif ($from =~ m/^vm(\d+)(i(\d))?$/) {
 	my $vmid = $1;
-	$from_info = extract_vm_info($vmdata, $vmid);
+	my $netnum = $3 || 0;
+	$from_info = extract_vm_info($vmdata, $vmid, $netnum);
 	$start_state = 'fwbr-out'; 
 	$pkg->{mac_source} = $from_info->{macaddr};
     } else {
@@ -589,7 +595,7 @@ sub simulate_firewall {
 	}
    } elsif ($to =~ m/^vm(\d+)$/) {
 	my $vmid = $1;
-	$target = extract_vm_info($vmdata, $vmid);
+	$target = extract_vm_info($vmdata, $vmid, 0);
 	$target->{iface} = $target->{tapdev};
     } else {
 	die "unable to parse \"to => '$to'\"\n";
