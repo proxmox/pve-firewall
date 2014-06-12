@@ -107,6 +107,8 @@ my $vmdata = {
     qemu => {
 	100 => {
 	    net0 => "e1000=0E:0B:38:B8:B3:21,bridge=vmbr0,firewall=1",
+	    net1 => "e1000=0E:0B:38:B9:B4:21,bridge=vmbr1,firewall=1",
+	    net2 => "e1000=0E:0B:38:BA:B4:21,bridge=vmbr2,firewall=1",
 	},
 	101 => {
 	    net0 => "e1000=0E:0B:38:B8:B3:22,bridge=vmbr0,firewall=1",
