@@ -777,6 +777,12 @@ sub compute_ipset_chain_name {
     return "PVEFW-$id";
 }
 
+sub compute_ipfilter_ipset_name {
+    my ($iface) = @_;
+
+    return "ipfilter-$iface";
+}
+
 sub parse_address_list {
     my ($str) = @_;
 
@@ -1746,8 +1752,9 @@ sub generate_venet_rules_direction {
 
     my $chain = "venet0-$vmid-$direction";
 
-    my $ipfilter_ipset = compute_ipset_chain_name($vmid, 'ipfilter')
-	if $vmfw_conf->{ipset}->{ipfilter};	
+    my $ipfilter_name = compute_ipfilter_ipset_name('venet0');
+    my $ipfilter_ipset = compute_ipset_chain_name($vmid, $ipfilter_name)
+	if $vmfw_conf->{ipset}->{$ipfilter_name};
 
     ruleset_create_vm_chain($ruleset, $chain, $options, undef, $ipfilter_ipset, $direction);
 
@@ -1791,8 +1798,9 @@ sub generate_tap_rules_direction {
 
     my $tapchain = "$iface-$direction";
 
-    my $ipfilter_ipset = compute_ipset_chain_name($vmid, 'ipfilter')
-	if $vmfw_conf->{ipset}->{ipfilter};	
+    my $ipfilter_name = compute_ipfilter_ipset_name($netid);
+    my $ipfilter_ipset = compute_ipset_chain_name($vmid, $ipfilter_name)
+	if $vmfw_conf->{ipset}->{$ipfilter_name};	
 
     ruleset_create_vm_chain($ruleset, $tapchain, $options, $macaddr, $ipfilter_ipset, $direction);
 
