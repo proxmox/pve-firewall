@@ -1,6 +1,8 @@
 pve-firewall (1.0-7) unstable; urgency=low
 
   * proxy host rule API calls to correct node
+  
+  * always generate MAC and IP filter rules if firewall is enabled on NIC
 
  -- Proxmox Support Team <support@proxmox.com>  Thu, 26 Jun 2014 07:12:57 +0200
 

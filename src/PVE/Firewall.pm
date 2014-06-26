@@ -1752,11 +1752,7 @@ sub generate_venet_rules_direction {
 
     my $chain = "venet0-$vmid-$direction";
 
-    my $ipfilter_name = compute_ipfilter_ipset_name('venet0');
-    my $ipfilter_ipset = compute_ipset_chain_name($vmid, $ipfilter_name)
-	if $vmfw_conf->{ipset}->{$ipfilter_name};
-
-    ruleset_create_vm_chain($ruleset, $chain, $options, undef, $ipfilter_ipset, $direction);
+    ruleset_create_vm_chain($ruleset, $chain, $options, undef, undef, $direction);
 
     ruleset_generate_vm_rules($ruleset, $rules, $cluster_conf, $vmfw_conf, $chain, 'venet', $direction);
 
@@ -1802,24 +1798,30 @@ sub generate_tap_rules_direction {
     my $ipfilter_ipset = compute_ipset_chain_name($vmid, $ipfilter_name)
 	if $vmfw_conf->{ipset}->{$ipfilter_name};	
 
+    # create chain with mac and ip filter
     ruleset_create_vm_chain($ruleset, $tapchain, $options, $macaddr, $ipfilter_ipset, $direction);
 
-    ruleset_generate_vm_rules($ruleset, $rules, $cluster_conf, $vmfw_conf, $tapchain, $netid, $direction, $options);
+    if ($options->{enable}) {
+	ruleset_generate_vm_rules($ruleset, $rules, $cluster_conf, $vmfw_conf, $tapchain, $netid, $direction, $options);
 
-    ruleset_generate_vm_ipsrules($ruleset, $options, $direction, $iface);
+	ruleset_generate_vm_ipsrules($ruleset, $options, $direction, $iface);
 
-    # implement policy
-    my $policy;
+	# implement policy
+	my $policy;
 
-    if ($direction eq 'OUT') {
-	$policy = $options->{policy_out} || 'ACCEPT'; # allow everything by default
-    } else {
+	if ($direction eq 'OUT') {
+	    $policy = $options->{policy_out} || 'ACCEPT'; # allow everything by default
+	} else {
 	$policy = $options->{policy_in} || 'DROP'; # allow nothing by default
-    }
+	}
 
-    my $accept = generate_nfqueue($options);
-    my $accept_action = $direction eq 'OUT' ? "PVEFW-SET-ACCEPT-MARK" : $accept;
-    ruleset_add_chain_policy($ruleset, $tapchain, $vmid, $policy, $loglevel, $accept_action);
+	my $accept = generate_nfqueue($options);
+	my $accept_action = $direction eq 'OUT' ? "PVEFW-SET-ACCEPT-MARK" : $accept;
+	ruleset_add_chain_policy($ruleset, $tapchain, $vmid, $policy, $loglevel, $accept_action);
+    } else {
+	my $accept_action = $direction eq 'OUT' ? "PVEFW-SET-ACCEPT-MARK" : 'ACCEPT';
+	ruleset_add_chain_policy($ruleset, $tapchain, $vmid, 'ACCEPT', $loglevel, $accept_action);
+    }
 
     # plug the tap chain to bridge chain
     if ($direction eq 'IN') {
@@ -2857,7 +2859,6 @@ sub compile {
 	    my $conf = $vmdata->{qemu}->{$vmid};
 	    my $vmfw_conf = $vmfw_configs->{$vmid};
 	    return if !$vmfw_conf;
-	    return if !$vmfw_conf->{options}->{enable};
 
 	    generate_ipset_chains($ipset_ruleset, $cluster_conf, $vmfw_conf);
 
@@ -2884,32 +2885,34 @@ sub compile {
 
 	    my $vmfw_conf = $vmfw_configs->{$vmid};
 	    return if !$vmfw_conf;
-	    return if !$vmfw_conf->{options}->{enable};
 
 	    generate_ipset_chains($ipset_ruleset, $cluster_conf, $vmfw_conf);
 
-	    if ($conf->{ip_address} && $conf->{ip_address}->{value}) {
-		my $ip = $conf->{ip_address}->{value};
-		$ip =~ s/\s+/,/g;
-		parse_address_list($ip); # make sure we have a valid $ip list
+	    if ($vmfw_conf->{options}->{enable}) {
+		if ($conf->{ip_address} && $conf->{ip_address}->{value}) {
+		    my $ip = $conf->{ip_address}->{value};
+		    $ip =~ s/\s+/,/g;
+		    parse_address_list($ip); # make sure we have a valid $ip list
 
-		my @ips = split(',', $ip);
+		    my @ips = split(',', $ip);
 
-		foreach my $singleip (@ips) {
-		    my $venet0ipset = {};
-		    $venet0ipset->{cidr} = $singleip;
-		    push @{$cluster_conf->{ipset}->{venet0}}, $venet0ipset;
+		    foreach my $singleip (@ips) {
+			my $venet0ipset = {};
+			$venet0ipset->{cidr} = $singleip;
+			push @{$cluster_conf->{ipset}->{venet0}}, $venet0ipset;
+		    }
+
+		    generate_venet_rules_direction($ruleset, $cluster_conf, $vmfw_conf, $vmid, $ip, 'IN');
+		    generate_venet_rules_direction($ruleset, $cluster_conf, $vmfw_conf, $vmid, $ip, 'OUT');
 		}
-
-		generate_venet_rules_direction($ruleset, $cluster_conf, $vmfw_conf, $vmid, $ip, 'IN');
-		generate_venet_rules_direction($ruleset, $cluster_conf, $vmfw_conf, $vmid, $ip, 'OUT');
 	    }
 
 	    if ($conf->{netif} && $conf->{netif}->{value}) {
 		my $netif = PVE::OpenVZ::parse_netif($conf->{netif}->{value});
 		foreach my $netid (keys %$netif) {
 		    my $d = $netif->{$netid};
-
+		    my $bridge = $d->{bridge};
+		    next if !$bridge || $bridge !~ m/^vmbr\d+(v(\d+))?f$/; # firewall enabled ?
 		    my $macaddr = $d->{mac};
 		    my $iface = $d->{host_ifname};
 		    generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
