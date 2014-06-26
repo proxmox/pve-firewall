@@ -67,6 +67,7 @@ sub register_get_rules {
 	    additionalProperties => 0,
 	    properties => $properties,
 	},
+	proxyto => $class->rule_env() eq 'host' ? 'node' : undef,
 	returns => {
 	    type => 'array',
 	    items => {
@@ -111,6 +112,7 @@ sub register_get_rule {
 	    additionalProperties => 0,
 	    properties => $properties,
 	},
+	proxyto => $class->rule_env() eq 'host' ? 'node' : undef,
 	returns => {
 	    type => "object",
 	    properties => {
@@ -154,6 +156,7 @@ sub register_create_rule {
 	    additionalProperties => 0,
 	    properties => $create_rule_properties,
 	},
+	proxyto => $class->rule_env() eq 'host' ? 'node' : undef,
 	returns => { type => "null" },
 	code => sub {
 	    my ($param) = @_;
@@ -207,6 +210,7 @@ sub register_update_rule {
 	    additionalProperties => 0,
 	    properties => $update_rule_properties,
 	},
+	proxyto => $class->rule_env() eq 'host' ? 'node' : undef,
 	returns => { type => "null" },
 	code => sub {
 	    my ($param) = @_;
@@ -265,6 +269,7 @@ sub register_delete_rule {
 	    additionalProperties => 0,
 	    properties => $properties,
 	},
+	proxyto => $class->rule_env() eq 'host' ? 'node' : undef,
 	returns => { type => "null" },
 	code => sub {
 	    my ($param) = @_;
