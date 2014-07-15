@@ -11,6 +11,9 @@ policy_out: ACCEPT
 
 myserveralias 10.0.0.111
 mynetworkalias 10.0.0.0/24
+myserveraliasipv6 2001:db8:0:85a3:0:0:ac1f:8001
+myserveraliasipv6short 2001:db8:0:85a3::ac1f:8001
+
 
 [RULES]
 
@@ -29,7 +32,8 @@ IN  ACCEPT -source 10.0.0.1-10.0.0.10
 IN  ACCEPT -source 10.0.0.1,10.0.0.2,10.0.0.3
 IN  ACCEPT -source +mynetgroup 
 IN  ACCEPT -source myserveralias
-
+IN  ACCEPT -source myserveraliasipv6
+IN  ACCEPT -source 2001:db8:0:85a3:0:0:ac1f:8001
 
 [ipset myipset]
 
@@ -38,9 +42,12 @@ IN  ACCEPT -source myserveralias
 192.168.0.0/24
 ! 10.0.0.0/8  #nomatch - needs kernel 3.7 or newer
 mynetworkalias
+2001:db8:0:85a3::ac1f:8001
+2001:db8:0:85a3:0:0:ac1f:8002
 
 #global ipset blacklist
 [ipset blacklist]
 
 10.0.0.8
 192.168.0.0/24
+2001:db8:0:85a3:0:0:ac1f:8001
