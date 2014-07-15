@@ -2925,7 +2925,7 @@ sub compile_iptables_filter {
 
     my $ipset_ruleset = {};
 
-    if ($hostfw_enable) {
+    if ($hostfw_enable && $ipversion eq 4) {
 	eval { enable_host_firewall($ruleset, $hostfw_conf, $cluster_conf); };
 	warn $@ if $@; # just to be sure - should not happen
     }
