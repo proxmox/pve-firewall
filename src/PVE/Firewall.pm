@@ -572,6 +572,99 @@ $pve_std_chains->{4} = {
     ],
 };
 
+$pve_std_chains->{6} = {
+    'PVEFW-SET-ACCEPT-MARK' => [
+        "-j MARK --set-mark 1",
+    ],
+    'PVEFW-DropBroadcast' => [
+        # same as shorewall 'Broadcast'
+        # simply DROP BROADCAST/MULTICAST/ANYCAST
+        # we can use this to reduce logging
+        #{ action => 'DROP', dsttype => 'BROADCAST' }, #no broadcast in ipv6
+        { action => 'DROP', dsttype => 'MULTICAST' },
+        { action => 'DROP', dsttype => 'ANYCAST' },
+        #{ action => 'DROP', dest => '224.0.0.0/4' },
+    ],
+    'PVEFW-reject' => [
+        # same as shorewall 'reject'
+        #{ action => 'DROP', dsttype => 'BROADCAST' },
+        #{ action => 'DROP', source => '224.0.0.0/4' },
+        { action => 'DROP', proto => 'icmpv6' },
+        "-p tcp -j REJECT --reject-with tcp-reset",
+        #"-p udp -j REJECT --reject-with icmp-port-unreachable",
+        #"-p icmp -j REJECT --reject-with icmp-host-unreachable",
+        #"-j REJECT --reject-with icmp-host-prohibited",
+    ],
+    'PVEFW-Drop' => [
+        # same as shorewall 'Drop', which is equal to DROP,
+        # but REJECT/DROP some packages to reduce logging,
+        # and ACCEPT critical ICMP types
+        { action => 'PVEFW-reject',  proto => 'tcp', dport => '43' }, # REJECT 'auth'
+        # we are not interested in BROADCAST/MULTICAST/ANYCAST
+        { action => 'PVEFW-DropBroadcast' },
+        # ACCEPT critical ICMP types
+        { action => 'ACCEPT', proto => 'icmpv6', dport => 'destination-unreachable' },
+        { action => 'ACCEPT', proto => 'icmpv6', dport => 'time-exceeded' },
+        { action => 'ACCEPT', proto => 'icmpv6', dport => 'packet-too-big' },
+
+        # Drop packets with INVALID state
+        "-m conntrack --ctstate INVALID -j DROP",
+        # Drop Microsoft SMB noise
+        { action => 'DROP', proto => 'udp', dport => '135,445', nbdport => 2 },
+        { action => 'DROP', proto => 'udp', dport => '137:139'},
+        { action => 'DROP', proto => 'udp', dport => '1024:65535', sport => 137 },
+        { action => 'DROP', proto => 'tcp', dport => '135,139,445', nbdport => 3 },
+        { action => 'DROP', proto => 'udp', dport => 1900 }, # UPnP
+        # Drop new/NotSyn traffic so that it doesn't get logged
+        "-p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN -j DROP",
+        # Drop DNS replies
+        { action => 'DROP', proto => 'udp', sport => 53 },
+    ],
+    'PVEFW-Reject' => [
+        # same as shorewall 'Reject', which is equal to Reject,
+        # but REJECT/DROP some packages to reduce logging,
+        # and ACCEPT critical ICMP types
+        { action => 'PVEFW-reject',  proto => 'tcp', dport => '43' }, # REJECT 'auth'
+        # we are not interested in BROADCAST/MULTICAST/ANYCAST
+        { action => 'PVEFW-DropBroadcast' },
+        # ACCEPT critical ICMP types
+        { action => 'ACCEPT', proto => 'icmpv6', dport => 'destination-unreachable' },
+        { action => 'ACCEPT', proto => 'icmpv6', dport => 'time-exceeded' },
+        { action => 'ACCEPT', proto => 'icmpv6', dport => 'packet-too-big' },
+
+        # Drop packets with INVALID state
+        "-m conntrack --ctstate INVALID -j DROP",
+        # Drop Microsoft SMB noise
+        { action => 'PVEFW-reject', proto => 'udp', dport => '135,445', nbdport => 2 },
+        { action => 'PVEFW-reject', proto => 'udp', dport => '137:139'},
+        { action => 'PVEFW-reject', proto => 'udp', dport => '1024:65535', sport => 137 },
+        { action => 'PVEFW-reject', proto => 'tcp', dport => '135,139,445', nbdport => 3 },
+        { action => 'DROP', proto => 'udp', dport => 1900 }, # UPnP
+        # Drop new/NotSyn traffic so that it doesn't get logged
+        "-p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN -j DROP",
+        # Drop DNS replies
+        { action => 'DROP', proto => 'udp', sport => 53 },
+    ],
+    'PVEFW-tcpflags' => [
+        # same as shorewall tcpflags action.
+        # Packets arriving on this interface are checked for som illegal combinations of TCP flags
+        "-p tcp -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG FIN,PSH,URG -g PVEFW-logflags",
+        "-p tcp -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG NONE -g PVEFW-logflags",
+        "-p tcp -m tcp --tcp-flags SYN,RST SYN,RST -g PVEFW-logflags",
+        "-p tcp -m tcp --tcp-flags FIN,SYN FIN,SYN -g PVEFW-logflags",
+        "-p tcp -m tcp --sport 0 --tcp-flags FIN,SYN,RST,ACK SYN -g PVEFW-logflags",
+    ],
+    'PVEFW-smurfs' => [
+        #does smurf attack works with ipv6, as broadcast not exist ???
+
+        # same as shorewall smurfs action
+        # Filter packets for smurfs (packets with a broadcast address as the source).
+        #"-s 0.0.0.0/32 -j RETURN",
+        #"-m addrtype --src-type BROADCAST -g PVEFW-smurflog",
+        #"-s 224.0.0.0/4 -g PVEFW-smurflog",
+    ],
+};
+
 # iptables -p icmp -h
 my $icmp_type_names = {
     any => 1,
