@@ -1721,12 +1721,12 @@ sub ruleset_create_vm_chain {
 }
 
 sub ruleset_add_group_rule {
-    my ($ruleset, $cluster_conf, $chain, $rule, $direction, $action) = @_;
+    my ($ruleset, $cluster_conf, $chain, $rule, $direction, $action, $ipversion) = @_;
 
     my $group = $rule->{action};
     my $group_chain = "GROUP-$group-$direction";
     if(!ruleset_chain_exist($ruleset, $group_chain)){
-	generate_group_rules($ruleset, $cluster_conf, $group);
+	generate_group_rules($ruleset, $cluster_conf, $group, $ipversion);
     }
 
     if ($direction eq 'OUT' && $rule->{iface_out}) {
@@ -1754,7 +1754,7 @@ sub ruleset_generate_vm_rules {
 
 	if ($rule->{type} eq 'group') {
 	    ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, $direction,
-				   $direction eq 'OUT' ? 'RETURN' : $in_accept);
+				   $direction eq 'OUT' ? 'RETURN' : $in_accept, $ipversion);
 	} else {
 	    next if $rule->{type} ne $lc_direction;
 	    eval {
@@ -1900,7 +1900,7 @@ sub generate_tap_rules_direction {
 }
 
 sub enable_host_firewall {
-    my ($ruleset, $hostfw_conf, $cluster_conf) = @_;
+    my ($ruleset, $hostfw_conf, $cluster_conf, $ipversion) = @_;
 
     my $options = $hostfw_conf->{options};
     my $cluster_options = $cluster_conf->{options};
@@ -1931,7 +1931,7 @@ sub enable_host_firewall {
 
 	eval {
 	    if ($rule->{type} eq 'group') {
-		ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, 'IN', $accept_action);
+		ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, 'IN', $accept_action, $ipversion);
 	    } elsif ($rule->{type} eq 'in') {
 		ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" },
 				      undef, $cluster_conf, $hostfw_conf);
@@ -1984,7 +1984,7 @@ sub enable_host_firewall {
 	$rule->{iface_out} = $rule->{iface} if $rule->{iface};
 	eval {
 	    if ($rule->{type} eq 'group') {
-		ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, 'OUT', $accept_action);
+		ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, 'OUT', $accept_action, $ipversion);
 	    } elsif ($rule->{type} eq 'out') {
 		ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" },
 				      undef, $cluster_conf, $hostfw_conf);
@@ -2015,7 +2015,7 @@ sub enable_host_firewall {
 }
 
 sub generate_group_rules {
-    my ($ruleset, $cluster_conf, $group) = @_;
+    my ($ruleset, $cluster_conf, $group, $ipversion) = @_;
 
     my $rules = $cluster_conf->{groups}->{$group};
 
@@ -2031,6 +2031,7 @@ sub generate_group_rules {
 
     foreach my $rule (@$rules) {
 	next if $rule->{type} ne 'in';
+	next if $rule->{ipversion} && $rule->{ipversion} ne $ipversion;
 	ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" }, undef, $cluster_conf);
     }
 
@@ -2041,6 +2042,7 @@ sub generate_group_rules {
 
     foreach my $rule (@$rules) {
 	next if $rule->{type} ne 'out';
+	next if $rule->{ipversion} && $rule->{ipversion} ne $ipversion;
 	# we use PVEFW-SET-ACCEPT-MARK (Instead of ACCEPT) because we need to
 	# check also other tap rules later
 	ruleset_generate_rule($ruleset, $chain, $rule,
@@ -2927,7 +2929,7 @@ sub compile_iptables_filter {
 
     # currently pveproxy don't works with ipv6, so let's generate host fw ipv4 only for the moment
     if ($hostfw_enable && ($ipversion == 4)) {
-	eval { enable_host_firewall($ruleset, $hostfw_conf, $cluster_conf); };
+	eval { enable_host_firewall($ruleset, $hostfw_conf, $cluster_conf, $ipversion); };
 	warn $@ if $@; # just to be sure - should not happen
     }
 
