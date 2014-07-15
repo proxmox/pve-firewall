@@ -3481,7 +3481,16 @@ sub update_nf_conntrack_tcp_timeout_established {
 
 sub remove_pvefw_chains {
 
-    my ($chash, $hooks) = iptables_get_chains();
+    PVE::Firewall::remove_pvefw_chains_iptables("iptables");
+    PVE::Firewall::remove_pvefw_chains_iptables("ip6tables");
+    PVE::Firewall::remove_pvefw_chains_ipset();
+
+}
+
+sub remove_pvefw_chains_iptables {
+    my ($iptablescmd) = @_;
+
+    my ($chash, $hooks) = iptables_get_chains($iptablescmd);
     my $cmdlist = "*filter\n";
 
     foreach my $h (qw(INPUT OUTPUT FORWARD)) {
@@ -3499,18 +3508,33 @@ sub remove_pvefw_chains {
     }
     $cmdlist .= "COMMIT\n";
 
-    iptables_restore_cmdlist($cmdlist);
+    if($iptablescmd eq "ip6tables") {
+	ip6tables_restore_cmdlist($cmdlist);
+    } else {
+	iptables_restore_cmdlist($cmdlist);
+    }
+}
+
+sub remove_pvefw_chains_ipset {
 
     my $ipset_chains = ipset_get_chains();
 
-    $cmdlist = "";
+    my $sub_cmdlist = "";
+    my $cmdlist = "";
  
     foreach my $chain (keys %$ipset_chains) {
-       $cmdlist .= "flush $chain\n";
-       $cmdlist .= "destroy $chain\n";
+	if ($chain =~ m/^PVEFW-\S+\-(v4|v6)$/) {
+	   $sub_cmdlist .= "flush $chain\n";
+	   $sub_cmdlist .= "destroy $chain\n";
+	}else{
+	   $cmdlist .= "flush $chain\n";
+	   $cmdlist .= "destroy $chain\n";
+        }
     }
 
-    ipset_restore_cmdlist($cmdlist) if $cmdlist; 
+    $cmdlist .= $sub_cmdlist;
+
+    ipset_restore_cmdlist($cmdlist) if $cmdlist;
 }
 
 sub init {
