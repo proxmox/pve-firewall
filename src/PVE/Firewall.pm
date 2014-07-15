@@ -1741,7 +1741,7 @@ sub ruleset_add_group_rule {
 }
 
 sub ruleset_generate_vm_rules {
-    my ($ruleset, $rules, $cluster_conf, $vmfw_conf, $chain, $netid, $direction, $options) = @_;
+    my ($ruleset, $rules, $cluster_conf, $vmfw_conf, $chain, $netid, $direction, $options, $ipversion) = @_;
 
     my $lc_direction = lc($direction);
 
@@ -1750,6 +1750,8 @@ sub ruleset_generate_vm_rules {
     foreach my $rule (@$rules) {
 	next if $rule->{iface} && $rule->{iface} ne $netid;
 	next if !$rule->{enable} || $rule->{errors};
+	next if $rule->{ipversion} && $rule->{ipversion} ne $ipversion;
+
 	if ($rule->{type} eq 'group') {
 	    ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, $direction,
 				   $direction eq 'OUT' ? 'RETURN' : $in_accept);
@@ -1805,7 +1807,7 @@ sub ruleset_generate_vm_ipsrules {
 }
 
 sub generate_venet_rules_direction {
-    my ($ruleset, $cluster_conf, $vmfw_conf, $vmid, $ip, $direction) = @_;
+    my ($ruleset, $cluster_conf, $vmfw_conf, $vmid, $ip, $direction, $ipversion) = @_;
 
     my $lc_direction = lc($direction);
 
@@ -1818,7 +1820,7 @@ sub generate_venet_rules_direction {
 
     ruleset_create_vm_chain($ruleset, $chain, $options, undef, undef, $direction);
 
-    ruleset_generate_vm_rules($ruleset, $rules, $cluster_conf, $vmfw_conf, $chain, 'venet', $direction);
+    ruleset_generate_vm_rules($ruleset, $rules, $cluster_conf, $vmfw_conf, $chain, 'venet', $direction, undef, $ipversion);
 
     # implement policy
     my $policy;
@@ -1847,7 +1849,7 @@ sub generate_venet_rules_direction {
 }
 
 sub generate_tap_rules_direction {
-    my ($ruleset, $cluster_conf, $iface, $netid, $macaddr, $vmfw_conf, $vmid, $direction) = @_;
+    my ($ruleset, $cluster_conf, $iface, $netid, $macaddr, $vmfw_conf, $vmid, $direction, $ipversion) = @_;
 
     my $lc_direction = lc($direction);
 
@@ -1866,7 +1868,7 @@ sub generate_tap_rules_direction {
     ruleset_create_vm_chain($ruleset, $tapchain, $options, $macaddr, $ipfilter_ipset, $direction);
 
     if ($options->{enable}) {
-	ruleset_generate_vm_rules($ruleset, $rules, $cluster_conf, $vmfw_conf, $tapchain, $netid, $direction, $options);
+	ruleset_generate_vm_rules($ruleset, $rules, $cluster_conf, $vmfw_conf, $tapchain, $netid, $direction, $options, $ipversion);
 
 	ruleset_generate_vm_ipsrules($ruleset, $options, $direction, $iface);
 
@@ -2947,9 +2949,9 @@ sub compile_iptables_filter {
 
 		my $macaddr = $net->{macaddr};
 		generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
-					     $vmfw_conf, $vmid, 'IN');
+					     $vmfw_conf, $vmid, 'IN', $ipversion);
 		generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
-					     $vmfw_conf, $vmid, 'OUT');
+					     $vmfw_conf, $vmid, 'OUT', $ipversion);
 	    }
 	};
 	warn $@ if $@; # just to be sure - should not happen
@@ -2979,8 +2981,8 @@ sub compile_iptables_filter {
 			push @{$cluster_conf->{ipset}->{venet0}}, $venet0ipset;
 		    }
 
-		    generate_venet_rules_direction($ruleset, $cluster_conf, $vmfw_conf, $vmid, $ip, 'IN');
-		    generate_venet_rules_direction($ruleset, $cluster_conf, $vmfw_conf, $vmid, $ip, 'OUT');
+		    generate_venet_rules_direction($ruleset, $cluster_conf, $vmfw_conf, $vmid, $ip, 'IN', $ipversion);
+		    generate_venet_rules_direction($ruleset, $cluster_conf, $vmfw_conf, $vmid, $ip, 'OUT', $ipversion);
 		}
 	    }
 
@@ -2993,9 +2995,9 @@ sub compile_iptables_filter {
 		    my $macaddr = $d->{mac};
 		    my $iface = $d->{host_ifname};
 		    generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
-						 $vmfw_conf, $vmid, 'IN');
+						 $vmfw_conf, $vmid, 'IN', $ipversion);
 		    generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
-						 $vmfw_conf, $vmid, 'OUT');
+						 $vmfw_conf, $vmid, 'OUT', $ipversion);
 		}
 	    }
 	};
