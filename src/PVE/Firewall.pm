@@ -10,7 +10,7 @@ use PVE::Exception qw(raise raise_param_exc);
 use PVE::JSONSchema qw(register_standard_option get_standard_option);
 use PVE::Cluster;
 use PVE::ProcFSTools;
-use PVE::Tools qw($IPV4RE);
+use PVE::Tools qw($IPV4RE $IPV6RE);
 use File::Basename;
 use File::Path;
 use IO::File;
@@ -48,7 +48,7 @@ PVE::JSONSchema::register_format('IPv4orCIDR', \&pve_verify_ipv4_or_cidr);
 sub pve_verify_ipv4_or_cidr {
     my ($cidr, $noerr) = @_;
 
-    if ($cidr =~ m!^(?:$IPV4RE)(/(\d+))?$!) {
+    if ($cidr =~ m!^(?:$IPV6RE|$IPV4RE)(/(\d+))?$!) {
 	return $cidr if Net::IP->new($cidr);
 	return undef if $noerr;
 	die Net::IP::Error() . "\n";
@@ -1114,7 +1114,12 @@ sub verify_rule {
 	    } elsif ($value =~ m/^${ip_alias_pattern}$/){
 		my $alias = lc($value);
 		&$add_error($name, "no such alias '$value'")
-		    if !($cluster_conf->{aliases}->{$alias} || ($fw_conf && $fw_conf->{aliases}->{$alias}))
+		    if !($cluster_conf->{aliases}->{$alias} || ($fw_conf && $fw_conf->{aliases}->{$alias}));
+
+		my $e = $fw_conf->{aliases}->{$alias} if $fw_conf;
+		$e = $cluster_conf->{aliases}->{$alias} if !$e && $cluster_conf;
+
+		$ipversion = $e->{ipversion};
 	    }
 	}
     };
@@ -2223,16 +2228,33 @@ sub parse_alias {
     if ($line =~ m/^(\S+)\s(\S+)$/) {
 	my ($name, $cidr) = ($1, $2);
 	$cidr =~ s|/32$||;
+	$cidr =~ s|/128$||;
 	pve_verify_ipv4_or_cidr($cidr);
+	my $ipversion = get_ip_version($cidr);
 	my $data = {
 	    name => $name,
 	    cidr => $cidr,
+	    ipversion => $ipversion,
 	};
 	$data->{comment} = $comment  if $comment;
 	return $data;
     }
 
     return undef;
+}
+
+sub get_ip_version {
+    my ($cidr) = @_;
+
+    my $ipversion = undef;
+
+    if ($cidr =~ m!^(?:$IPV4RE)(/(\d+))?$!) {
+	$ipversion = '4';
+    }elsif ($cidr =~ m!^(?:$IPV6RE)(/(\d+))?$!) {
+	$ipversion = '6';
+    }
+
+    return $ipversion;
 }
 
 sub generic_fw_config_parser {
