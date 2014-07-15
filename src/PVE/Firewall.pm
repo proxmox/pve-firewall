@@ -489,7 +489,8 @@ my $pve_fw_parsed_macros;
 my $pve_fw_macro_descr;
 my $pve_fw_preferred_macro_names = {};
 
-my $pve_std_chains = {
+my $pve_std_chains = {};
+$pve_std_chains->{4} = {
     'PVEFW-SET-ACCEPT-MARK' => [
 	"-j MARK --set-mark 1",
     ],
@@ -2641,7 +2642,7 @@ sub get_option_log_level {
 }
 
 sub generate_std_chains {
-    my ($ruleset, $options) = @_;
+    my ($ruleset, $options, $pve_std_chains) = @_;
 
     my $loglevel = get_option_log_level($options, 'smurf_log_level');
 
@@ -2890,7 +2891,7 @@ sub compile_iptables_filter {
 
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o venet0 -m set --match-set ${venet0_ipset_chain} dst -j PVEFW-VENET-IN");
 
-    generate_std_chains($ruleset, $hostfw_options);
+    generate_std_chains($ruleset, $hostfw_options, $pve_std_chains->{$ipversion});
 
     my $hostfw_enable = !(defined($hostfw_options->{enable}) && ($hostfw_options->{enable} == 0));
 
