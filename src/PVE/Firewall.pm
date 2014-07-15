@@ -1437,6 +1437,12 @@ sub iptables_restore_cmdlist {
     run_command("/sbin/iptables-restore -n", input => $cmdlist);
 }
 
+sub ip6tables_restore_cmdlist {
+    my ($cmdlist) = @_;
+
+    run_command("/sbin/ip6tables-restore -n", input => $cmdlist);
+}
+
 sub ipset_restore_cmdlist {
     my ($cmdlist) = @_;
 
@@ -1444,6 +1450,9 @@ sub ipset_restore_cmdlist {
 }
 
 sub iptables_get_chains {
+    my ($iptablescmd) = @_;
+
+    $iptablescmd = "iptables" if !$iptablescmd;
 
     my $res = {};
 
@@ -1498,7 +1507,7 @@ sub iptables_get_chains {
 	}
     };
 
-    run_command("/sbin/iptables-save", outfunc => $parser);
+    run_command("/sbin/$iptablescmd-save", outfunc => $parser);
 
     return wantarray ? ($res, $hooks) : $res;
 }
@@ -3250,11 +3259,11 @@ sub print_sig_rule {
 }
 
 sub get_ruleset_cmdlist {
-    my ($ruleset, $verbose) = @_;
+    my ($ruleset, $verbose, $iptablescmd) = @_;
 
     my $cmdlist = "*filter\n"; # we pass this to iptables-restore;
 
-    my ($active_chains, $hooks) = iptables_get_chains();
+    my ($active_chains, $hooks) = iptables_get_chains($iptablescmd);
     my $statushash = get_ruleset_status($ruleset, $active_chains, \&iptables_chain_digest, $verbose);
 
     # create missing chains first
@@ -3369,7 +3378,7 @@ sub get_ipset_cmdlist {
 }
 
 sub apply_ruleset {
-    my ($ruleset, $hostfw_conf, $ipset_ruleset, $verbose) = @_;
+    my ($ruleset, $hostfw_conf, $ipset_ruleset, $rulesetv6, $verbose) = @_;
 
     enable_bridge_firewall();
 
@@ -3377,6 +3386,7 @@ sub apply_ruleset {
 	get_ipset_cmdlist($ipset_ruleset, undef, $verbose);
 
     my ($cmdlist, $changes) = get_ruleset_cmdlist($ruleset, $verbose);
+    my ($cmdlistv6, $changesv6) = get_ruleset_cmdlist($rulesetv6, $verbose, "ip6tables");
 
     if ($verbose) {
 	if ($ipset_changes) {
@@ -3389,11 +3399,17 @@ sub apply_ruleset {
 	    print "iptables changes:\n";
 	    print $cmdlist;
 	}
+
+	if ($changesv6) {
+	    print "ip6tables changes:\n";
+	    print $cmdlistv6;
+	}
     }
 
     ipset_restore_cmdlist($ipset_create_cmdlist);
 
     iptables_restore_cmdlist($cmdlist);
+    ip6tables_restore_cmdlist($cmdlistv6);
 
     ipset_restore_cmdlist($ipset_delete_cmdlist) if $ipset_delete_cmdlist;
 
@@ -3404,6 +3420,17 @@ sub apply_ruleset {
     my $errors;
     foreach my $chain (sort keys %$ruleset) {
 	my $stat = $statushash->{$chain};
+	if ($stat->{action} ne 'exists') {
+	    warn "unable to update chain '$chain'\n";
+	    $errors = 1;
+	}
+    }
+
+    my $active_chainsv6 = iptables_get_chains("ip6tables");
+    my $statushashv6 = get_ruleset_status($rulesetv6, $active_chainsv6, \&iptables_chain_digest, 0);
+
+    foreach my $chain (sort keys %$rulesetv6) {
+	my $stat = $statushashv6->{$chain};
 	if ($stat->{action} ne 'exists') {
 	    warn "unable to update chain '$chain'\n";
 	    $errors = 1;
@@ -3511,7 +3538,7 @@ sub update {
 
 	my ($ruleset, $ipset_ruleset, $rulesetv6) = compile($cluster_conf, $hostfw_conf);
 
-	apply_ruleset($ruleset, $hostfw_conf, $ipset_ruleset);
+	apply_ruleset($ruleset, $hostfw_conf, $ipset_ruleset, $rulesetv6);
     };
 
     run_locked($code);
