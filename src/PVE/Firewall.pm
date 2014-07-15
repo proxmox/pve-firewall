@@ -2836,6 +2836,13 @@ sub compile {
 	$vmfw_configs = read_vm_firewall_configs($cluster_conf, $vmdata, undef, $verbose);
     }
 
+    my ($ruleset, $ipset_ruleset) = compile_iptables_filter($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, 4, $verbose);
+    return ($ruleset, $ipset_ruleset);
+}
+
+sub compile_iptables_filter {
+    my ($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, $ipversion, $verbose) = @_;
+
     $cluster_conf->{ipset}->{venet0} = [];
     my $venet0_ipset_chain = compute_ipset_chain_name(0, 'venet0');
 
