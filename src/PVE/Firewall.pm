@@ -802,6 +802,8 @@ sub parse_address_list {
 
     my $count = 0;
     my $iprange = 0;
+    my $ipversion = undef;
+
     foreach my $elem (split(/,/, $str)) {
 	$count++;
 	if (!Net::IP->new($elem)) {
@@ -809,9 +811,11 @@ sub parse_address_list {
 	    die "invalid IP address: $err\n";
 	}
 	$iprange = 1 if $elem =~ m/-/;
+	$ipversion = Net::IP::ip_get_version($elem); #fixme : don't work with range
     }
 
     die "you can use a range in a list\n" if $iprange && $count > 1;
+    return $ipversion;
 }
 
 sub parse_port_name_number_or_range {
@@ -1071,6 +1075,7 @@ sub verify_rule {
     my ($rule, $cluster_conf, $fw_conf, $rule_env, $noerr) = @_;
 
     my $allow_groups = $rule_env eq 'group' ? 0 : 1;
+    my $ipversion = undef;
 
     my $allow_iface = $rule_env_iface_lookup->{$rule_env};
     die "unknown rule_env '$rule_env'\n" if !defined($allow_iface); # should not happen
@@ -1169,13 +1174,13 @@ sub verify_rule {
     }
 
     if ($rule->{source}) {
-	eval { parse_address_list($rule->{source}); };
+	eval { $ipversion = parse_address_list($rule->{source}); };
 	&$add_error('source', $@) if $@;
 	&$check_ipset_or_alias_property('source');
     }
 
     if ($rule->{dest}) {
-	eval { parse_address_list($rule->{dest}); };
+	eval { $ipversion = parse_address_list($rule->{dest}); };
 	&$add_error('dest', $@) if $@;
 	&$check_ipset_or_alias_property('dest');
     }
@@ -1195,6 +1200,7 @@ sub verify_rule {
     }
 
     $rule->{errors} = $errors if $error_count;
+    $rule->{ipversion} = $ipversion if $ipversion;
 
     return $rule;
 }
