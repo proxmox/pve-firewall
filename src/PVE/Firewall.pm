@@ -3052,7 +3052,9 @@ sub compile {
     }
 
     my ($ruleset, $ipset_ruleset) = compile_iptables_filter($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, 4, $verbose);
-    return ($ruleset, $ipset_ruleset);
+    my ($rulesetv6) = compile_iptables_filter($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, 6, $verbose);
+
+    return ($ruleset, $ipset_ruleset, $rulesetv6);
 }
 
 sub compile_iptables_filter {
@@ -3507,7 +3509,7 @@ sub update {
 
 	my $hostfw_conf = load_hostfw_conf();
 
-	my ($ruleset, $ipset_ruleset) = compile($cluster_conf, $hostfw_conf);
+	my ($ruleset, $ipset_ruleset, $rulesetv6) = compile($cluster_conf, $hostfw_conf);
 
 	apply_ruleset($ruleset, $hostfw_conf, $ipset_ruleset);
     };
