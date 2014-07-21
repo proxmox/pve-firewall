@@ -1211,6 +1211,46 @@ sub copy_rule_data {
     return $rule;
 }
 
+sub rules_modify_permissions {
+    my ($rule_env) = @_;
+
+    if ($rule_env eq 'host') {
+	return {
+	    check => ['perm', '/nodes/{node}', [ 'Sys.Modify' ]],
+	};
+    } elsif ($rule_env eq 'cluster' || $rule_env eq 'group') {
+	return {
+	    check => ['perm', '/', [ 'Sys.Modify' ]],
+	};
+    } elsif ($rule_env eq 'vm' ||   $rule_env eq 'ct') {
+	return {
+	    check => ['perm', '/vms/{vmid}', [ 'VM.Config.Network' ]],
+	}
+    }
+
+    return undef;
+}
+
+sub rules_audit_permissions {
+    my ($rule_env) = @_;
+
+    if ($rule_env eq 'host') {
+	return {
+	    check => ['perm', '/nodes/{node}', [ 'Sys.Audit' ]],
+	};
+    } elsif ($rule_env eq 'cluster' || $rule_env eq 'group') {
+	return {
+	    check => ['perm', '/', [ 'Sys.Audit' ]],
+	};
+    } elsif ($rule_env eq 'vm' ||   $rule_env eq 'ct') {
+	return {
+	    check => ['perm', '/vms/{vmid}', [ 'VM.Audit' ]],
+	}
+    }
+
+    return undef;
+}
+
 # core functions
 my $bridge_firewall_enabled = 0;
 

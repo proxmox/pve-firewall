@@ -39,6 +39,12 @@ sub save_config {
     die "implement this in subclass";
 }
 
+sub rule_env {
+    my ($class, $param) = @_;
+    
+    die "implement this in subclass";
+}
+
 sub save_ipset {
     my ($class, $param, $fw_conf, $ipset) = @_;
 
@@ -79,6 +85,7 @@ sub register_get_ipset {
 	path => '',
 	method => 'GET',
 	description => "List IPSet content",
+	permissions => PVE::Firewall::rules_audit_permissions($class->rule_env()),
 	parameters => {
 	    additionalProperties => 0,
 	    properties => $properties,
@@ -126,6 +133,7 @@ sub register_delete_ipset {
 	method => 'DELETE',
 	description => "Delete IPSet",
 	protected => 1,
+	permissions => PVE::Firewall::rules_modify_permissions($class->rule_env()),
 	parameters => {
 	    additionalProperties => 0,
 	    properties => $properties,
@@ -161,6 +169,7 @@ sub register_create_ip {
 	method => 'POST',
 	description => "Add IP or Network to IPSet.",
 	protected => 1,
+	permissions => PVE::Firewall::rules_modify_permissions($class->rule_env()),
 	parameters => {
 	    additionalProperties => 0,
 	    properties => $properties,
@@ -207,6 +216,7 @@ sub register_read_ip {
 	path => '{cidr}',
 	method => 'GET',
 	description => "Read IP or Network settings from IPSet.",
+	permissions => PVE::Firewall::rules_audit_permissions($class->rule_env()),
 	protected => 1,
 	parameters => {
 	    additionalProperties => 0,
@@ -247,6 +257,7 @@ sub register_update_ip {
 	method => 'PUT',
 	description => "Update IP or Network settings",
 	protected => 1,
+	permissions => PVE::Firewall::rules_modify_permissions($class->rule_env()),
 	parameters => {
 	    additionalProperties => 0,
 	    properties => $properties,
@@ -288,6 +299,7 @@ sub register_delete_ip {
 	method => 'DELETE',
 	description => "Remove IP or Network from IPSet.",
 	protected => 1,
+	permissions => PVE::Firewall::rules_modify_permissions($class->rule_env()),
 	parameters => {
 	    additionalProperties => 0,
 	    properties => $properties,
@@ -331,6 +343,12 @@ use warnings;
 
 use base qw(PVE::API2::Firewall::IPSetBase);
 
+sub rule_env {
+    my ($class, $param) = @_;
+    
+    return 'cluster';
+}
+
 sub load_config {
     my ($class, $param) = @_;
 
@@ -356,6 +374,12 @@ use warnings;
 use PVE::JSONSchema qw(get_standard_option);
 
 use base qw(PVE::API2::Firewall::IPSetBase);
+
+sub rule_env {
+    my ($class, $param) = @_;
+    
+    return 'vm';
+}
 
 __PACKAGE__->additional_parameters({ 
     node => get_standard_option('pve-node'),
@@ -388,6 +412,12 @@ use warnings;
 use PVE::JSONSchema qw(get_standard_option);
 
 use base qw(PVE::API2::Firewall::IPSetBase);
+
+sub rule_env {
+    my ($class, $param) = @_;
+    
+    return 'ct';
+}
 
 __PACKAGE__->additional_parameters({ 
     node => get_standard_option('pve-node'),
@@ -437,6 +467,12 @@ sub save_config {
     die "implement this in subclass";
 }
 
+sub rule_env {
+    my ($class, $param) = @_;
+    
+    die "implement this in subclass";
+}
+
 my $additional_param_hash_list = {};
 
 sub additional_parameters {
@@ -482,6 +518,7 @@ sub register_index {
 	path => '',
 	method => 'GET',
 	description => "List IPSets",
+	permissions => PVE::Firewall::rules_audit_permissions($class->rule_env()),
 	parameters => {
 	    additionalProperties => 0,
 	    properties => $properties,
@@ -531,6 +568,7 @@ sub register_create {
 	method => 'POST',
 	description => "Create new IPSet",
 	protected => 1,
+	permissions => PVE::Firewall::rules_modify_permissions($class->rule_env()),
 	parameters => {
 	    additionalProperties => 0,
 	    properties => $properties,
@@ -585,6 +623,12 @@ use PVE::Firewall;
 
 use base qw(PVE::API2::Firewall::BaseIPSetList);
 
+sub rule_env {
+    my ($class, $param) = @_;
+    
+    return 'cluster';
+}
+
 sub load_config {
     my ($class, $param) = @_;
  
@@ -620,6 +664,12 @@ __PACKAGE__->additional_parameters({
     node => get_standard_option('pve-node'),
     vmid => get_standard_option('pve-vmid'),				   
 });
+
+sub rule_env {
+    my ($class, $param) = @_;
+    
+    return 'vm';
+}
 
 sub load_config {
     my ($class, $param) = @_;
@@ -657,6 +707,12 @@ __PACKAGE__->additional_parameters({
     node => get_standard_option('pve-node'),
     vmid => get_standard_option('pve-vmid'),				   
 });
+
+sub rule_env {
+    my ($class, $param) = @_;
+    
+    return 'ct';
+}
 
 sub load_config {
     my ($class, $param) = @_;

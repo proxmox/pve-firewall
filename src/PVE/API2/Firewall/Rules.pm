@@ -53,46 +53,6 @@ sub additional_parameters {
     return $copy;
 }
 
-my $rules_modify_permissions = sub {
-    my ($rule_env) = @_;
-
-    if ($rule_env eq 'host') {
-	return {
-	    check => ['perm', '/nodes/{node}', [ 'Sys.Modify' ]],
-	};
-    } elsif ($rule_env eq 'cluster' || $rule_env eq 'group') {
-	return {
-	    check => ['perm', '/', [ 'Sys.Modify' ]],
-	};
-    } elsif ($rule_env eq 'vm' ||   $rule_env eq 'ct') {
-	return {
-	    check => ['perm', '/vms/{vmid}', [ 'VM.Config.Network' ]],
-	}
-    }
-
-    return undef;
-};
-
-my $rules_audit_permissions = sub {
-    my ($rule_env) = @_;
-
-    if ($rule_env eq 'host') {
-	return {
-	    check => ['perm', '/nodes/{node}', [ 'Sys.Audit' ]],
-	};
-    } elsif ($rule_env eq 'cluster' || $rule_env eq 'group') {
-	return {
-	    check => ['perm', '/', [ 'Sys.Audit' ]],
-	};
-    } elsif ($rule_env eq 'vm' ||   $rule_env eq 'ct') {
-	return {
-	    check => ['perm', '/vms/{vmid}', [ 'VM.Audit' ]],
-	}
-    }
-
-    return undef;
-};
-
 sub register_get_rules {
     my ($class) = @_;
 
@@ -105,7 +65,7 @@ sub register_get_rules {
 	path => '',
 	method => 'GET',
 	description => "List rules.",
-	permissions => &$rules_audit_permissions($rule_env),
+	permissions => PVE::Firewall::rules_audit_permissions($rule_env),
 	parameters => {
 	    additionalProperties => 0,
 	    properties => $properties,
@@ -153,7 +113,7 @@ sub register_get_rule {
 	path => '{pos}',
 	method => 'GET',
 	description => "Get single rule data.",
-	permissions => &$rules_audit_permissions($rule_env),
+	permissions => PVE::Firewall::rules_audit_permissions($rule_env),
 	parameters => {
 	    additionalProperties => 0,
 	    properties => $properties,
@@ -200,7 +160,7 @@ sub register_create_rule {
 	method => 'POST',
 	description => "Create new rule.",
 	protected => 1,
-	permissions => &$rules_modify_permissions($rule_env),
+	permissions => PVE::Firewall::rules_modify_permissions($rule_env),
 	parameters => {
 	    additionalProperties => 0,
 	    properties => $create_rule_properties,
@@ -257,7 +217,7 @@ sub register_update_rule {
 	method => 'PUT',
 	description => "Modify rule data.",
 	protected => 1,
-	permissions => &$rules_modify_permissions($rule_env),
+	permissions => PVE::Firewall::rules_modify_permissions($rule_env),
 	parameters => {
 	    additionalProperties => 0,
 	    properties => $update_rule_properties,
@@ -319,7 +279,7 @@ sub register_delete_rule {
 	method => 'DELETE',
 	description => "Delete rule.",
 	protected => 1,
-	permissions => &$rules_modify_permissions($rule_env),
+	permissions => PVE::Firewall::rules_modify_permissions($rule_env),
 	parameters => {
 	    additionalProperties => 0,
 	    properties => $properties,
