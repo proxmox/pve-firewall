@@ -104,6 +104,9 @@ __PACKAGE__->register_method({
     method => 'GET',
     description => "Get host firewall options.",
     proxyto => 'node',
+    permissions => {
+	check => ['perm', '/nodes/{node}', [ 'Sys.Audit' ]],
+    },
     parameters => {
     	additionalProperties => 0,
 	properties => {
@@ -130,6 +133,9 @@ __PACKAGE__->register_method({
     description => "Set Firewall options.",
     protected => 1,
     proxyto => 'node',
+    permissions => {
+	check => ['perm', '/nodes/{node}', [ 'Sys.Modify' ]],
+    },
     parameters => {
     	additionalProperties => 0,
 	properties => &$add_option_properties({
