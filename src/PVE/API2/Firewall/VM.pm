@@ -102,6 +102,9 @@ sub register_handlers {
 	method => 'GET',
 	description => "Get VM firewall options.",
 	proxyto => 'node',
+	permissions => {
+	    check => ['perm', '/vms/{vmid}', [ 'VM.Audit' ]],
+	},
 	parameters => {
 	    additionalProperties => 0,
 	    properties => {
@@ -130,6 +133,9 @@ sub register_handlers {
 	description => "Set Firewall options.",
 	protected => 1,
 	proxyto => 'node',
+	permissions => {
+	    check => ['perm', '/vms/{vmid}', [ 'VM.Config.Network' ]],
+	},
 	parameters => {
 	    additionalProperties => 0,
 	    properties => &$add_option_properties({
@@ -241,6 +247,9 @@ sub register_handlers {
 	path => 'refs',
 	method => 'GET',
 	description => "Lists possible IPSet/Alias reference which are allowed in source/dest properties.",
+	permissions => {
+	    check => ['perm', '/vms/{vmid}', [ 'VM.Audit' ]],
+	},
 	parameters => {
 	    additionalProperties => 0,
 	    properties => {
