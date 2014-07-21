@@ -36,6 +36,7 @@ __PACKAGE__->register_method({
     path => '',
     method => 'GET',
     description => "List security groups.",
+    permissions => { user => 'all' },
     parameters => {
     	additionalProperties => 0,
 	properties => {},
@@ -69,6 +70,9 @@ __PACKAGE__->register_method({
     method => 'POST',
     description => "Create new security group.",
     protected => 1,
+    permissions => {
+	check => ['perm', '/', [ 'Sys.Modify' ]],
+    },
     parameters => {
 	additionalProperties => 0,
 	properties => { 
