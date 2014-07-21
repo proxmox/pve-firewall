@@ -106,6 +106,9 @@ __PACKAGE__->register_method({
     path => 'options',
     method => 'GET',
     description => "Get Firewall options.",
+    permissions => {
+	check => ['perm', '/', [ 'Sys.Audit' ]],
+    },
     parameters => {
     	additionalProperties => 0,
     },
@@ -129,6 +132,9 @@ __PACKAGE__->register_method({
     method => 'PUT',
     description => "Set Firewall options.",
     protected => 1,
+    permissions => {
+	check => ['perm', '/', [ 'Sys.Modify' ]],
+    },
     parameters => {
     	additionalProperties => 0,
 	properties => &$add_option_properties({
@@ -176,6 +182,7 @@ __PACKAGE__->register_method({
     path => 'macros',
     method => 'GET',
     description => "List available macros",
+    permissions => { user => 'all' },
     parameters => {
     	additionalProperties => 0,
     },
@@ -214,6 +221,9 @@ __PACKAGE__->register_method({
     path => 'refs',
     method => 'GET',
     description => "Lists possible IPSet/Alias reference which are allowed in source/dest properties.",
+    permissions => {
+	check => ['perm', '/', [ 'Sys.Audit' ]],
+    },
     parameters => {
 	additionalProperties => 0,
 	properties => {
