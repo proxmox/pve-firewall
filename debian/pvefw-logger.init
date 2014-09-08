@@ -2,8 +2,8 @@
 
 ### BEGIN INIT INFO
 # Provides:        pvefw-logger
-# Required-Start:  $remote_fs $network $syslog pve-cluster cman clvm
-# Required-Stop:   $remote_fs $network $syslog pve-cluster cman clvm
+# Required-Start:  $remote_fs $network $syslog pve-cluster +cman +clvm
+# Required-Stop:   $remote_fs $network $syslog pve-cluster +cman +clvm
 # Default-Start:   2 3 4 5
 # Default-Stop:    0 1 6
 # Short-Description: PVE firewall logger
