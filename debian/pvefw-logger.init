@@ -18,6 +18,7 @@ DESC="PVE firewall logger"
 PIDFILE=/var/run/pvefw-logger.pid
 
 test -f $DAEMON || exit 0
+[ -e /proxmox_install_mode ] && exit 0
 
 # avoid warnings about uninstalled locales
 export LC_ALL="C"
