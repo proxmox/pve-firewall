@@ -760,7 +760,10 @@ sub local_network {
     return $__local_network;
 }
 
-my $max_iptables_ipset_name_length = 27;
+# ipset names are limited to 31 characters, and we use '_swap' 
+# suffix for atomic update, for example PVEFW-${VMID}-${ipset_name}_swap
+
+my $max_iptables_ipset_name_length = 31 - length("_swap");
 
 sub compute_ipset_chain_name {
     my ($vmid, $ipset_name) = @_;
