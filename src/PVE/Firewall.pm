@@ -857,8 +857,8 @@ sub pve_fw_verify_port_spec {
    return $portstr;
 }
 
-PVE::JSONSchema::register_format('pve-fw-v4addr-spec', \&pve_fw_verify_v4addr_spec);
-sub pve_fw_verify_v4addr_spec {
+PVE::JSONSchema::register_format('pve-fw-addr-spec', \&pve_fw_verify_addr_spec);
+sub pve_fw_verify_addr_spec {
    my ($list) = @_;
 
    parse_address_list($list);
@@ -957,11 +957,11 @@ my $rule_properties = {
     },
     iface => get_standard_option('pve-iface', { optional => 1 }),
     source => {
-	type => 'string', format => 'pve-fw-v4addr-spec',
+	type => 'string', format => 'pve-fw-addr-spec',
 	optional => 1,
     },
     dest => {
-	type => 'string', format => 'pve-fw-v4addr-spec',
+	type => 'string', format => 'pve-fw-addr-spec',
 	optional => 1,
     },
     proto => {
