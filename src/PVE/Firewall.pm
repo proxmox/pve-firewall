@@ -806,13 +806,14 @@ sub parse_address_list {
 
     foreach my $elem (split(/,/, $str)) {
 	$count++;
-	if (!Net::IP->new($elem)) {
+	my $ip = Net::IP->new($elem);
+	if (!$ip) {
 	    my $err = Net::IP::Error();
 	    die "invalid IP address: $err\n";
 	}
 	$iprange = 1 if $elem =~ m/-/;
 
-	my $new_ipversion = Net::IP::ip_get_version($elem); #fixme : don't work with range
+	my $new_ipversion = Net::IP::ip_is_ipv6($ip->ip()) ? 6 : 4;
 
 	die "detected mixed ipv4/ipv6 addresses in address list '$str'\n"
 	    if defined($ipversion) && ($new_ipversion != $ipversion);
