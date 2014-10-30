@@ -802,7 +802,7 @@ sub parse_address_list {
 
     my $count = 0;
     my $iprange = 0;
-    my $ipversion = undef;
+    my $ipversion;
 
     foreach my $elem (split(/,/, $str)) {
 	$count++;
@@ -811,10 +811,17 @@ sub parse_address_list {
 	    die "invalid IP address: $err\n";
 	}
 	$iprange = 1 if $elem =~ m/-/;
-	$ipversion = Net::IP::ip_get_version($elem); #fixme : don't work with range
+
+	my $new_ipversion = Net::IP::ip_get_version($elem); #fixme : don't work with range
+
+	die "detected mixed ipv4/ipv6 addresses in address list '$str'\n"
+	    if defined($ipversion) && ($new_ipversion != $ipversion);
+
+	$ipversion = $new_ipversion;
     }
 
     die "you can't use a range in a list\n" if $iprange && $count > 1;
+
     return $ipversion;
 }
 
