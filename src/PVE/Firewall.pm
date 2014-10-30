@@ -816,7 +816,7 @@ sub parse_address_list {
 	my $new_ipversion = Net::IP::ip_is_ipv6($ip->ip()) ? 6 : 4;
 
 	die "detected mixed ipv4/ipv6 addresses in address list '$str'\n"
-	    if defined($ipversion) && ($new_ipversion != $ipversion);
+	    if $ipversion && ($new_ipversion != $ipversion);
 
 	$ipversion = $new_ipversion;
     }
@@ -1750,7 +1750,7 @@ sub ruleset_generate_vm_rules {
     foreach my $rule (@$rules) {
 	next if $rule->{iface} && $rule->{iface} ne $netid;
 	next if !$rule->{enable} || $rule->{errors};
-	next if $rule->{ipversion} && $rule->{ipversion} ne $ipversion;
+	next if $rule->{ipversion} && ($rule->{ipversion} != $ipversion);
 
 	if ($rule->{type} eq 'group') {
 	    ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, $direction,
