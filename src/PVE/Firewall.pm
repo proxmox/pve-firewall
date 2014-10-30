@@ -2642,29 +2642,35 @@ sub get_option_log_level {
 }
 
 sub generate_std_chains {
-    my ($ruleset, $options, $pve_std_chains) = @_;
+    my ($ruleset, $options, $ipversion) = @_;
+
+    my $std_chains = $pve_std_chains->{$ipversion} || die "internal error";
 
     my $loglevel = get_option_log_level($options, 'smurf_log_level');
 
-    # same as shorewall smurflog.
-    my $chain = 'PVEFW-smurflog';
-    $pve_std_chains->{$chain} = [];
+    my $chain;
 
-    push @{$pve_std_chains->{$chain}}, get_log_rule_base($chain, 0, "DROP: ", $loglevel) if $loglevel;
-    push @{$pve_std_chains->{$chain}}, "-j DROP";
+    if ($ipversion == 4) {
+	# same as shorewall smurflog.
+	$chain = 'PVEFW-smurflog';
+	$std_chains->{$chain} = [];
+	
+	push @{$std_chains->{$chain}}, get_log_rule_base($chain, 0, "DROP: ", $loglevel) if $loglevel;
+	push @{$std_chains->{$chain}}, "-j DROP";
+    }
 
     # same as shorewall logflags action.
     $loglevel = get_option_log_level($options, 'tcp_flags_log_level');
     $chain = 'PVEFW-logflags';
-    $pve_std_chains->{$chain} = [];
+    $std_chains->{$chain} = [];
 
     # fixme: is this correctly logged by pvewf-logger? (ther is no --log-ip-options for NFLOG)
-    push @{$pve_std_chains->{$chain}}, get_log_rule_base($chain, 0, "DROP: ", $loglevel) if $loglevel;
-    push @{$pve_std_chains->{$chain}}, "-j DROP";
+    push @{$std_chains->{$chain}}, get_log_rule_base($chain, 0, "DROP: ", $loglevel) if $loglevel;
+    push @{$std_chains->{$chain}}, "-j DROP";
 
-    foreach my $chain (keys %$pve_std_chains) {
+    foreach my $chain (keys %$std_chains) {
 	ruleset_create_chain($ruleset, $chain);
-	foreach my $rule (@{$pve_std_chains->{$chain}}) {
+	foreach my $rule (@{$std_chains->{$chain}}) {
 	    if (ref($rule)) {
 		ruleset_generate_rule($ruleset, $chain, $rule);
 	    } else {
@@ -2891,7 +2897,7 @@ sub compile_iptables_filter {
 
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o venet0 -m set --match-set ${venet0_ipset_chain} dst -j PVEFW-VENET-IN");
 
-    generate_std_chains($ruleset, $hostfw_options, $pve_std_chains->{$ipversion});
+    generate_std_chains($ruleset, $hostfw_options, $ipversion);
 
     my $hostfw_enable = !(defined($hostfw_options->{enable}) && ($hostfw_options->{enable} == 0));
 
