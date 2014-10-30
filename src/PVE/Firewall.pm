@@ -1083,7 +1083,6 @@ sub verify_rule {
     my ($rule, $cluster_conf, $fw_conf, $rule_env, $noerr) = @_;
 
     my $allow_groups = $rule_env eq 'group' ? 0 : 1;
-    my $ipversion = undef;
 
     my $allow_iface = $rule_env_iface_lookup->{$rule_env};
     die "unknown rule_env '$rule_env'\n" if !defined($allow_iface); # should not happen
@@ -1181,6 +1180,8 @@ sub verify_rule {
 	    if !$rule->{proto};
     }
 
+    my $ipversion;
+
     if ($rule->{source}) {
 	eval { $ipversion = parse_address_list($rule->{source}); };
 	&$add_error('source', $@) if $@;
@@ -1188,7 +1189,12 @@ sub verify_rule {
     }
 
     if ($rule->{dest}) {
-	eval { $ipversion = parse_address_list($rule->{dest}); };
+	eval { 
+	    my $dest_ipversion = parse_address_list($rule->{dest}); 
+	    die "detected mixed ipv4/ipv6 adresses in rule\n"
+		if defined($ipversion) && ($dest_ipversion != $ipversion);
+	    $ipversion = $dest_ipversion;
+	};
 	&$add_error('dest', $@) if $@;
 	&$check_ipset_or_alias_property('dest');
     }
