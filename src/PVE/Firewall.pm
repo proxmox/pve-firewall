@@ -814,7 +814,7 @@ sub parse_address_list {
 	$ipversion = Net::IP::ip_get_version($elem); #fixme : don't work with range
     }
 
-    die "you can use a range in a list\n" if $iprange && $count > 1;
+    die "you can't use a range in a list\n" if $iprange && $count > 1;
     return $ipversion;
 }
 
