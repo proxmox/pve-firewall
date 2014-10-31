@@ -2971,18 +2971,20 @@ sub compile_iptables_filter {
 		if ($conf->{ip_address} && $conf->{ip_address}->{value}) {
 		    my $ip = $conf->{ip_address}->{value};
 		    $ip =~ s/\s+/,/g;
-		    parse_address_list($ip); # make sure we have a valid $ip list
 
-		    my @ips = split(',', $ip);
+		    my @ips = ();
 
-		    foreach my $singleip (@ips) {
-			my $venet0ipset = {};
-			$venet0ipset->{cidr} = $singleip;
-			push @{$cluster_conf->{ipset}->{venet0}}, $venet0ipset;
+		    foreach my $singleip (split(',', $ip)) {
+			my $singleip_ver = parse_address_list($singleip); # make sure we have a valid $ip list
+			push @{$cluster_conf->{ipset}->{venet0}}, { cidr => $singleip };
+			push @ips, $singleip if $singleip_ver == $ipversion;
 		    }
 
-		    generate_venet_rules_direction($ruleset, $cluster_conf, $vmfw_conf, $vmid, $ip, 'IN', $ipversion);
-		    generate_venet_rules_direction($ruleset, $cluster_conf, $vmfw_conf, $vmid, $ip, 'OUT', $ipversion);
+		    if (scalar(@ips)) {
+			my $ip_list = join(',', @ips);
+			generate_venet_rules_direction($ruleset, $cluster_conf, $vmfw_conf, $vmid, $ip_list, 'IN', $ipversion);
+			generate_venet_rules_direction($ruleset, $cluster_conf, $vmfw_conf, $vmid, $ip_list, 'OUT', $ipversion);
+		    }
 		}
 	    }
 
