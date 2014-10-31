@@ -44,8 +44,8 @@ my $max_alias_name_length = 64;
 my $max_ipset_name_length = 64;
 my $max_group_name_length = 20;
 
-PVE::JSONSchema::register_format('IPv4orCIDR', \&pve_verify_ipv4_or_cidr);
-sub pve_verify_ipv4_or_cidr {
+PVE::JSONSchema::register_format('IPorCIDR', \&pve_verify_ip_or_cidr);
+sub pve_verify_ip_or_cidr {
     my ($cidr, $noerr) = @_;
 
     if ($cidr =~ m!^(?:$IPV6RE|$IPV4RE)(/(\d+))?$!) {
@@ -57,19 +57,13 @@ sub pve_verify_ipv4_or_cidr {
     die "value does not look like a valid IP address or CIDR network\n";
 }
 
-PVE::JSONSchema::register_format('IPv4orCIDRorAlias', \&pve_verify_ipv4_or_cidr_or_alias);
-sub pve_verify_ipv4_or_cidr_or_alias {
+PVE::JSONSchema::register_format('IPorCIDRorAlias', \&pve_verify_ip_or_cidr_or_alias);
+sub pve_verify_ip_or_cidr_or_alias {
     my ($cidr, $noerr) = @_;
 
     return if $cidr =~ m/^(?:$ip_alias_pattern)$/;
 
-    if ($cidr =~ m!^(?:$IPV4RE)(/(\d+))?$!) {
-	return $cidr if Net::IP->new($cidr);
-	return undef if $noerr;
-	die Net::IP::Error() . "\n";
-    }
-    return undef if $noerr;
-    die "value does not look like a valid IP address or CIDR network\n";
+    return pve_verify_ip_or_cidr($cidr, $noerr);
 }
 
 PVE::JSONSchema::register_standard_option('ipset-name', {
@@ -1100,7 +1094,7 @@ sub verify_rule {
     };
 
     my $check_ipset_or_alias_property = sub {
-	my ($name) = @_;
+	my ($name, $expected_ipversion) = @_;
 
 	if (my $value = $rule->{$name}) {
 	    if ($value =~ m/^\+/) {
@@ -1119,7 +1113,8 @@ sub verify_rule {
 		my $e = $fw_conf->{aliases}->{$alias} if $fw_conf;
 		$e = $cluster_conf->{aliases}->{$alias} if !$e && $cluster_conf;
 
-		$ipversion = $e->{ipversion};
+		die "detected mixed ipv4/ipv6 adresses in rule\n"
+		    if $expected_ipversion && ($expected_ipversion != $e->{ipversion});
 	    }
 	}
     };
@@ -1190,18 +1185,18 @@ sub verify_rule {
     if ($rule->{source}) {
 	eval { $ipversion = parse_address_list($rule->{source}); };
 	&$add_error('source', $@) if $@;
-	&$check_ipset_or_alias_property('source');
+	&$check_ipset_or_alias_property('source', $ipversion);
     }
 
     if ($rule->{dest}) {
 	eval { 
 	    my $dest_ipversion = parse_address_list($rule->{dest}); 
 	    die "detected mixed ipv4/ipv6 adresses in rule\n"
-		if defined($ipversion) && ($dest_ipversion != $ipversion);
-	    $ipversion = $dest_ipversion;
+		if $ipversion && $dest_ipversion && ($dest_ipversion != $ipversion);
+	    $ipversion = $dest_ipversion if $dest_ipversion;
 	};
 	&$add_error('dest', $@) if $@;
-	&$check_ipset_or_alias_property('dest');
+	&$check_ipset_or_alias_property('dest', $ipversion);
     }
 
     if ($rule->{macro} && !$error_count) {
@@ -2219,6 +2214,24 @@ sub resolve_alias {
     return $cidr;
 }
 
+sub parse_ip_or_cidr {
+    my ($cidr) = @_;
+
+    my $ipversion;
+    
+    if ($cidr =~ m!^(?:$IPV6RE)(/(\d+))?$!) {
+	$cidr =~ s|/128$||;
+	$ipversion = 6;
+    } elsif ($cidr =~ m!^(?:$IPV4RE)(/(\d+))?$!) {
+	$cidr =~ s|/32$||;
+	$ipversion = 4;
+    } else {
+	die "value does not look like a valid IP address or CIDR network\n";
+    }
+
+    return wantarray ? ($cidr, $ipversion) : $cidr;
+}
+
 sub parse_alias {
     my ($line) = @_;
 
@@ -2227,10 +2240,10 @@ sub parse_alias {
 
     if ($line =~ m/^(\S+)\s(\S+)$/) {
 	my ($name, $cidr) = ($1, $2);
-	$cidr =~ s|/32$||;
-	$cidr =~ s|/128$||;
-	pve_verify_ipv4_or_cidr($cidr);
-	my $ipversion = get_ip_version($cidr);
+	my $ipversion;
+
+	($cidr, $ipversion) = parse_ip_or_cidr($cidr);
+
 	my $data = {
 	    name => $name,
 	    cidr => $cidr,
@@ -2241,20 +2254,6 @@ sub parse_alias {
     }
 
     return undef;
-}
-
-sub get_ip_version {
-    my ($cidr) = @_;
-
-    my $ipversion = undef;
-
-    if ($cidr =~ m!^(?:$IPV4RE)(/(\d+))?$!) {
-	$ipversion = '4';
-    }elsif ($cidr =~ m!^(?:$IPV6RE)(/(\d+))?$!) {
-	$ipversion = '6';
-    }
-
-    return $ipversion;
 }
 
 sub generic_fw_config_parser {
@@ -2386,8 +2385,7 @@ sub generic_fw_config_parser {
 		if ($cidr =~ m/^${ip_alias_pattern}$/) {
 		    resolve_alias($cluster_conf, $res, $cidr); # make sure alias exists
 		} else {
-		    $cidr =~ s|/32$||;
-		    pve_verify_ipv4_or_cidr_or_alias($cidr);
+		    $cidr = parse_ip_or_cidr($cidr);
 		}
 	    };
 	    if (my $err = $@) {

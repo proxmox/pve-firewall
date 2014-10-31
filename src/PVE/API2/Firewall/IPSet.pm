@@ -12,7 +12,7 @@ use base qw(PVE::RESTHandler);
 my $api_properties = { 
     cidr => {
 	description => "Network/IP specification in CIDR format.",
-	type => 'string', format => 'IPv4orCIDRorAlias',
+	type => 'string', format => 'IPorCIDRorAlias',
     },
     name => get_standard_option('ipset-name'),
     comment => {
