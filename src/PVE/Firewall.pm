@@ -2925,7 +2925,8 @@ sub compile_iptables_filter {
 
     my $ipset_ruleset = {};
 
-    if ($hostfw_enable && $ipversion eq 4) {
+    # currently pveproxy don't works with ipv6, so let's generate host fw ipv4 only for the moment
+    if ($hostfw_enable && ($ipversion == 4)) {
 	eval { enable_host_firewall($ruleset, $hostfw_conf, $cluster_conf); };
 	warn $@ if $@; # just to be sure - should not happen
     }
