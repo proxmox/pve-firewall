@@ -2202,7 +2202,7 @@ sub parse_clusterfw_option {
 sub resolve_alias {
     my ($clusterfw_conf, $fw_conf, $cidr) = @_;
 
-    if ($cidr !~ m/^\d/) {
+    if ($cidr =~ m/^${ip_alias_pattern}$/) {
 	my $alias = lc($cidr);
 	my $e = $fw_conf->{aliases}->{$alias} if $fw_conf;
 	$e = $clusterfw_conf->{aliases}->{$alias} if !$e && $clusterfw_conf;
