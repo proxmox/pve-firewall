@@ -613,6 +613,32 @@ my $icmp_type_names = {
     'address-mask-reply' => 1,
 };
 
+# ip6tables -p icmpv6 -h
+
+my $icmpv6_type_names = {
+    'any' => 1,
+    'destination-unreachable' => 1,
+    'no-route' => 1,
+    'communication-prohibited' => 1,
+    'address-unreachable' => 1,
+    'port-unreachable' => 1,
+    'packet-too-big' => 1,
+    'time-exceeded' => 1,
+    'ttl-zero-during-transit' => 1,
+    'ttl-zero-during-reassembly' => 1,
+    'parameter-problem' => 1,
+    'bad-header' => 1,
+    'unknown-header-type' => 1,
+    'unknown-option' => 1,
+    'echo-request' => 1,
+    'echo-reply' => 1,
+    'router-solicitation' => 1,
+    'router-advertisement' => 1,
+    'neighbour-solicitation' => 1,
+    'neighbour-advertisement' => 1,
+    'redirect' => 1,
+};
+
 sub init_firewall_macros {
 
     $pve_fw_parsed_macros = {};
@@ -698,6 +724,10 @@ sub get_etc_protocols {
     }
 
     close($fh);
+
+    # add special case for ICMP v6
+    $protocols->{byid}->{icmpv6}->{name} = "icmpv6";
+    $protocols->{byname}->{icmpv6} = $protocols->{byid}->{icmpv6};
 
     $etc_protocols = $protocols;
 
@@ -840,6 +870,8 @@ sub parse_port_name_number_or_range {
 	    die "invalid port '$port'\n" if $port > 65535;
 	} else {
 	    if ($icmp_type_names->{$item}) {
+		$icmp_port = 1;
+	    } elsif ($icmpv6_type_names->{$item}) {
 		$icmp_port = 1;
 	    } else {
 		die "invalid port '$item'\n" if !$services->{byname}->{$item};
@@ -1163,9 +1195,21 @@ sub verify_rule {
 	}
     }
 
+    my $ipversion;
+    my $set_ip_version = sub {
+	my $vers = shift;
+	if ($vers) {
+	    die "detected mixed ipv4/ipv6 adresses in rule\n"
+		if $ipversion && ($vers != $ipversion);
+	    $ipversion = $vers;
+	}
+    };
+
     if ($rule->{proto}) {
 	eval { pve_fw_verify_protocol_spec($rule->{proto}); };
 	&$add_error('proto', $@) if $@;
+	&$set_ip_version(4) if $rule->{proto} eq 'icmp';
+ 	&$set_ip_version(6) if $rule->{proto} eq 'icmpv6';
     }
 
     if ($rule->{dport}) {
@@ -1182,10 +1226,11 @@ sub verify_rule {
 	    if !$rule->{proto};
     }
 
-    my $ipversion;
-
     if ($rule->{source}) {
-	eval { $ipversion = parse_address_list($rule->{source}); };
+	eval { 
+	    my $source_ipversion = parse_address_list($rule->{source});
+	    &$set_ip_version($source_ipversion);
+	};
 	&$add_error('source', $@) if $@;
 	&$check_ipset_or_alias_property('source', $ipversion);
     }
@@ -1193,9 +1238,7 @@ sub verify_rule {
     if ($rule->{dest}) {
 	eval { 
 	    my $dest_ipversion = parse_address_list($rule->{dest}); 
-	    die "detected mixed ipv4/ipv6 adresses in rule\n"
-		if $ipversion && $dest_ipversion && ($dest_ipversion != $ipversion);
-	    $ipversion = $dest_ipversion if $dest_ipversion;
+	    &$set_ip_version($dest_ipversion);
 	};
 	&$add_error('dest', $@) if $@;
 	&$check_ipset_or_alias_property('dest', $ipversion);
@@ -1510,6 +1553,10 @@ sub ruleset_generate_cmdstr {
 		# Note: we use dport to store --icmp-type
 		die "unknown icmp-type '$rule->{dport}'\n" if !defined($icmp_type_names->{$rule->{dport}});
 		push @cmd, "-m icmp --icmp-type $rule->{dport}";
+	    } elsif ($rule->{proto} && $rule->{proto} eq 'icmpv6') {
+		# Note: we use dport to store --icmpv6-type
+		die "unknown icmpv6-type '$rule->{dport}'\n" if !defined($icmpv6_type_names->{$rule->{dport}});
+		push @cmd, "-m icmpv6 --icmpv6-type $rule->{dport}";
 	    } else {
 		if ($nbdport > 1) {
 		    if ($multiport == 2) {
