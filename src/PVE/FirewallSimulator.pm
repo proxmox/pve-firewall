@@ -53,21 +53,40 @@ sub nf_dev_match {
 }
 
 sub ipset_match {
-    my ($ipsetname, $ipset, $ipaddr) = @_;
+    my ($ipset_ruleset, $ipsetname, $ipaddr) = @_;
+
+    my $ipset = $ipset_ruleset->{$ipsetname};
+    die "no such ipset '$ipsetname'" if !$ipset;
 
     my $ip = Net::IP->new($ipaddr);
 
-    foreach my $entry (@$ipset) {
-	next if $entry =~ m/^create/; # simply ignore
-	if ($entry =~ m/add \S+ (\S+)$/) {
-	    my $test = Net::IP->new($1);
-	    if ($test->overlaps($ip)) {
-		add_trace("IPSET $ipsetname match $ipaddr\n");
-		return 1;
+    my $first = $ipset->[0];
+    if ($first =~ m/^create\s+\S+\s+list:/) {
+	foreach my $entry (@$ipset) {
+	    next if $entry =~ m/^create/; # simply ignore
+	    if ($entry =~ m/add \S+ (\S+)$/) {
+		return 1 if ipset_match($ipset_ruleset, $1, $ipaddr);
+	    } else {
+		die "implement me";
 	    }
-	} else {
-	    die "implement me";
 	}
+	return 0;
+    } elsif ($first =~ m/^create\s+\S+\s+hash:net/) {
+	foreach my $entry (@$ipset) {
+	    next if $entry =~ m/^create/; # simply ignore
+	    if ($entry =~ m/add \S+ (\S+)$/) {
+		my $test = Net::IP->new($1);
+		if ($test->overlaps($ip)) {
+		    add_trace("IPSET $ipsetname match $ipaddr\n");
+		    return 1;
+		}
+	    } else {
+		die "implement me";
+	    }
+	}
+	return 0;
+    } else {
+	die "unknown ipset type '$first' - not implemented\n";
     }
 
     return 0;
@@ -154,21 +173,19 @@ sub rule_match {
 	if ($rule =~ s/^-m set (!\s+)?--match-set (\S+) src\s*//) {
 	    die "missing source" if !$pkg->{source};
 	    my $neg = $1;
-	    my $ipset = $ipset_ruleset->{$2};
-	    die "no such ip set '$2'" if !$ipset;
+	    my $ipset_name = $2;
 	    if ($neg) {
-		return undef if ipset_match($1, $ipset, $pkg->{source});
+		return undef if ipset_match($ipset_ruleset, $ipset_name, $pkg->{source});
 	    } else {
-		return undef if !ipset_match($1, $ipset, $pkg->{source});
+		return undef if !ipset_match($ipset_ruleset, $ipset_name, $pkg->{source});
 	    }
 	    next;
 	}
 
 	if ($rule =~ s/^-m set --match-set (\S+) dst\s*//) {
 	    die "missing destination" if !$pkg->{dest};
-	    my $ipset = $ipset_ruleset->{$1};
-	    die "no such ip set '$1'" if !$ipset;
-	    return undef if !ipset_match($1, $ipset, $pkg->{dest});
+	    my $ipset_name = $1;
+	    return undef if !ipset_match($ipset_ruleset, $ipset_name, $pkg->{dest});
 	    next;
 	}
 
@@ -300,6 +317,8 @@ sub copy_packet {
 # checks several times.
 sub route_packet {
     my ($ruleset, $ipset_ruleset, $pkg, $from_info, $target, $start_state) = @_;
+
+    $pkg->{ipversion} = 4; # fixme: allow ipv6
 
     my $route_state = $start_state;
 
