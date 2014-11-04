@@ -5,6 +5,7 @@ use strict;
 use POSIX;
 use Data::Dumper;
 use Digest::SHA;
+use Socket qw(AF_INET6 inet_ntop inet_pton);
 use PVE::INotify;
 use PVE::Exception qw(raise raise_param_exc);
 use PVE::JSONSchema qw(register_standard_option get_standard_option);
@@ -755,10 +756,12 @@ sub local_network {
     return $__local_network;
 }
 
-# ipset names are limited to 31 characters, and we use '_swap' 
-# suffix for atomic update, for example PVEFW-${VMID}-${ipset_name}_swap
+# ipset names are limited to 31 characters,
+# and we use '-v4' or '-v6' to indicate IP versions, 
+# and we use '_swap' suffix for atomic update, 
+# for example PVEFW-${VMID}-${ipset_name}_swap
 
-my $max_iptables_ipset_name_length = 31 - length("_swap");
+my $max_iptables_ipset_name_length = 31 - length("_swap") - length("-v4");
 
 sub compute_ipset_chain_name {
     my ($vmid, $ipset_name) = @_;
@@ -767,7 +770,6 @@ sub compute_ipset_chain_name {
 
     my $id = "$vmid-${ipset_name}";
 
-   
     if ((length($id) + 6) > $max_iptables_ipset_name_length) {
 	$id = PVE::Tools::fnv31a_hex($id);
     }
@@ -2202,16 +2204,13 @@ sub parse_clusterfw_option {
 sub resolve_alias {
     my ($clusterfw_conf, $fw_conf, $cidr) = @_;
 
-    if ($cidr =~ m/^${ip_alias_pattern}$/) {
-	my $alias = lc($cidr);
-	my $e = $fw_conf->{aliases}->{$alias} if $fw_conf;
-	$e = $clusterfw_conf->{aliases}->{$alias} if !$e && $clusterfw_conf;
-	return $e->{cidr} if $e;
-	
-	die "no such alias '$cidr'\n";
-    }
+    my $alias = lc($cidr);
+    my $e = $fw_conf->{aliases}->{$alias} if $fw_conf;
+    $e = $clusterfw_conf->{aliases}->{$alias} if !$e && $clusterfw_conf;
 
-    return $cidr;
+    die "no such alias '$cidr'\n" if !$e;;
+
+    return wantarray ? ($e->{cidr}, $e->{ipversion}) : $e->{cidr};
 }
 
 sub parse_ip_or_cidr {
@@ -2738,39 +2737,64 @@ sub generate_ipset {
 
     die "duplicate ipset chain '$name'\n" if defined($ipset_ruleset->{$name});
 
-    my $hashsize = scalar(@$options);
-    if ($hashsize <= 64) {
-	$hashsize = 64;
-    } else {
-	$hashsize = round_powerof2($hashsize);
-    }
-
-    $ipset_ruleset->{$name} = ["create $name hash:net family inet hashsize $hashsize maxelem $hashsize"];
+    $ipset_ruleset->{$name} = ["create $name list:set size 4"];
 
     # remove duplicates
     my $nethash = {};
     foreach my $entry (@$options) {
 	next if $entry->{errors}; # skip entries with errors
 	eval {
-	    my $cidr = resolve_alias($clusterfw_conf, $fw_conf, $entry->{cidr});
-	    $nethash->{$cidr} = { cidr => $cidr, nomatch => $entry->{nomatch} };
+	    my ($cidr, $ipversion);
+	    if ($entry->{cidr} =~ m/^${ip_alias_pattern}$/) {
+		($cidr, $ipversion) = resolve_alias($clusterfw_conf, $fw_conf, $entry->{cidr});
+            } else {
+		($cidr, $ipversion) = parse_ip_or_cidr($entry->{cidr});
+	    }
+	    #http://backreference.org/2013/03/01/ipv6-address-normalization/
+	    if ($ipversion == 6) {
+		my $ipv6 = inet_pton(AF_INET6, lc($cidr));
+		$cidr = inet_ntop(AF_INET6, $ipv6);
+		$cidr =~ s|/128$||;
+	    } else {
+		$cidr =~ s|/32$||;
+	    }
+
+	    $nethash->{$ipversion}->{$cidr} = { cidr => $cidr, nomatch => $entry->{nomatch} };
 	};
 	warn $@ if $@;
     }
 
-    foreach my $cidr (sort keys %$nethash) {
-	my $entry = $nethash->{$cidr};
+    foreach my $ipversion (sort keys %$nethash) {
+	my $data = $nethash->{$ipversion};
+	my $subname = "$name-v$ipversion";
 
-	my $cmd = "add $name $cidr";
-	if ($entry->{nomatch}) {
-	    if ($feature_ipset_nomatch) {
-		push @{$ipset_ruleset->{$name}}, "$cmd nomatch";
-	    } else {
-		warn "ignore !$cidr - nomatch not supported by kernel\n";
-	    }
+	my $hashsize = scalar(@$options);
+	if ($hashsize <= 64) {
+	    $hashsize = 64;
 	} else {
-	    push @{$ipset_ruleset->{$name}}, $cmd;
+	    $hashsize = round_powerof2($hashsize);
 	}
+
+	my $family = $ipversion == "6" ? "inet6" : "inet";
+
+	$ipset_ruleset->{$subname} = ["create $subname hash:net family $family hashsize $hashsize maxelem $hashsize"];
+
+	foreach my $cidr (sort keys %$data) {
+	    my $entry = $data->{$cidr};
+
+	    my $cmd = "add $subname $cidr";
+	    if ($entry->{nomatch}) {
+		if ($feature_ipset_nomatch) {
+		    push @{$ipset_ruleset->{$subname}}, "$cmd nomatch";
+		} else {
+		    warn "ignore !$cidr - nomatch not supported by kernel\n";
+		}
+	    } else {
+		push @{$ipset_ruleset->{$subname}}, $cmd;
+	    }
+	}
+
+	push @{$ipset_ruleset->{$name}}, "add $name $subname";
     }
 }
 
@@ -3171,6 +3195,11 @@ sub get_ipset_cmdlist {
 		$cmdlist .= "$cmd\n";
 	    }
 	}
+    }
+
+    foreach my $chain (sort keys %$ruleset) {
+	my $stat = $statushash->{$chain};
+	die "internal error" if !$stat;
 
 	if ($stat->{action} eq 'update') {
 	    my $chain_swap = $chain."_swap";
@@ -3183,10 +3212,9 @@ sub get_ipset_cmdlist {
 	    $cmdlist .= "flush $chain_swap\n";
 	    $cmdlist .= "destroy $chain_swap\n";
 	}
-
     }
 
-    foreach my $chain (keys %$statushash) {
+    foreach my $chain (sort keys %$statushash) {
 	next if $statushash->{$chain}->{action} ne 'delete';
 
 	$delete_cmdlist .= "flush $chain\n";
