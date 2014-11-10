@@ -656,15 +656,6 @@ $pve_std_chains->{6} = {
         "-p tcp -m tcp --tcp-flags FIN,SYN FIN,SYN -g PVEFW-logflags",
         "-p tcp -m tcp --sport 0 --tcp-flags FIN,SYN,RST,ACK SYN -g PVEFW-logflags",
     ],
-    'PVEFW-smurfs' => [
-        #does smurf attack works with ipv6, as broadcast not exist ???
-
-        # same as shorewall smurfs action
-        # Filter packets for smurfs (packets with a broadcast address as the source).
-        #"-s 0.0.0.0/32 -j RETURN",
-        #"-m addrtype --src-type BROADCAST -g PVEFW-smurflog",
-        #"-s 224.0.0.0/4 -g PVEFW-smurflog",
-    ],
 };
 
 # iptables -p icmp -h
@@ -1825,7 +1816,7 @@ sub ruleset_chain_add_conn_filters {
 }
 
 sub ruleset_chain_add_input_filters {
-    my ($ruleset, $chain, $options, $cluster_conf, $loglevel) = @_;
+    my ($ruleset, $chain, $options, $cluster_conf, $ipversion, $loglevel) = @_;
 
     if ($cluster_conf->{ipset}->{blacklist}){
 	if (!ruleset_chain_exist($ruleset, "PVEFW-blacklist")) {
@@ -1838,7 +1829,9 @@ sub ruleset_chain_add_input_filters {
     }
 
     if (!(defined($options->{nosmurfs}) && $options->{nosmurfs} == 0)) {
-	ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate INVALID,NEW -j PVEFW-smurfs");
+	if ($ipversion == 4) {
+	    ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate INVALID,NEW -j PVEFW-smurfs");
+	}
     }
 
     if ($options->{tcpflags}) {
@@ -2069,7 +2062,7 @@ sub enable_host_firewall {
     ruleset_addrule($ruleset, $chain, "-i lo -j ACCEPT");
 
     ruleset_chain_add_conn_filters($ruleset, $chain, 'ACCEPT');
-    ruleset_chain_add_input_filters($ruleset, $chain, $options, $cluster_conf, $loglevel);
+    ruleset_chain_add_input_filters($ruleset, $chain, $options, $cluster_conf, $ipversion, $loglevel);
 
     # we use RETURN because we need to check also tap rules
     my $accept_action = 'RETURN';
@@ -3106,7 +3099,7 @@ sub compile_iptables_filter {
     ruleset_addrule($ruleset, "PVEFW-INPUT", "-i venet0 -m set --match-set ${venet0_ipset_chain} src -j PVEFW-VENET-OUT");
 
     ruleset_create_chain($ruleset, "PVEFW-FWBR-IN");
-    ruleset_chain_add_input_filters($ruleset, "PVEFW-FWBR-IN", $hostfw_options, $cluster_conf, $loglevel);
+    ruleset_chain_add_input_filters($ruleset, "PVEFW-FWBR-IN", $hostfw_options, $cluster_conf, $ipversion, $loglevel);
 
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m physdev --physdev-is-bridged --physdev-in fwln+ -j PVEFW-FWBR-IN");
 
@@ -3114,7 +3107,7 @@ sub compile_iptables_filter {
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m physdev --physdev-is-bridged --physdev-out fwln+ -j PVEFW-FWBR-OUT");
 
     ruleset_create_chain($ruleset, "PVEFW-VENET-IN");
-    ruleset_chain_add_input_filters($ruleset, "PVEFW-VENET-IN", $hostfw_options, $cluster_conf, $loglevel);
+    ruleset_chain_add_input_filters($ruleset, "PVEFW-VENET-IN", $hostfw_options, $cluster_conf, $ipversion, $loglevel);
 
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o venet0 -m set --match-set ${venet0_ipset_chain} dst -j PVEFW-VENET-IN");
 
