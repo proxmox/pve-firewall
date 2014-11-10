@@ -3332,7 +3332,9 @@ sub get_ipset_cmdlist {
 	}
     }
 
-    foreach my $chain (sort keys %$ruleset) {
+    # create -v4 and -v6 chains first
+    foreach my $chain (keys %$ruleset) {
+	next if $chain !~ m/-v[46]$/;
 	my $stat = $statushash->{$chain};
 	die "internal error" if !$stat;
 
@@ -3343,7 +3345,20 @@ sub get_ipset_cmdlist {
 	}
     }
 
-    foreach my $chain (sort keys %$ruleset) {
+    # then create list chains which use above -v4 and -v6 chains
+    foreach my $chain (keys %$ruleset) {
+	next if $chain =~ m/-v[46]$/;
+	my $stat = $statushash->{$chain};
+	die "internal error" if !$stat;
+
+	if ($stat->{action} eq 'create') {
+	    foreach my $cmd (@{$ruleset->{$chain}}) {
+		$cmdlist .= "$cmd\n";
+	    }
+	}
+    }
+
+    foreach my $chain (keys %$ruleset) {
 	my $stat = $statushash->{$chain};
 	die "internal error" if !$stat;
 
@@ -3360,8 +3375,19 @@ sub get_ipset_cmdlist {
 	}
     }
 
-    foreach my $chain (sort keys %$statushash) {
+    # remove unused list chains first
+    foreach my $chain (keys %$statushash) {
 	next if $statushash->{$chain}->{action} ne 'delete';
+	next if $chain !~ m/-v[46]$/;
+
+	$delete_cmdlist .= "flush $chain\n";
+	$delete_cmdlist .= "destroy $chain\n";
+    }
+
+    # the remove unused -v4 -v6 chains
+    foreach my $chain (keys %$statushash) {
+	next if $statushash->{$chain}->{action} ne 'delete';
+	next if $chain =~ m/-v[46]$/;
 
 	$delete_cmdlist .= "flush $chain\n";
 	$delete_cmdlist .= "destroy $chain\n";
