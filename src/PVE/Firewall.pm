@@ -581,15 +581,17 @@ $pve_std_chains->{6} = {
         # simply DROP BROADCAST/MULTICAST/ANYCAST
         # we can use this to reduce logging
         #{ action => 'DROP', dsttype => 'BROADCAST' }, #no broadcast in ipv6
-        { action => 'DROP', dsttype => 'MULTICAST' },
-        { action => 'DROP', dsttype => 'ANYCAST' },
+	# ipv6 addrtype does not work with kernel 2.6.32
+	#{ action => 'DROP', dsttype => 'MULTICAST' },
+        #{ action => 'DROP', dsttype => 'ANYCAST' },
+        { action => 'DROP', dest => 'ff00::/8' },
         #{ action => 'DROP', dest => '224.0.0.0/4' },
     ],
     'PVEFW-reject' => [
         # same as shorewall 'reject'
         #{ action => 'DROP', dsttype => 'BROADCAST' },
         #{ action => 'DROP', source => '224.0.0.0/4' },
-        { action => 'DROP', proto => 'icmpv6' },
+	{ action => 'DROP', proto => 'icmpv6' },
         "-p tcp -j REJECT --reject-with tcp-reset",
         #"-p udp -j REJECT --reject-with icmp-port-unreachable",
         #"-p icmp -j REJECT --reject-with icmp-host-unreachable",
@@ -599,7 +601,7 @@ $pve_std_chains->{6} = {
         # same as shorewall 'Drop', which is equal to DROP,
         # but REJECT/DROP some packages to reduce logging,
         # and ACCEPT critical ICMP types
-        { action => 'PVEFW-reject',  proto => 'tcp', dport => '43' }, # REJECT 'auth'
+	{ action => 'PVEFW-reject', proto => 'tcp', dport => '43' }, # REJECT 'auth'
         # we are not interested in BROADCAST/MULTICAST/ANYCAST
         { action => 'PVEFW-DropBroadcast' },
         # ACCEPT critical ICMP types
@@ -610,15 +612,15 @@ $pve_std_chains->{6} = {
         # Drop packets with INVALID state
         "-m conntrack --ctstate INVALID -j DROP",
         # Drop Microsoft SMB noise
-        { action => 'DROP', proto => 'udp', dport => '135,445', nbdport => 2 },
-        { action => 'DROP', proto => 'udp', dport => '137:139'},
-        { action => 'DROP', proto => 'udp', dport => '1024:65535', sport => 137 },
-        { action => 'DROP', proto => 'tcp', dport => '135,139,445', nbdport => 3 },
-        { action => 'DROP', proto => 'udp', dport => 1900 }, # UPnP
+	{ action => 'DROP', proto => 'udp', dport => '135,445', nbdport => 2 },
+	{ action => 'DROP', proto => 'udp', dport => '137:139'},
+	{ action => 'DROP', proto => 'udp', dport => '1024:65535', sport => 137 },
+	{ action => 'DROP', proto => 'tcp', dport => '135,139,445', nbdport => 3 },
+	{ action => 'DROP', proto => 'udp', dport => 1900 }, # UPnP
         # Drop new/NotSyn traffic so that it doesn't get logged
         "-p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN -j DROP",
         # Drop DNS replies
-        { action => 'DROP', proto => 'udp', sport => 53 },
+	{ action => 'DROP', proto => 'udp', sport => 53 },
     ],
     'PVEFW-Reject' => [
         # same as shorewall 'Reject', which is equal to Reject,
