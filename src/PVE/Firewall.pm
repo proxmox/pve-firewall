@@ -1427,19 +1427,19 @@ my $rule_format = "%-15s %-30s %-30s %-15s %-15s %-15s\n";
 sub iptables_restore_cmdlist {
     my ($cmdlist) = @_;
 
-    run_command("/sbin/iptables-restore -n", input => $cmdlist);
+    run_command("/sbin/iptables-restore -n", input => $cmdlist, errmsg => "iptables_restore_cmdlist");
 }
 
 sub ip6tables_restore_cmdlist {
     my ($cmdlist) = @_;
 
-    run_command("/sbin/ip6tables-restore -n", input => $cmdlist);
+    run_command("/sbin/ip6tables-restore -n", input => $cmdlist, errmsg => "iptables_restore_cmdlist");
 }
 
 sub ipset_restore_cmdlist {
     my ($cmdlist) = @_;
 
-    run_command("/usr/sbin/ipset restore", input => $cmdlist);
+    run_command("/usr/sbin/ipset restore", input => $cmdlist, errmsg => "ipset_restore_cmdlist");
 }
 
 sub iptables_get_chains {
