@@ -188,7 +188,8 @@ sub register_create_ip {
 	    }
 
 	    # make sure alias exists (if $cidr is an alias)
-	    PVE::Firewall::resolve_alias($cluster_conf, $fw_conf, $cidr); 
+	    PVE::Firewall::resolve_alias($cluster_conf, $fw_conf, $cidr)
+		if $cidr =~ m/^${PVE::Firewall::ip_alias_pattern}$/;
 
 	    my $data = { cidr => $cidr };
 

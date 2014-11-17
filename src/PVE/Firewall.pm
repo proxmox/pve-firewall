@@ -39,7 +39,7 @@ eval {
 
 my $security_group_name_pattern = '[A-Za-z][A-Za-z0-9\-\_]+';
 my $ipset_name_pattern = '[A-Za-z][A-Za-z0-9\-\_]+';
-my $ip_alias_pattern = '[A-Za-z][A-Za-z0-9\-\_]+';
+our $ip_alias_pattern = '[A-Za-z][A-Za-z0-9\-\_]+';
 
 my $max_alias_name_length = 64;
 my $max_ipset_name_length = 64;
