@@ -1,7 +1,7 @@
 RELEASE=3.3
 
 VERSION=1.0
-PKGREL=9
+PKGREL=10
 
 PACKAGE=pve-firewall
 
