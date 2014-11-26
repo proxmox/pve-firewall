@@ -383,8 +383,13 @@ __PACKAGE__->register_method ({
 	    my $cluster_conf = PVE::Firewall::load_clusterfw_conf(undef, $verbose); 
 	    my ($ruleset, $ipset_ruleset, $rulesetv6) = PVE::Firewall::compile($cluster_conf, undef, undef, $verbose);
 
+	    print "ipset cmdlist:\n";
 	    my (undef, undef, $ipset_changes) = PVE::Firewall::get_ipset_cmdlist($ipset_ruleset, $verbose);
+
+	    print "\niptables cmdlist:\n";
 	    my (undef, $ruleset_changes) = PVE::Firewall::get_ruleset_cmdlist($ruleset, $verbose);
+
+	    print "\nip6tables cmdlist:\n";
 	    my (undef, $ruleset_changesv6) = PVE::Firewall::get_ruleset_cmdlist($rulesetv6, $verbose, "ip6tables");
 
 	    if ($ipset_changes || $ruleset_changes || $ruleset_changesv6) {
