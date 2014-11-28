@@ -1,3 +1,10 @@
+pve-firewall (1.0-12) unstable; urgency=low
+
+  * add preinst script to clear ipset from older installation (because 
+    sets cannot be swapped if there type does not match.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 28 Nov 2014 08:59:38 +0100
+
 pve-firewall (1.0-11) unstable; urgency=low
 
   * bug fix: correctly set ipversion for aliases in verify_rule
