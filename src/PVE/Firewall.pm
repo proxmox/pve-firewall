@@ -37,6 +37,10 @@ eval {
     $have_pve_manager = 1;
 };
 
+my $pve_fw_status_dir = "/var/lib/pve-firewall";
+
+mkdir $pve_fw_status_dir; # make sure this exists
+
 my $security_group_name_pattern = '[A-Za-z][A-Za-z0-9\-\_]+';
 my $ipset_name_pattern = '[A-Za-z][A-Za-z0-9\-\_]+';
 our $ip_alias_pattern = '[A-Za-z][A-Za-z0-9\-\_]+';
@@ -3427,10 +3431,23 @@ sub apply_ruleset {
 	}
     }
 
+    my $tmpfile = "$pve_fw_status_dir/ipsetcmdlist1";
+    PVE::Tools::file_set_contents($tmpfile, $ipset_create_cmdlist || '');
+
     ipset_restore_cmdlist($ipset_create_cmdlist);
 
+    $tmpfile = "$pve_fw_status_dir/ip4cmdlist";
+    PVE::Tools::file_set_contents($tmpfile, $cmdlist || '');
+
     iptables_restore_cmdlist($cmdlist);
+
+    $tmpfile = "$pve_fw_status_dir/ip6cmdlist";
+    PVE::Tools::file_set_contents($tmpfile, $cmdlistv6 || '');
+
     ip6tables_restore_cmdlist($cmdlistv6);
+
+    $tmpfile = "$pve_fw_status_dir/ipsetcmdlist2";
+    PVE::Tools::file_set_contents($tmpfile, $ipset_delete_cmdlist || '');
 
     ipset_restore_cmdlist($ipset_delete_cmdlist) if $ipset_delete_cmdlist;
 
