@@ -3381,7 +3381,7 @@ sub get_ipset_cmdlist {
     # remove unused list chains first
     foreach my $chain (keys %$statushash) {
 	next if $statushash->{$chain}->{action} ne 'delete';
-	next if $chain !~ m/-v[46]$/;
+	next if $chain =~ m/-v[46]$/;
 
 	$delete_cmdlist .= "flush $chain\n";
 	$delete_cmdlist .= "destroy $chain\n";
@@ -3390,7 +3390,7 @@ sub get_ipset_cmdlist {
     # the remove unused -v4 -v6 chains
     foreach my $chain (keys %$statushash) {
 	next if $statushash->{$chain}->{action} ne 'delete';
-	next if $chain =~ m/-v[46]$/;
+	next if $chain !~ m/-v[46]$/;
 
 	$delete_cmdlist .= "flush $chain\n";
 	$delete_cmdlist .= "destroy $chain\n";
