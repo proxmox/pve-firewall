@@ -49,8 +49,6 @@ my $commandline = [$0, @ARGV];
 
 $0 = "pve-firewall";
 
-mkdir "/var/lib/pve-firewall";
-
 sub restart_server {
     my ($waittime) = @_;
 
