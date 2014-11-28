@@ -1,0 +1,27 @@
+#!/bin/sh
+
+set -e
+
+case "$1" in
+    install|upgrade)
+	old_version=$2
+	if [ -e '/usr/sbin/pve-firewall' ]; then
+	    if dpkg --compare-versions "$old_version" le '1.0-11' ; then
+		echo "Detected old pve-firewall version - stopping to clear old iptables rules"
+		/usr/sbin/pve-firewall stop
+	    fi
+	fi
+    ;;
+
+    abort-upgrade)
+    ;;
+
+    *)
+        echo "preinst called with unknown argument \`$1'" >&2
+        exit 1
+    ;;
+esac
+
+#DEBHELPER#
+
+exit 0
