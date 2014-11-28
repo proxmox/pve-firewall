@@ -1217,6 +1217,16 @@ sub verify_rule {
 	$errors->{$param} = $msg if !$errors->{$param};
     };
 
+    my $ipversion;
+    my $set_ip_version = sub {
+	my $vers = shift;
+	if ($vers) {
+	    die "detected mixed ipv4/ipv6 adresses in rule\n"
+		if $ipversion && ($vers != $ipversion);
+	    $ipversion = $vers;
+	}
+    };
+
     my $check_ipset_or_alias_property = sub {
 	my ($name, $expected_ipversion) = @_;
 
@@ -1237,8 +1247,7 @@ sub verify_rule {
 		my $e = $fw_conf->{aliases}->{$alias} if $fw_conf;
 		$e = $cluster_conf->{aliases}->{$alias} if !$e && $cluster_conf;
 
-		die "detected mixed ipv4/ipv6 adresses in rule\n"
-		    if $expected_ipversion && ($expected_ipversion != $e->{ipversion});
+		&$set_ip_version($e->{ipversion});
 	    }
 	}
     };
@@ -1284,16 +1293,6 @@ sub verify_rule {
 	    &$add_error('macro', "unknown macro '$rule->{macro}'");
 	}
     }
-
-    my $ipversion;
-    my $set_ip_version = sub {
-	my $vers = shift;
-	if ($vers) {
-	    die "detected mixed ipv4/ipv6 adresses in rule\n"
-		if $ipversion && ($vers != $ipversion);
-	    $ipversion = $vers;
-	}
-    };
 
     if ($rule->{proto}) {
 	eval { pve_fw_verify_protocol_spec($rule->{proto}); };
