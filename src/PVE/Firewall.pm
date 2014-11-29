@@ -881,16 +881,16 @@ sub local_network {
 # and we use '_swap' suffix for atomic update, 
 # for example PVEFW-${VMID}-${ipset_name}_swap
 
-my $max_iptables_ipset_name_length = 31 - length("_swap") - length("-v4");
+my $max_iptables_ipset_name_length = 31 - length("PVEFW-") - length("_swap");
 
 sub compute_ipset_chain_name {
-    my ($vmid, $ipset_name) = @_;
+    my ($vmid, $ipset_name, $ipversion) = @_;
 
     $vmid = 0 if !defined($vmid);
 
-    my $id = "$vmid-${ipset_name}";
+    my $id = "$vmid-${ipset_name}-v$ipversion";
 
-    if ((length($id) + 6) > $max_iptables_ipset_name_length) {
+    if (length($id) > $max_iptables_ipset_name_length) {
 	$id = PVE::Tools::fnv31a_hex($id);
     }
 
@@ -1558,7 +1558,7 @@ sub ipset_get_chains {
 }
 
 sub ruleset_generate_cmdstr {
-    my ($ruleset, $chain, $rule, $actions, $goto, $cluster_conf, $fw_conf) = @_;
+    my ($ruleset, $chain, $ipversion, $rule, $actions, $goto, $cluster_conf, $fw_conf) = @_;
 
     return if defined($rule->{enable}) && !$rule->{enable};
     return if $rule->{errors};
@@ -1581,10 +1581,10 @@ sub ruleset_generate_cmdstr {
 	    if ($source =~ m/^\+(${ipset_name_pattern})$/) {
 		my $name = $1;
 		if ($fw_conf && $fw_conf->{ipset}->{$name}) {
-		    my $ipset_chain = compute_ipset_chain_name($fw_conf->{vmid}, $name);
+		    my $ipset_chain = compute_ipset_chain_name($fw_conf->{vmid}, $name, $ipversion);
 		    push @cmd, "-m set --match-set ${ipset_chain} src";
 		} elsif ($cluster_conf && $cluster_conf->{ipset}->{$name}) {
-		    my $ipset_chain = compute_ipset_chain_name(0, $name);
+		    my $ipset_chain = compute_ipset_chain_name(0, $name, $ipversion);
 		    push @cmd, "-m set --match-set ${ipset_chain} src";
 		} else {
 		    die "no such ipset '$name'\n";
@@ -1610,10 +1610,10 @@ sub ruleset_generate_cmdstr {
 	    if ($dest =~ m/^\+(${ipset_name_pattern})$/) {
 		my $name = $1;
 		if ($fw_conf && $fw_conf->{ipset}->{$name}) {
-		    my $ipset_chain = compute_ipset_chain_name($fw_conf->{vmid}, $name);
+		    my $ipset_chain = compute_ipset_chain_name($fw_conf->{vmid}, $name, $ipversion);
 		    push @cmd, "-m set --match-set ${ipset_chain} dst";
 		} elsif ($cluster_conf && $cluster_conf->{ipset}->{$name}) {
-		    my $ipset_chain = compute_ipset_chain_name(0, $name);
+		    my $ipset_chain = compute_ipset_chain_name(0, $name, $ipversion);
 		    push @cmd, "-m set --match-set ${ipset_chain} dst";
 		} else {
 		    die "no such ipset '$name'\n";
@@ -1692,7 +1692,7 @@ sub ruleset_generate_cmdstr {
 }
 
 sub ruleset_generate_rule {
-    my ($ruleset, $chain, $rule, $actions, $goto, $cluster_conf, $fw_conf) = @_;
+    my ($ruleset, $chain, $ipversion, $rule, $actions, $goto, $cluster_conf, $fw_conf) = @_;
 
     my $rules;
 
@@ -1706,7 +1706,7 @@ sub ruleset_generate_rule {
 
     my @cmds = ();
     foreach my $tmp (@$rules) {
-	if (my $cmdstr = ruleset_generate_cmdstr($ruleset, $chain, $tmp, $actions, $goto, $cluster_conf, $fw_conf)) {
+	if (my $cmdstr = ruleset_generate_cmdstr($ruleset, $chain, $ipversion, $tmp, $actions, $goto, $cluster_conf, $fw_conf)) {
 	    push @cmds, $cmdstr;
 	}
     }
@@ -1717,11 +1717,11 @@ sub ruleset_generate_rule {
 }
 
 sub ruleset_generate_rule_insert {
-    my ($ruleset, $chain, $rule, $actions, $goto) = @_;
+    my ($ruleset, $chain, $ipversion, $rule, $actions, $goto) = @_;
 
     die "implement me" if $rule->{macro}; # not implemented, because not needed so far
 
-    if (my $cmdstr = ruleset_generate_cmdstr($ruleset, $chain, $rule, $actions, $goto)) {
+    if (my $cmdstr = ruleset_generate_cmdstr($ruleset, $chain, $ipversion, $rule, $actions, $goto)) {
 	ruleset_insertrule($ruleset, $chain, $cmdstr);
     }
 }
@@ -1785,11 +1785,11 @@ sub ruleset_addlog {
 }
 
 sub ruleset_add_chain_policy {
-    my ($ruleset, $chain, $vmid, $policy, $loglevel, $accept_action) = @_;
+    my ($ruleset, $chain, $ipversion, $vmid, $policy, $loglevel, $accept_action) = @_;
 
     if ($policy eq 'ACCEPT') {
 
-	ruleset_generate_rule($ruleset, $chain, { action => 'ACCEPT' },
+	ruleset_generate_rule($ruleset, $chain, $ipversion, { action => 'ACCEPT' },
 			      { ACCEPT =>  $accept_action});
 
     } elsif ($policy eq 'DROP') {
@@ -1819,7 +1819,7 @@ sub ruleset_chain_add_conn_filters {
 }
 
 sub ruleset_chain_add_input_filters {
-    my ($ruleset, $chain, $options, $cluster_conf, $ipversion, $loglevel) = @_;
+    my ($ruleset, $chain, $ipversion, $options, $cluster_conf, $loglevel) = @_;
 
     if ($cluster_conf->{ipset}->{blacklist}){
 	if (!ruleset_chain_exist($ruleset, "PVEFW-blacklist")) {
@@ -1827,7 +1827,7 @@ sub ruleset_chain_add_input_filters {
 	    ruleset_addlog($ruleset, "PVEFW-blacklist", 0, "DROP: ", $loglevel) if $loglevel;
 	    ruleset_addrule($ruleset, "PVEFW-blacklist", "-j DROP");
 	}
-	my $ipset_chain = compute_ipset_chain_name(0, 'blacklist');
+	my $ipset_chain = compute_ipset_chain_name(0, 'blacklist', $ipversion);
 	ruleset_addrule($ruleset, $chain, "-m set --match-set ${ipset_chain} src -j PVEFW-blacklist");
     }
 
@@ -1843,18 +1843,20 @@ sub ruleset_chain_add_input_filters {
 }
 
 sub ruleset_create_vm_chain {
-    my ($ruleset, $chain, $options, $macaddr, $ipfilter_ipset, $direction) = @_;
+    my ($ruleset, $chain, $ipversion, $options, $macaddr, $ipfilter_ipset, $direction) = @_;
 
     ruleset_create_chain($ruleset, $chain);
     my $accept = generate_nfqueue($options);
 
     if (!(defined($options->{dhcp}) && $options->{dhcp} == 0)) {
 	if ($direction eq 'OUT') {
-	    ruleset_generate_rule($ruleset, $chain, { action => 'PVEFW-SET-ACCEPT-MARK',
-						      proto => 'udp', sport => 68, dport => 67 });
+	    ruleset_generate_rule($ruleset, $chain, $ipversion, 
+				  { action => 'PVEFW-SET-ACCEPT-MARK',
+				    proto => 'udp', sport => 68, dport => 67 });
 	} else {
-	    ruleset_generate_rule($ruleset, $chain, { action => 'ACCEPT',
-						      proto => 'udp', sport => 67, dport => 68 });
+	    ruleset_generate_rule($ruleset, $chain, $ipversion,
+				  { action => 'ACCEPT',
+				    proto => 'udp', sport => 67, dport => 68 });
 	}
     }
 
@@ -1908,11 +1910,11 @@ sub ruleset_generate_vm_rules {
 	    next if $rule->{type} ne $lc_direction;
 	    eval {
 		if ($direction eq 'OUT') {
-		    ruleset_generate_rule($ruleset, $chain, $rule,
+		    ruleset_generate_rule($ruleset, $chain, $ipversion, $rule,
 					  { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" },
 					  undef, $cluster_conf, $vmfw_conf);
 		} else {
-		    ruleset_generate_rule($ruleset, $chain, $rule,
+		    ruleset_generate_rule($ruleset, $chain, $ipversion, $rule,
 					  { ACCEPT => $in_accept , REJECT => "PVEFW-reject" },
 					  undef, $cluster_conf, $vmfw_conf);
 		}
@@ -1967,7 +1969,7 @@ sub generate_venet_rules_direction {
 
     my $chain = "venet0-$vmid-$direction";
 
-    ruleset_create_vm_chain($ruleset, $chain, $options, undef, undef, $direction);
+    ruleset_create_vm_chain($ruleset, $chain, $ipversion, $options, undef, undef, $direction);
 
     ruleset_generate_vm_rules($ruleset, $rules, $cluster_conf, $vmfw_conf, $chain, 'venet', $direction, undef, $ipversion);
 
@@ -1982,15 +1984,15 @@ sub generate_venet_rules_direction {
 
     my $accept = generate_nfqueue($options);
     my $accept_action = $direction eq 'OUT' ? "PVEFW-SET-ACCEPT-MARK" : $accept;
-    ruleset_add_chain_policy($ruleset, $chain, $vmid, $policy, $loglevel, $accept_action);
+    ruleset_add_chain_policy($ruleset, $chain, $ipversion, $vmid, $policy, $loglevel, $accept_action);
 
     if ($direction eq 'OUT') {
-	ruleset_generate_rule_insert($ruleset, "PVEFW-VENET-OUT", {
+	ruleset_generate_rule_insert($ruleset, "PVEFW-VENET-OUT", $ipversion, {
 	    action => $chain,
 	    source => $ip,
 	    iface_in => 'venet0'});
     } else {
-	ruleset_generate_rule($ruleset, "PVEFW-VENET-IN", {
+	ruleset_generate_rule($ruleset, "PVEFW-VENET-IN", $ipversion, {
 	    action => $chain,
 	    dest => $ip,
 	    iface_out => 'venet0'});
@@ -2010,11 +2012,11 @@ sub generate_tap_rules_direction {
     my $tapchain = "$iface-$direction";
 
     my $ipfilter_name = compute_ipfilter_ipset_name($netid);
-    my $ipfilter_ipset = compute_ipset_chain_name($vmid, $ipfilter_name)
+    my $ipfilter_ipset = compute_ipset_chain_name($vmid, $ipfilter_name, $ipversion)
 	if $vmfw_conf->{ipset}->{$ipfilter_name};	
 
     # create chain with mac and ip filter
-    ruleset_create_vm_chain($ruleset, $tapchain, $options, $macaddr, $ipfilter_ipset, $direction);
+    ruleset_create_vm_chain($ruleset, $tapchain, $ipversion, $options, $macaddr, $ipfilter_ipset, $direction);
 
     if ($options->{enable}) {
 	ruleset_generate_vm_rules($ruleset, $rules, $cluster_conf, $vmfw_conf, $tapchain, $netid, $direction, $options, $ipversion);
@@ -2032,10 +2034,10 @@ sub generate_tap_rules_direction {
 
 	my $accept = generate_nfqueue($options);
 	my $accept_action = $direction eq 'OUT' ? "PVEFW-SET-ACCEPT-MARK" : $accept;
-	ruleset_add_chain_policy($ruleset, $tapchain, $vmid, $policy, $loglevel, $accept_action);
+	ruleset_add_chain_policy($ruleset, $tapchain, $ipversion, $vmid, $policy, $loglevel, $accept_action);
     } else {
 	my $accept_action = $direction eq 'OUT' ? "PVEFW-SET-ACCEPT-MARK" : 'ACCEPT';
-	ruleset_add_chain_policy($ruleset, $tapchain, $vmid, 'ACCEPT', $loglevel, $accept_action);
+	ruleset_add_chain_policy($ruleset, $tapchain, $ipversion, $vmid, 'ACCEPT', $loglevel, $accept_action);
     }
 
     # plug the tap chain to bridge chain
@@ -2065,7 +2067,7 @@ sub enable_host_firewall {
     ruleset_addrule($ruleset, $chain, "-i lo -j ACCEPT");
 
     ruleset_chain_add_conn_filters($ruleset, $chain, 'ACCEPT');
-    ruleset_chain_add_input_filters($ruleset, $chain, $options, $cluster_conf, $ipversion, $loglevel);
+    ruleset_chain_add_input_filters($ruleset, $chain, $ipversion, $options, $cluster_conf, $loglevel);
 
     # we use RETURN because we need to check also tap rules
     my $accept_action = 'RETURN';
@@ -2082,7 +2084,8 @@ sub enable_host_firewall {
 	    if ($rule->{type} eq 'group') {
 		ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, 'IN', $accept_action, $ipversion);
 	    } elsif ($rule->{type} eq 'in') {
-		ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" },
+		ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, 
+				      { ACCEPT => $accept_action, REJECT => "PVEFW-reject" },
 				      undef, $cluster_conf, $hostfw_conf);
 	    }
 	};
@@ -2091,7 +2094,7 @@ sub enable_host_firewall {
     }
 
     # allow standard traffic for management ipset (includes cluster network)
-    my $mngmnt_ipset_chain = compute_ipset_chain_name(0, "management");
+    my $mngmnt_ipset_chain = compute_ipset_chain_name(0, "management", $ipversion);
     my $mngmntsrc = "-m set --match-set ${mngmnt_ipset_chain} src";
     ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 8006 -j $accept_action");  # PVE API
     ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 5900:5999 -j $accept_action");  # PVE VNC Console
@@ -2109,7 +2112,7 @@ sub enable_host_firewall {
 
     # implement input policy
     my $policy = $cluster_options->{policy_in} || 'DROP'; # allow nothing by default
-    ruleset_add_chain_policy($ruleset, $chain, 0, $policy, $loglevel, $accept_action);
+    ruleset_add_chain_policy($ruleset, $chain, $ipversion, 0, $policy, $loglevel, $accept_action);
 
     # host outbound firewall
     $chain = "PVEFW-HOST-OUT";
@@ -2135,7 +2138,8 @@ sub enable_host_firewall {
 	    if ($rule->{type} eq 'group') {
 		ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, 'OUT', $accept_action, $ipversion);
 	    } elsif ($rule->{type} eq 'out') {
-		ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" },
+		ruleset_generate_rule($ruleset, $chain, $ipversion, 
+				      $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" },
 				      undef, $cluster_conf, $hostfw_conf);
 	    }
 	};
@@ -2157,7 +2161,7 @@ sub enable_host_firewall {
 
     # implement output policy
     $policy = $cluster_options->{policy_out} || 'ACCEPT'; # allow everything by default
-    ruleset_add_chain_policy($ruleset, $chain, 0, $policy, $loglevel, $accept_action);
+    ruleset_add_chain_policy($ruleset, $chain, $ipversion, 0, $policy, $loglevel, $accept_action);
 
     ruleset_addrule($ruleset, "PVEFW-OUTPUT", "-j PVEFW-HOST-OUT");
     ruleset_addrule($ruleset, "PVEFW-INPUT", "-j PVEFW-HOST-IN");
@@ -2181,7 +2185,9 @@ sub generate_group_rules {
     foreach my $rule (@$rules) {
 	next if $rule->{type} ne 'in';
 	next if $rule->{ipversion} && $rule->{ipversion} ne $ipversion;
-	ruleset_generate_rule($ruleset, $chain, $rule, { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" }, undef, $cluster_conf);
+	ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, 
+			      { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" }, 
+			      undef, $cluster_conf);
     }
 
     $chain = "GROUP-${group}-OUT";
@@ -2194,8 +2200,9 @@ sub generate_group_rules {
 	next if $rule->{ipversion} && $rule->{ipversion} ne $ipversion;
 	# we use PVEFW-SET-ACCEPT-MARK (Instead of ACCEPT) because we need to
 	# check also other tap rules later
-	ruleset_generate_rule($ruleset, $chain, $rule,
-			      { ACCEPT => 'PVEFW-SET-ACCEPT-MARK', REJECT => "PVEFW-reject" }, undef, $cluster_conf);
+	ruleset_generate_rule($ruleset, $chain, $ipversion, $rule,
+			      { ACCEPT => 'PVEFW-SET-ACCEPT-MARK', REJECT => "PVEFW-reject" }, 
+			      undef, $cluster_conf);
     }
 }
 
@@ -2862,7 +2869,7 @@ sub generate_std_chains {
 	ruleset_create_chain($ruleset, $chain);
 	foreach my $rule (@{$std_chains->{$chain}}) {
 	    if (ref($rule)) {
-		ruleset_generate_rule($ruleset, $chain, $rule);
+		ruleset_generate_rule($ruleset, $chain, $ipversion, $rule);
 	    } else {
 		ruleset_addrule($ruleset, $chain, $rule);
 	    }
@@ -2871,77 +2878,68 @@ sub generate_std_chains {
 }
 
 sub generate_ipset_chains {
-    my ($ipset_ruleset, $clusterfw_conf, $fw_conf) = @_;
+    my ($ipset_ruleset, $clusterfw_conf, $fw_conf) = @_; #fixme
 
     foreach my $ipset (keys %{$fw_conf->{ipset}}) {
-	my $ipset_chain = compute_ipset_chain_name($fw_conf->{vmid}, $ipset);
-	generate_ipset($ipset_ruleset, $ipset_chain, $fw_conf->{ipset}->{$ipset}, $clusterfw_conf, $fw_conf);
-    }
-}
 
-sub generate_ipset {
-    my ($ipset_ruleset, $name, $options, $clusterfw_conf, $fw_conf) = @_;
+	my $options = $fw_conf->{ipset}->{$ipset};
 
-    die "duplicate ipset chain '$name'\n" if defined($ipset_ruleset->{$name});
-
-    $ipset_ruleset->{$name} = ["create $name list:set size 4"];
-
-    # remove duplicates
-    my $nethash = {};
-    foreach my $entry (@$options) {
-	next if $entry->{errors}; # skip entries with errors
-	eval {
-	    my ($cidr, $ipversion);
-	    if ($entry->{cidr} =~ m/^${ip_alias_pattern}$/) {
-		($cidr, $ipversion) = resolve_alias($clusterfw_conf, $fw_conf, $entry->{cidr});
-            } else {
-		($cidr, $ipversion) = parse_ip_or_cidr($entry->{cidr});
-	    }
-	    #http://backreference.org/2013/03/01/ipv6-address-normalization/
-	    if ($ipversion == 6) {
-		my $ipv6 = inet_pton(AF_INET6, lc($cidr));
-		$cidr = inet_ntop(AF_INET6, $ipv6);
-		$cidr =~ s|/128$||;
-	    } else {
-		$cidr =~ s|/32$||;
-	    }
-
-	    $nethash->{$ipversion}->{$cidr} = { cidr => $cidr, nomatch => $entry->{nomatch} };
-	};
-	warn $@ if $@;
-    }
-
-    foreach my $ipversion (sort keys %$nethash) {
-	my $data = $nethash->{$ipversion};
-	my $subname = "$name-v$ipversion";
-
-	my $hashsize = scalar(@$options);
-	if ($hashsize <= 64) {
-	    $hashsize = 64;
-	} else {
-	    $hashsize = round_powerof2($hashsize);
-	}
-
-	my $family = $ipversion == "6" ? "inet6" : "inet";
-
-	$ipset_ruleset->{$subname} = ["create $subname hash:net family $family hashsize $hashsize maxelem $hashsize"];
-
-	foreach my $cidr (sort keys %$data) {
-	    my $entry = $data->{$cidr};
-
-	    my $cmd = "add $subname $cidr";
-	    if ($entry->{nomatch}) {
-		if ($feature_ipset_nomatch) {
-		    push @{$ipset_ruleset->{$subname}}, "$cmd nomatch";
+	# remove duplicates
+	my $nethash = {};
+	foreach my $entry (@$options) {
+	    next if $entry->{errors}; # skip entries with errors
+	    eval {
+		my ($cidr, $ver);
+		if ($entry->{cidr} =~ m/^${ip_alias_pattern}$/) {
+		    ($cidr, $ver) = resolve_alias($clusterfw_conf, $fw_conf, $entry->{cidr});
 		} else {
-		    warn "ignore !$cidr - nomatch not supported by kernel\n";
+		    ($cidr, $ver) = parse_ip_or_cidr($entry->{cidr});
 		}
-	    } else {
-		push @{$ipset_ruleset->{$subname}}, $cmd;
-	    }
+		#http://backreference.org/2013/03/01/ipv6-address-normalization/
+		if ($ver == 6) {
+		    my $ipv6 = inet_pton(AF_INET6, lc($cidr));
+		    $cidr = inet_ntop(AF_INET6, $ipv6);
+		    $cidr =~ s|/128$||;
+		} else {
+		    $cidr =~ s|/32$||;
+		}
+
+		$nethash->{$ver}->{$cidr} = { cidr => $cidr, nomatch => $entry->{nomatch} };
+	    };
+	    warn $@ if $@;
 	}
 
-	push @{$ipset_ruleset->{$name}}, "add $name $subname";
+	foreach my $ipversion (4, 6) {
+	    my $data = $nethash->{$ipversion};
+
+	    my $name = compute_ipset_chain_name($fw_conf->{vmid}, $ipset, $ipversion);
+
+	    my $hashsize = scalar(@$options);
+	    if ($hashsize <= 64) {
+		$hashsize = 64;
+	    } else {
+		$hashsize = round_powerof2($hashsize);
+	    }
+
+	    my $family = $ipversion == "6" ? "inet6" : "inet";
+
+	    $ipset_ruleset->{$name} = ["create $name hash:net family $family hashsize $hashsize maxelem $hashsize"];
+
+	    foreach my $cidr (sort keys %$data) {
+		my $entry = $data->{$cidr};
+
+		my $cmd = "add $name $cidr";
+		if ($entry->{nomatch}) {
+		    if ($feature_ipset_nomatch) {
+			push @{$ipset_ruleset->{$name}}, "$cmd nomatch";
+		    } else {
+			warn "ignore !$cidr - nomatch not supported by kernel\n";
+		    }
+		} else {
+		    push @{$ipset_ruleset->{$name}}, $cmd;
+		}
+	    }
+	}
     }
 }
 
@@ -3068,7 +3066,7 @@ sub compile_iptables_filter {
     my ($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, $ipversion, $verbose) = @_;
 
     $cluster_conf->{ipset}->{venet0} = [];
-    my $venet0_ipset_chain = compute_ipset_chain_name(0, 'venet0');
+    my $venet0_ipset_chain = compute_ipset_chain_name(0, 'venet0', $ipversion);
 
     my $localnet;
     if ($cluster_conf->{aliases}->{local_network}) {
@@ -3102,7 +3100,7 @@ sub compile_iptables_filter {
     ruleset_addrule($ruleset, "PVEFW-INPUT", "-i venet0 -m set --match-set ${venet0_ipset_chain} src -j PVEFW-VENET-OUT");
 
     ruleset_create_chain($ruleset, "PVEFW-FWBR-IN");
-    ruleset_chain_add_input_filters($ruleset, "PVEFW-FWBR-IN", $hostfw_options, $cluster_conf, $ipversion, $loglevel);
+    ruleset_chain_add_input_filters($ruleset, "PVEFW-FWBR-IN", $ipversion, $hostfw_options, $cluster_conf, $loglevel);
 
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m physdev --physdev-is-bridged --physdev-in fwln+ -j PVEFW-FWBR-IN");
 
@@ -3110,7 +3108,7 @@ sub compile_iptables_filter {
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m physdev --physdev-is-bridged --physdev-out fwln+ -j PVEFW-FWBR-OUT");
 
     ruleset_create_chain($ruleset, "PVEFW-VENET-IN");
-    ruleset_chain_add_input_filters($ruleset, "PVEFW-VENET-IN", $hostfw_options, $cluster_conf, $ipversion, $loglevel);
+    ruleset_chain_add_input_filters($ruleset, "PVEFW-VENET-IN", $ipversion, $hostfw_options, $cluster_conf, $loglevel);
 
     ruleset_addrule($ruleset, "PVEFW-FORWARD", "-o venet0 -m set --match-set ${venet0_ipset_chain} dst -j PVEFW-VENET-IN");
 
@@ -3335,22 +3333,7 @@ sub get_ipset_cmdlist {
 	}
     }
 
-    # create -v4 and -v6 chains first
     foreach my $chain (keys %$ruleset) {
-	next if $chain !~ m/-v[46]$/;
-	my $stat = $statushash->{$chain};
-	die "internal error" if !$stat;
-
-	if ($stat->{action} eq 'create') {
-	    foreach my $cmd (@{$ruleset->{$chain}}) {
-		$cmdlist .= "$cmd\n";
-	    }
-	}
-    }
-
-    # then create list chains which use above -v4 and -v6 chains
-    foreach my $chain (keys %$ruleset) {
-	next if $chain =~ m/-v[46]$/;
 	my $stat = $statushash->{$chain};
 	die "internal error" if !$stat;
 
@@ -3378,19 +3361,9 @@ sub get_ipset_cmdlist {
 	}
     }
 
-    # remove unused list chains first
+     # the remove unused chains
     foreach my $chain (keys %$statushash) {
 	next if $statushash->{$chain}->{action} ne 'delete';
-	next if $chain =~ m/-v[46]$/;
-
-	$delete_cmdlist .= "flush $chain\n";
-	$delete_cmdlist .= "destroy $chain\n";
-    }
-
-    # the remove unused -v4 -v6 chains
-    foreach my $chain (keys %$statushash) {
-	next if $statushash->{$chain}->{action} ne 'delete';
-	next if $chain !~ m/-v[46]$/;
 
 	$delete_cmdlist .= "flush $chain\n";
 	$delete_cmdlist .= "destroy $chain\n";
@@ -3556,20 +3529,12 @@ sub remove_pvefw_chains_ipset {
 
     my $ipset_chains = ipset_get_chains();
 
-    my $sub_cmdlist = "";
     my $cmdlist = "";
  
     foreach my $chain (keys %$ipset_chains) {
-	if ($chain =~ m/^PVEFW-\S+\-(v4|v6)$/) {
-	   $sub_cmdlist .= "flush $chain\n";
-	   $sub_cmdlist .= "destroy $chain\n";
-	}else{
-	   $cmdlist .= "flush $chain\n";
-	   $cmdlist .= "destroy $chain\n";
-        }
+	$cmdlist .= "flush $chain\n";
+	$cmdlist .= "destroy $chain\n";
     }
-
-    $cmdlist .= $sub_cmdlist;
 
     ipset_restore_cmdlist($cmdlist) if $cmdlist;
 }
