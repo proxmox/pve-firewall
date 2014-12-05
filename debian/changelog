@@ -1,3 +1,11 @@
+pve-firewall (1.0-14) unstable; urgency=low
+
+  *  do not use ipset list chains
+  
+  *  remove preinst script (not needed anymore) 
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 05 Dec 2014 13:42:00 +0100
+
 pve-firewall (1.0-13) unstable; urgency=low
 
   * fix ipset remove order
