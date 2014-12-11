@@ -3560,7 +3560,7 @@ sub update {
 	    return;
 	}
 
-	my $hostfw_conf = load_hostfw_conf();
+	my $hostfw_conf = load_hostfw_conf($cluster_conf);
 
 	my ($ruleset, $ipset_ruleset, $rulesetv6) = compile($cluster_conf, $hostfw_conf);
 
