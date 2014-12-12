@@ -1,3 +1,9 @@
+pve-firewall (1.0-15) unstable; urgency=low
+
+  * bug fix: load cluster conf for host rules
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 12 Dec 2014 06:33:28 +0100
+
 pve-firewall (1.0-14) unstable; urgency=low
 
   *  do not use ipset list chains
