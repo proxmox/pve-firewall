@@ -55,12 +55,8 @@ case "$1" in
 	;;
     reload|restart|force-reload)
 	log_daemon_msg "Restarting $DESC" "$NAME"
-	if ( [ -e $PIDFILE ] && kill -0 `cat $PIDFILE`) then
-	    start-stop-daemon --stop --quiet --pidfile $PIDFILE --signal HUP
-	else
-	    $DAEMON start
-	fi
-  	log_end_msg $?
+	$DAEMON restart
+ 	log_end_msg $?
   	;;
     *)
 	N=/etc/init.d/$NAME

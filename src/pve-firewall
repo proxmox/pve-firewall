@@ -3,11 +3,11 @@
 use strict;
 use warnings;
 use PVE::SafeSyslog;
-use POSIX ":sys_wait_h";
-use Fcntl ':flock';
-use Getopt::Long;
+use PVE::Daemon;
+
 use Time::HiRes qw (gettimeofday);
 use PVE::Tools qw(dir_glob_foreach file_read_firstline);
+use PVE::ProcFSTools;
 use PVE::INotify;
 use PVE::Cluster qw(cfs_read_file);
 use PVE::RPCEnvironment;
@@ -16,26 +16,13 @@ use PVE::Firewall;
 use PVE::FirewallSimulator;
 use Data::Dumper;
 
-use base qw(PVE::CLIHandler);
+use base qw(PVE::Daemon);
 
-my $pve_firewall_pidfile = "/var/run/pve-firewall.pid";
+my $cmdline = [$0, @ARGV];
 
-$SIG{'__WARN__'} = sub {
-    my $err = $@;
-    my $t = $_[0];
-    chomp $t;
-    print "$t\n";
-    syslog('warning', "WARNING: %s", $t);
-    $@ = $err;
-};
+my %daemon_options = (restart_on_error => 5, stop_wait_time => 5);
 
-initlog('pve-firewall');
-
-$ENV{'PATH'} = '/sbin:/bin:/usr/sbin:/usr/bin';
-
-die "please run as root\n" if $> != 0;
-
-PVE::INotify::inotify_init();
+my $daemon = __PACKAGE__->new('pve-firewall', $cmdline, %daemon_options);
 
 my $rpcenv = PVE::RPCEnvironment->init('cli');
 
@@ -45,58 +32,11 @@ $rpcenv->set_user('root@pam');
 
 my $nodename = PVE::INotify::nodename();
 
-my $commandline = [$0, @ARGV];
+sub init {
 
-$0 = "pve-firewall";
-
-sub restart_server {
-    my ($waittime) = @_;
-
-    syslog('info', "server shutdown (restart)");
-
-    $ENV{RESTART_PVE_FIREWALL} = 1;
-
-    sleep($waittime) if $waittime; # avoid high server load due to restarts
-
-    PVE::INotify::inotify_close();
-
-    exec (@$commandline);
-    exit (-1); # never reached?
-}
-
-sub cleanup {
-    unlink "$pve_firewall_pidfile.lock";
-    unlink $pve_firewall_pidfile;
-}
-
-sub lockpidfile {
-    my $pidfile = shift;
-    my $lkfn = "$pidfile.lock";
-
-    if (!open (FLCK, ">>$lkfn")) {
-	my $msg = "can't aquire lock on file '$lkfn' - $!";
-	syslog ('err', $msg);
-	die "ERROR: $msg\n";
-    }
-
-    if (!flock (FLCK, LOCK_EX|LOCK_NB)) {
-	close (FLCK);
-        my $msg = "can't aquire lock '$lkfn' - $!";
-	syslog ('err', $msg);
-	die "ERROR: $msg\n";
-    }
-}
-
-sub writepidfile {
-    my $pidfile = shift;
-
-    if (!open (PIDFH, ">$pidfile")) {
-	my $msg = "can't open pid file '$pidfile' - $!";
-	syslog ('err', $msg);
-	die "ERROR: $msg\n";
-    } 
-    print PIDFH "$$\n";
-    close (PIDFH);
+    PVE::Cluster::cfs_update();
+    
+    PVE::Firewall::init();
 }
 
 my $restart_request = 0;
@@ -107,194 +47,88 @@ my $updatetime = 10;
 
 my $initial_memory_usage;
 
-sub run_server {
-    my ($param) = @_;
+sub shutdown {
+    my ($self) = @_;
 
-    # try to get the lock
-    lockpidfile($pve_firewall_pidfile);
+    syslog('info' , "server closing");
 
-    # run in background
-    my $spid;
-
-    my $restart = $ENV{RESTART_PVE_FIREWALL};
-
-    delete $ENV{RESTART_PVE_FIREWALL};
-
-    PVE::Cluster::cfs_update();
-    
-    PVE::Firewall::init();
-
-    if (!$param->{debug}) {
-	open STDIN,  '</dev/null' || die "can't read /dev/null";
-	open STDOUT, '>/dev/null' || die "can't write /dev/null";
-    }
-
-    if (!$restart && !$param->{debug}) {
-	$spid = fork();
-	if (!defined ($spid)) {
-	    my $msg =  "can't put server into background - fork failed";
-	    syslog('err', $msg);
-	    die "ERROR: $msg\n";
-	} elsif ($spid) { # parent
-	    exit (0);
-	}
-    } 
-
-    writepidfile($pve_firewall_pidfile);
-
-    open STDERR, '>&STDOUT' || die "can't close STDERR\n";
- 
-    $SIG{INT} = $SIG{TERM} = $SIG{QUIT} = sub { 
-	syslog('info' , "server closing");
-
-	$SIG{INT} = 'DEFAULT';
-
-	# wait for children
-	1 while (waitpid(-1, POSIX::WNOHANG()) > 0);
+    # wait for children
+    1 while (waitpid(-1, POSIX::WNOHANG()) > 0);
 	
-	syslog('info' , "clear firewall rules");
-	eval { PVE::Firewall::remove_pvefw_chains(); die "STOP";};
-	warn $@ if $@;
+    syslog('info' , "clear firewall rules");
 
-	cleanup();
+    eval { PVE::Firewall::remove_pvefw_chains(); };
+    warn $@ if $@;
 
-	exit (0);
-    };
+    $self->exit_daemon(0);
+}
 
-    $SIG{HUP} = sub {
-	# wake up process, so this forces an immediate firewall rules update
-	syslog('info' , "received signal HUP (restart)");
-	$restart_request = 1;
-    };
+sub hup {
+    my ($self) = @_;
 
-    if ($restart) {
-	syslog('info' , "restarting server");
-    } else {
-	syslog('info' , "starting server");
-    }
+    syslog('info' , "received signal HUP");
+
+    $restart_request = 1;
+}
+
+sub run {
+    my ($self) = @_;
+
+    local $SIG{'__WARN__'} = 'IGNORE'; # do not fill up logs
 
     for (;;) { # forever
 
+	$next_update = time() + $updatetime;
+
+	my ($ccsec, $cusec) = gettimeofday ();
 	eval {
-
-	    local $SIG{'__WARN__'} = 'IGNORE'; # do not fill up logs
-
-	    $next_update = time() + $updatetime;
-
-	    my ($ccsec, $cusec) = gettimeofday ();
-	    eval {
-		PVE::Cluster::cfs_update();
-		PVE::Firewall::update();
-	    };
-	    my $err = $@;
-
-	    if ($err) {
-		syslog('err', "status update error: $err");
-	    }
-
-	    my ($ccsec_end, $cusec_end) = gettimeofday ();
-	    my $cptime = ($ccsec_end-$ccsec) + ($cusec_end - $cusec)/1000000;
-
-	    syslog('info', sprintf("firewall update time (%.3f seconds)", $cptime))
-		if ($cptime > 5);
-
-	    $cycle++;
-
-	    my $mem = PVE::ProcFSTools::read_memory_usage();
-
-	    if (!defined($initial_memory_usage) || ($cycle < 10)) {
-		$initial_memory_usage = $mem->{resident};
-	    } else {
-		my $diff = $mem->{resident} - $initial_memory_usage;
-		if ($diff > 5*1024*1024) {
-		    syslog ('info', "restarting server after $cycle cycles to " .
-			    "reduce memory usage (free $mem->{resident} ($diff) bytes)");
-		    restart_server();
-		}
-	    }
-
-	    my $wcount = 0;
-	    while ((time() < $next_update) && 
-		   ($wcount < $updatetime) && # protect against time wrap
-		   !$restart_request) { $wcount++; sleep (1); };
-
-	    restart_server() if $restart_request;
+	    PVE::Cluster::cfs_update();
+	    PVE::Firewall::update();
 	};
-
 	my $err = $@;
-    
+	
 	if ($err) {
-	    syslog ('err', "ERROR: $err");
-	    restart_server(5);
-	    exit (0);
+	    syslog('err', "status update error: $err");
 	}
+
+	my ($ccsec_end, $cusec_end) = gettimeofday ();
+	my $cptime = ($ccsec_end-$ccsec) + ($cusec_end - $cusec)/1000000;
+
+	syslog('info', sprintf("firewall update time (%.3f seconds)", $cptime))
+	    if ($cptime > 5);
+
+	$cycle++;
+
+	my $mem = PVE::ProcFSTools::read_memory_usage();
+	
+	if (!defined($initial_memory_usage) || ($cycle < 10)) {
+	    $initial_memory_usage = $mem->{resident};
+	} else {
+	    my $diff = $mem->{resident} - $initial_memory_usage;
+	    if ($diff > 5*1024*1024) {
+		syslog ('info', "restarting server after $cycle cycles to " .
+			"reduce memory usage (free $mem->{resident} ($diff) bytes)");
+		$self->restart_daemon();
+	    }
+	}
+
+	my $wcount = 0;
+	while ((time() < $next_update) && 
+	       ($wcount < $updatetime) && # protect against time wrap
+	       !$restart_request) { $wcount++; sleep (1); };
+	
+	$self->restart_daemon() if $restart_request;
     }
 }
 
-__PACKAGE__->register_method ({
-    name => 'start',
-    path => 'start',
-    method => 'POST',
-    description => "Start the Proxmox VE firewall service.",
-    parameters => {
-    	additionalProperties => 0,
-	properties => {
-	    debug => {
-		description => "Debug mode - stay in foreground",
-		type => "boolean",
-		optional => 1,
-		default => 0,
-	    },
-	},
-    },
-    returns => { type => 'null' },
-
-    code => sub {
-	my ($param) = @_;
-
-	run_server($param);
-
-	return undef;
-    }});
-
-__PACKAGE__->register_method ({
-    name => 'stop',
-    path => 'stop',
-    method => 'POST',
-    description => "Stop firewall. This removes all Proxmox VE related iptable rules. The host is unprotected afterwards.",
-    parameters => {
-    	additionalProperties => 0,
-	properties => {},
-    },
-    returns => { type => 'null' },
-
-    code => sub {
-	my ($param) = @_;
-
-	my $pid = int(PVE::Tools::file_read_firstline($pve_firewall_pidfile) || 0);
-
-	if ($pid) {
-	    if (PVE::ProcFSTools::check_process_running($pid)) {
-		kill(15, $pid); # send TERM signal
-		# give max 5 seconds to shut down
-		for (my $i = 0; $i < 5; $i++) {
-		    last if !PVE::ProcFSTools::check_process_running($pid);
-		    sleep (1);
-		}
-       
-		# to be sure
-		kill(9, $pid); 
-		waitpid($pid, 0);
-	    }
-	    if (-f $pve_firewall_pidfile) {
-		# try to get the lock
-		lockpidfile($pve_firewall_pidfile);
-		cleanup();
-	    }
-	}
-
-	return undef;
-    }});
+$daemon->register_start_command(__PACKAGE__,
+				"Start the Proxmox VE firewall service.");
+$daemon->register_restart_command(__PACKAGE__,
+				  "Restart the Proxmox VE firewall service.");
+$daemon->register_stop_command(__PACKAGE__,
+			       "Stop firewall. This removes all Proxmox VE " .
+			       "related iptable rules. " .
+			       "The host is unprotected afterwards.");
 
 __PACKAGE__->register_method ({
     name => 'status',
@@ -331,10 +165,7 @@ __PACKAGE__->register_method ({
 
 	my $code = sub {
 
-	    my $pid = int(PVE::Tools::file_read_firstline($pve_firewall_pidfile) || 0);
-	    my $running = PVE::ProcFSTools::check_process_running($pid);
-
-	    my $status = $running ? 'running' : 'stopped';
+	    my $status = $daemon->running() ? 'running' : 'stopped';
 
 	    my $res = { status => $status };
 
@@ -557,6 +388,7 @@ __PACKAGE__->register_method ({
 
 my $cmddef = {
     start => [ __PACKAGE__, 'start', []],
+    restart => [ __PACKAGE__, 'restart', []],
     stop => [ __PACKAGE__, 'stop', []],
     compile => [ __PACKAGE__, 'compile', []],
     simulate => [ __PACKAGE__, 'simulate', []],
