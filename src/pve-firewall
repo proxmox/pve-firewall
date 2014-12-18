@@ -123,7 +123,7 @@ sub run {
 
 $daemon->register_start_command(__PACKAGE__,
 				"Start the Proxmox VE firewall service.");
-$daemon->register_restart_command(__PACKAGE__,
+$daemon->register_restart_command(__PACKAGE__, 1, 
 				  "Restart the Proxmox VE firewall service.");
 $daemon->register_stop_command(__PACKAGE__,
 			       "Stop firewall. This removes all Proxmox VE " .
