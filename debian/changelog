@@ -1,3 +1,9 @@
+pve-firewall (1.0-16) unstable; urgency=low
+
+  * use new Daemon class from pve-common
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 18 Dec 2014 09:45:07 +0100
+
 pve-firewall (1.0-15) unstable; urgency=low
 
   * bug fix: load cluster conf for host rules
