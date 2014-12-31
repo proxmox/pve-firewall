@@ -18,11 +18,27 @@ use Data::Dumper;
 
 use base qw(PVE::Daemon);
 
+$SIG{'__WARN__'} = sub {
+    my $err = $@;
+    my $t = $_[0];
+    chomp $t;
+    print STDERR "$t\n";
+    syslog('warning', "%s", $t);
+    $@ = $err;
+};
+
 my $cmdline = [$0, @ARGV];
 
 my %daemon_options = (restart_on_error => 5, stop_wait_time => 5);
 
-my $daemon = __PACKAGE__->new('pve-firewall', $cmdline, %daemon_options);
+my $daemon;
+eval {
+    $daemon = __PACKAGE__->new('pve-firewall', $cmdline, %daemon_options);
+};
+if (my $err = $@)  {
+    syslog("err", "daemon init failed - $err");
+    exit(-1);
+} 
 
 my $rpcenv = PVE::RPCEnvironment->init('cli');
 
@@ -65,8 +81,6 @@ sub shutdown {
 
 sub hup {
     my ($self) = @_;
-
-    syslog('info' , "received signal HUP");
 
     $restart_request = 1;
 }
