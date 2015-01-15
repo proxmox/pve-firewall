@@ -129,7 +129,7 @@ sub run {
 }
 
 $daemon->register_start_command("Start the Proxmox VE firewall service.");
-$daemon->register_restart_command("Restart the Proxmox VE firewall service.");
+$daemon->register_restart_command(1, "Restart the Proxmox VE firewall service.");
 $daemon->register_stop_command("Stop firewall. This removes all Proxmox VE " .
 			       "related iptable rules. " .
 			       "The host is unprotected afterwards.");
