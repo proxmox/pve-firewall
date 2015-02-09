@@ -1,3 +1,9 @@
+pve-firewall (1.0-18) unstable; urgency=low
+
+  * fix alias lookup
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 09 Feb 2015 09:32:03 +0100
+
 pve-firewall (1.0-17) unstable; urgency=low
 
   * fix restart behavior 
