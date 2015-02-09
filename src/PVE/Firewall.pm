@@ -1243,8 +1243,7 @@ sub verify_rule {
 		my $alias = lc($value);
 		&$add_error($name, "no such alias '$value'")
 		    if !($cluster_conf->{aliases}->{$alias} || ($fw_conf && $fw_conf->{aliases}->{$alias}));
-
-		my $e = $fw_conf->{aliases}->{$alias} if $fw_conf;
+		my $e = $fw_conf ? $fw_conf->{aliases}->{$alias} : undef;
 		$e = $cluster_conf->{aliases}->{$alias} if !$e && $cluster_conf;
 
 		&$set_ip_version($e->{ipversion});
@@ -1594,7 +1593,7 @@ sub ruleset_generate_cmdstr {
 	    }
 	} elsif ($source =~ m/^${ip_alias_pattern}$/){
 	    my $alias = lc($source);
-	    my $e = $fw_conf->{aliases}->{$alias} if $fw_conf;
+	    my $e = $fw_conf ? $fw_conf->{aliases}->{$alias} : undef;
 	    $e = $cluster_conf->{aliases}->{$alias} if !$e && $cluster_conf;
 	    die "no such alias '$source'\n" if !$e;
 	    push @cmd, "-s $e->{cidr}";
@@ -1623,7 +1622,7 @@ sub ruleset_generate_cmdstr {
 	    }
 	} elsif ($dest =~ m/^${ip_alias_pattern}$/){
 	    my $alias = lc($dest);
-	    my $e = $fw_conf->{aliases}->{$alias} if $fw_conf;
+	    my $e = $fw_conf ? $fw_conf->{aliases}->{$alias} : undef;
 	    $e = $cluster_conf->{aliases}->{$alias} if !$e && $cluster_conf;
 	    die "no such alias '$dest'\n" if !$e;
 	    push @cmd, "-d $e->{cidr}";
@@ -2359,7 +2358,7 @@ sub resolve_alias {
     my ($clusterfw_conf, $fw_conf, $cidr) = @_;
 
     my $alias = lc($cidr);
-    my $e = $fw_conf->{aliases}->{$alias} if $fw_conf;
+    my $e = $fw_conf ? $fw_conf->{aliases}->{$alias} : undef;
     $e = $clusterfw_conf->{aliases}->{$alias} if !$e && $clusterfw_conf;
 
     die "no such alias '$cidr'\n" if !$e;;
