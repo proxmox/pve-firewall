@@ -1441,7 +1441,7 @@ sub ip6tables_restore_cmdlist {
 sub ipset_restore_cmdlist {
     my ($cmdlist) = @_;
 
-    run_command("/usr/sbin/ipset restore", input => $cmdlist, errmsg => "ipset_restore_cmdlist");
+    run_command("/sbin/ipset restore", input => $cmdlist, errmsg => "ipset_restore_cmdlist");
 }
 
 sub iptables_get_chains {
@@ -1546,7 +1546,7 @@ sub ipset_get_chains {
 	}
     };
 
-    run_command("/usr/sbin/ipset save", outfunc => $parser);
+    run_command("/sbin/ipset save", outfunc => $parser);
 
     # compute digest for each chain
     foreach my $chain (keys %$chains) {
