@@ -1,3 +1,9 @@
+pve-firewall (2.0-1) unstable; urgency=medium
+
+  * recompile for debian jessie
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 27 Feb 2015 12:22:04 +0100
+
 pve-firewall (1.0-18) unstable; urgency=low
 
   * fix alias lookup

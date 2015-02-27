@@ -653,8 +653,6 @@ main(int argc, char *argv[])
 
     gboolean wrote_pidfile = FALSE;
 
-    g_thread_init(NULL);
-
     openlog("pvepw-logger", LOG_CONS|LOG_PID, LOG_DAEMON);
 
     GOptionContext *context;
