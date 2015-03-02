@@ -6,11 +6,6 @@ case "$1" in
     configure)
     ;;
 
-    triggered)
-        invoke-rc.d pve-firewall restart
-	exit 0
-    ;;
-
     abort-upgrade|abort-remove|abort-deconfigure)
     ;;
 
