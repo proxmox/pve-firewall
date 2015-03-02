@@ -39,6 +39,12 @@ sub save_aliases {
     die "implement this in subclass";
 }
 
+sub rule_env {
+    my ($class, $param) = @_;
+    
+    die "implement this in subclass";
+}
+
 my $additional_param_hash = {};
 
 sub additional_parameters {
@@ -75,6 +81,7 @@ sub register_get_aliases {
 	path => '',
 	method => 'GET',
 	description => "List aliases",
+	permissions => PVE::Firewall::rules_audit_permissions($class->rule_env()),
 	parameters => {
 	    additionalProperties => 0,
 	    properties => $properties,
@@ -120,6 +127,7 @@ sub register_create_alias {
 	path => '',
 	method => 'POST',
 	description => "Create IP or Network Alias.",
+	permissions => PVE::Firewall::rules_modify_permissions($class->rule_env()),
 	protected => 1,
 	parameters => {
 	    additionalProperties => 0,
@@ -159,6 +167,7 @@ sub register_read_alias {
 	path => '{name}',
 	method => 'GET',
 	description => "Read alias.",
+	permissions => PVE::Firewall::rules_audit_permissions($class->rule_env()),
 	parameters => {
 	    additionalProperties => 0,
 	    properties => $properties,
@@ -194,6 +203,7 @@ sub register_update_alias {
 	path => '{name}',
 	method => 'PUT',
 	description => "Update IP or Network alias.",
+	permissions => PVE::Firewall::rules_modify_permissions($class->rule_env()),
 	protected => 1,
 	parameters => {
 	    additionalProperties => 0,
@@ -249,6 +259,7 @@ sub register_delete_alias {
 	path => '{name}',
 	method => 'DELETE',
 	description => "Remove IP or Network alias.",
+	permissions => PVE::Firewall::rules_modify_permissions($class->rule_env()),
 	protected => 1,
 	parameters => {
 	    additionalProperties => 0,
@@ -290,6 +301,12 @@ use warnings;
 
 use base qw(PVE::API2::Firewall::AliasesBase);
 
+sub rule_env {
+    my ($class, $param) = @_;
+    
+    return 'cluster';
+}
+
 sub load_config {
     my ($class, $param) = @_;
 
@@ -315,6 +332,12 @@ use warnings;
 use PVE::JSONSchema qw(get_standard_option);
 
 use base qw(PVE::API2::Firewall::AliasesBase);
+
+sub rule_env {
+    my ($class, $param) = @_;
+    
+    return 'vm';
+}
 
 __PACKAGE__->additional_parameters({ 
     node => get_standard_option('pve-node'),
@@ -347,6 +370,12 @@ use warnings;
 use PVE::JSONSchema qw(get_standard_option);
 
 use base qw(PVE::API2::Firewall::AliasesBase);
+
+sub rule_env {
+    my ($class, $param) = @_;
+    
+    return 'ct';
+}
 
 __PACKAGE__->additional_parameters({ 
     node => get_standard_option('pve-node'),
