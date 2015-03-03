@@ -1,0 +1,13 @@
+[Unit]
+Description=Proxmox VE firewall logger
+ConditionPathExists=/usr/sbin/pvefw-logger
+DefaultDependencies=no
+Before=shutdown.target
+After=local-fs.target 
+Conflicts=shutdown.target
+
+[Service]
+ExecStart=/usr/sbin/pvefw-logger
+TimeoutStopSec=5
+Type=forking
+
