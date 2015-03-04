@@ -11,6 +11,7 @@ Conflicts=shutdown.target
 ExecStart=/usr/sbin/pve-firewall start
 ExecStop=/usr/sbin/pve-firewall stop
 ExecReload=/usr/sbin/pve-firewall restart
+PIDFile=/var/run/pve-firewall.pid
 Type=forking
 
 [Install]
