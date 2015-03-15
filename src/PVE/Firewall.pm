@@ -132,6 +132,17 @@ my $log_level_hash = {
     emerg => 0,
 };
 
+# we need to overwrite some macros for ipv6
+my $pve_ipv6fw_macros = {
+    'Ping' => [
+	{ action => 'PARAM', proto => 'icmpv6', dport => 'echo-request' },
+    ],
+    'Trcrt' => [
+	{ action => 'PARAM', proto => 'udp', dport => '33434:33524' },
+	{ action => 'PARAM', proto => 'icmpv6', dport => 'echo-request' },
+    ],
+ };
+
 # imported/converted from: /usr/share/shorewall/macro.*
 my $pve_fw_macros = {
     'Amanda' => [
@@ -1139,10 +1150,14 @@ sub delete_rule_properties {
 }
 
 my $apply_macro = sub {
-    my ($macro_name, $param, $verify) = @_;
+    my ($macro_name, $param, $verify, $ipversion) = @_;
 
     my $macro_rules = $pve_fw_parsed_macros->{$macro_name};
     die "unknown macro '$macro_name'\n" if !$macro_rules; # should not happen
+
+    if ($ipversion && ($ipversion == 6) && $pve_ipv6fw_macros->{$macro_name}) {
+	$macro_rules = $pve_ipv6fw_macros->{$macro_name};
+    }
 
     my $rules = [];
 
@@ -1332,8 +1347,10 @@ sub verify_rule {
 	&$check_ipset_or_alias_property('dest', $ipversion);
     }
 
+    $rule->{ipversion} = $ipversion if $ipversion;
+
     if ($rule->{macro} && !$error_count) {
-	eval { &$apply_macro($rule->{macro}, $rule, 1); };
+	eval { &$apply_macro($rule->{macro}, $rule, 1, $ipversion); };
 	if (my $err = $@) {
 	    if (ref($err) eq "PVE::Exception" && $err->{errors}) {
 		my $eh = $err->{errors};
@@ -1347,7 +1364,6 @@ sub verify_rule {
     }
 
     $rule->{errors} = $errors if $error_count;
-    $rule->{ipversion} = $ipversion if $ipversion;
 
     return $rule;
 }
@@ -1696,7 +1712,7 @@ sub ruleset_generate_rule {
     my $rules;
 
     if ($rule->{macro}) {
-	$rules = &$apply_macro($rule->{macro}, $rule);
+	$rules = &$apply_macro($rule->{macro}, $rule, 0, $ipversion);
     } else {
 	$rules = [ $rule ];
     }
@@ -2076,6 +2092,7 @@ sub enable_host_firewall {
     # add host rules first, so that cluster wide rules can be overwritten
     foreach my $rule (@$rules, @$cluster_rules) {
 	next if !$rule->{enable} || $rule->{errors};
+	next if $rule->{ipversion} && ($rule->{ipversion} != $ipversion);
 
 	$rule->{iface_in} = $rule->{iface} if $rule->{iface};
 
@@ -2100,10 +2117,10 @@ sub enable_host_firewall {
     ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 3128 -j $accept_action");  # SPICE Proxy
     ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 22 -j $accept_action");  # SSH
 
-    my $localnet = local_network();
+    my ($localnet, $localnet_ver) = parse_ip_or_cidr(local_network());
 
     # corosync
-    if ($localnet) {
+    if ($localnet && ($ipversion == $localnet_ver)) {
 	my $corosync_rule = "-p udp --dport 5404:5405 -j $accept_action";
 	ruleset_addrule($ruleset, $chain, "-s $localnet -d $localnet $corosync_rule");
 	ruleset_addrule($ruleset, $chain, "-s $localnet -m addrtype --dst-type MULTICAST $corosync_rule");
@@ -2131,6 +2148,7 @@ sub enable_host_firewall {
     # add host rules first, so that cluster wide rules can be overwritten
     foreach my $rule (@$rules, @$cluster_rules) {
 	next if !$rule->{enable} || $rule->{errors};
+	next if $rule->{ipversion} && ($rule->{ipversion} != $ipversion);
 
 	$rule->{iface_out} = $rule->{iface} if $rule->{iface};
 	eval {
@@ -2147,7 +2165,7 @@ sub enable_host_firewall {
     }
 
     # allow standard traffic on cluster network
-    if ($localnet) {
+    if ($localnet && ($ipversion == $localnet_ver)) {
 	ruleset_addrule($ruleset, $chain, "-d $localnet -p tcp --dport 8006 -j $accept_action");  # PVE API
 	ruleset_addrule($ruleset, $chain, "-d $localnet -p tcp --dport 22 -j $accept_action");  # SSH
 	ruleset_addrule($ruleset, $chain, "-d $localnet -p tcp --dport 5900:5999 -j $accept_action");  # PVE VNC Console
@@ -3117,8 +3135,7 @@ sub compile_iptables_filter {
 
     my $ipset_ruleset = {};
 
-    # currently pveproxy don't works with ipv6, so let's generate host fw ipv4 only for the moment
-    if ($hostfw_enable && ($ipversion == 4)) {
+    if ($hostfw_enable) {
 	eval { enable_host_firewall($ruleset, $hostfw_conf, $cluster_conf, $ipversion); };
 	warn $@ if $@; # just to be sure - should not happen
     }
