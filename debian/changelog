@@ -1,3 +1,9 @@
+pve-firewall (1.0-20) unstable; urgency=low
+
+  * correctly emit ipv6 rules for host firewall
+
+ -- Proxmox Support Team <support@proxmox.com>  Sun, 15 Mar 2015 10:21:20 +0100
+
 pve-firewall (1.0-19) unstable; urgency=low
 
   * iplement user permissions for Alias class
