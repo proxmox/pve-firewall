@@ -2117,7 +2117,8 @@ sub enable_host_firewall {
     ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 3128 -j $accept_action");  # SPICE Proxy
     ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 22 -j $accept_action");  # SSH
 
-    my ($localnet, $localnet_ver) = parse_ip_or_cidr(local_network());
+    my $localnet = $cluster_conf->{aliases}->{local_network}->{cidr};
+    my $localnet_ver = $cluster_conf->{aliases}->{local_network}->{ipversion};
 
     # corosync
     if ($localnet && ($ipversion == $localnet_ver)) {
@@ -3089,8 +3090,11 @@ sub compile_iptables_filter {
     if ($cluster_conf->{aliases}->{local_network}) {
 	$localnet = $cluster_conf->{aliases}->{local_network}->{cidr};
     } else {
-	$localnet = local_network() || '127.0.0.0/8';
-	$cluster_conf->{aliases}->{local_network} = { cidr => $localnet };
+	my $localnet_ver;
+	($localnet, $localnet_ver) = parse_ip_or_cidr(local_network() || '127.0.0.0/8');
+
+	$cluster_conf->{aliases}->{local_network} = { 
+	    name => 'local_network', cidr => $localnet, ipversion => $localnet_ver };
     }
 
     push @{$cluster_conf->{ipset}->{management}}, { cidr => $localnet };
