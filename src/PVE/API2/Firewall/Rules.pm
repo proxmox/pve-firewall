@@ -359,6 +359,9 @@ __PACKAGE__->register_method({
     method => 'DELETE',
     description => "Delete security group.",
     protected => 1,
+    permissions => {
+	check => ['perm', '/', [ 'Sys.Modify' ]],
+    },
     parameters => {
 	additionalProperties => 0,
 	properties => { 
