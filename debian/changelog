@@ -1,3 +1,9 @@
+pve-firewall (2.0-3) unstable; urgency=medium
+
+  * use noawait trigers for pve-api-updates
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 01 Jun 2015 12:33:06 +0200
+
 pve-firewall (2.0-2) unstable; urgency=medium
 
   * trigger pve-api-updates event
