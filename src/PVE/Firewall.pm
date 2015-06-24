@@ -113,8 +113,6 @@ eval  {
 
 };
 
-use Data::Dumper;
-
 my $nodename = PVE::INotify::nodename();
 
 my $pve_fw_lock_filename = "/var/lock/pvefw.lck";
