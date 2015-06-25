@@ -1106,7 +1106,8 @@ my $rule_properties = {
 	optional => 1,
     },
     enable => {
-	type => 'boolean',
+        type => 'integer',
+	minimum => 0,
 	optional => 1,
     },
     sport => {
@@ -2360,9 +2361,12 @@ sub parse_clusterfw_option {
 
     my ($opt, $value);
 
-    if ($line =~ m/^(enable):\s*(0|1)\s*$/i) {
+    if ($line =~ m/^(enable):\s*(\d+)\s*$/i) {
 	$opt = lc($1);
 	$value = int($2);
+	if (($value > 1) && ((time() - $value) > 60)) {
+	    $value = 0
+	}
     } elsif ($line =~ m/^(policy_(in|out)):\s*(ACCEPT|DROP|REJECT)\s*$/i) {
 	$opt = lc($1);
 	$value = uc($3);

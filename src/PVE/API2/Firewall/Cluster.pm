@@ -73,7 +73,8 @@ __PACKAGE__->register_method({
 
 my $option_properties = {
     enable => {
-	type => 'boolean',
+	type => 'integer',
+	minimum => 0,
 	optional => 1,
     },
     policy_in => {
@@ -163,8 +164,8 @@ __PACKAGE__->register_method({
 	    }
 	}
 
-	if (defined($param->{enable})) {
-	    $param->{enable} = $param->{enable} ? 1 : 0;
+	if (defined($param->{enable}) && ($param->{enable} > 1)) {
+	    $param->{enable} = time();
 	}
 
 	foreach my $k (keys %$option_properties) {
