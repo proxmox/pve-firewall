@@ -175,6 +175,12 @@ __PACKAGE__->register_method({
 
 	PVE::Firewall::save_clusterfw_conf($cluster_conf);
 
+	# instant firewall update when using double (anti-lockout) API call
+	# -> not waiting for a firewall update at the first (timestamp enable) set
+	if (defined($param->{enable}) && ($param->{enable} > 1)) {
+	    PVE::Firewall::update();
+	}
+
 	return undef;
     }});
 
