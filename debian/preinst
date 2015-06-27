@@ -8,7 +8,7 @@ case "$1" in
 	if [ -e '/usr/sbin/pve-firewall' ]; then
 	    if dpkg --compare-versions "$old_version" lt '1.0-16' ; then
 		echo "Detected old pve-firewall version - using stop/start to restart"
-		/usr/sbin/pve-firewall stop
+		pve-firewall stop
 	    fi
 	fi
     ;;
