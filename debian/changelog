@@ -1,3 +1,9 @@
+pve-firewall (2.0-4) unstable; urgency=medium
+
+  * include manual page for pve-firewall
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 27 Jun 2015 16:26:28 +0200
+
 pve-firewall (2.0-3) unstable; urgency=medium
 
   * use noawait trigers for pve-api-updates
