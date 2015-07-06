@@ -500,6 +500,7 @@ my $pve_fw_macros = {
 
 my $pve_fw_parsed_macros;
 my $pve_fw_macro_descr;
+my $pve_fw_macro_ipversion = {};
 my $pve_fw_preferred_macro_names = {};
 
 my $pve_std_chains = {};
@@ -749,14 +750,32 @@ sub init_firewall_macros {
 
     $pve_fw_parsed_macros = {};
 
-    foreach my $k (keys %$pve_fw_macros) {
+    my $parse = sub {
+	my ($k, $macro) = @_;
 	my $lc_name = lc($k);
-	my $macro = $pve_fw_macros->{$k};
-	if (!ref($macro->[0])) {
-	    $pve_fw_macro_descr->{$k} = shift @$macro;
+	$pve_fw_macro_ipversion->{$k} = 0;
+	while (!ref($macro->[0])) {
+	    my $desc = shift @$macro;
+	    if ($desc eq 'ipv4only') {
+		$pve_fw_macro_ipversion->{$k} = 4;
+	    } elsif ($desc eq 'ipv6only') {
+		$pve_fw_macro_ipversion->{$k} = 6;
+	    } else {
+		$pve_fw_macro_descr->{$k} = $desc;
+	    }
 	}
 	$pve_fw_preferred_macro_names->{$lc_name} = $k;
 	$pve_fw_parsed_macros->{$k} = $macro;
+    };
+
+    foreach my $k (keys %$pve_fw_macros) {
+	&$parse($k, $pve_fw_macros->{$k});
+    }
+
+    foreach my $k (keys %$pve_ipv6fw_macros) {
+	next if $pve_fw_parsed_macros->{$k};
+	&$parse($k, $pve_ipv6fw_macros->{$k});
+	$pve_fw_macro_ipversion->{$k} = 6;
     }
 }
 
@@ -1164,6 +1183,9 @@ my $apply_macro = sub {
     if ($ipversion && ($ipversion == 6) && $pve_ipv6fw_macros->{$macro_name}) {
 	$macro_rules = $pve_ipv6fw_macros->{$macro_name};
     }
+
+    # skip macros which are specific to another ipversion
+    return if ($ipversion//0) != ($pve_fw_macro_ipversion->{$macro_name}//0);
 
     my $rules = [];
 
