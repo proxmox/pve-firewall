@@ -135,6 +135,12 @@ my $pve_ipv6fw_macros = {
     'Ping' => [
 	{ action => 'PARAM', proto => 'icmpv6', dport => 'echo-request' },
     ],
+    'NeighborDiscovery' => [
+	"IPv6 neighbor solicitation, neighbor and router advertisement",
+	{ action => 'PARAM', proto => 'icmpv6', dport => 'router-advertisement' },
+	{ action => 'PARAM', proto => 'icmpv6', dport => 'neighbor-solicitation' },
+	{ action => 'PARAM', proto => 'icmpv6', dport => 'neighbor-advertisement' },
+    ],
     'Trcrt' => [
 	{ action => 'PARAM', proto => 'udp', dport => '33434:33524' },
 	{ action => 'PARAM', proto => 'icmpv6', dport => 'echo-request' },
