@@ -166,6 +166,11 @@ my $pve_fw_macros = {
 	{ action => 'PARAM', proto => 'tcp', dport => '6881:6999' },
 	{ action => 'PARAM', proto => 'udp', dport => '6881' },
     ],
+    'Ceph' => [
+        "Ceph Storage Cluster traffic (Ceph Monitors, OSD & MDS Deamons)",
+        { action => 'PARAM', proto => 'tcp', dport => '6789' },
+        { action => 'PARAM', proto => 'tcp', dport => '6800:7300' },
+    ],
     'CVS' => [
 	"Concurrent Versions System pserver traffic",
 	{ action => 'PARAM', proto => 'tcp', dport => '2401' },
