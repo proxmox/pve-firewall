@@ -1,3 +1,13 @@
+pve-firewall (2.0-5) unstable; urgency=medium
+
+  * add ipv6 neighbor discovery and solicitation macros
+
+  * ip6tables accepts both spellings of the word neighbor
+
+  * added Ceph macro
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 27 Jul 2015 13:20:55 +0200
+
 pve-firewall (2.0-4) unstable; urgency=medium
 
   * include manual page for pve-firewall
