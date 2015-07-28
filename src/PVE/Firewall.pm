@@ -899,14 +899,20 @@ sub local_network {
 
 	my $testip = Net::IP->new($ip);
 
-	my $routes = PVE::ProcFSTools::read_proc_net_route();
+	my $isv6 = $testip->version == 6;
+	my $routes = $isv6 ? PVE::ProcFSTools::read_proc_net_ipv6_route()
+	                   : PVE::ProcFSTools::read_proc_net_route();
 	foreach my $entry (@$routes) {
-	    my $mask = $ipv4_mask_hash_localnet->{$entry->{mask}};
-	    next if !defined($mask);
-	    return if $mask eq '0.0.0.0';
+	    my $mask;
+	    if ($isv6) {
+		$mask = $entry->{prefix};
+	    } else {
+		$mask = $ipv4_mask_hash_localnet->{$entry->{mask}};
+		next if !defined($mask);
+	    }
 	    my $cidr = "$entry->{dest}/$mask";
 	    my $testnet = Net::IP->new($cidr);
-	    if ($testnet->overlaps($testip)) {
+	    if ($testnet->overlaps($testip) == $Net::IP::IP_B_IN_A_OVERLAP) {
 		$__local_network = $cidr;
 		return;
 	    }
