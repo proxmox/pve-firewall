@@ -1197,7 +1197,9 @@ my $apply_macro = sub {
     }
 
     # skip macros which are specific to another ipversion
-    return if ($ipversion//0) != ($pve_fw_macro_ipversion->{$macro_name}//0);
+    if ($ipversion && (my $required = $pve_fw_macro_ipversion->{$macro_name})) {
+	return if $ipversion != $required;
+    }
 
     my $rules = [];
 
