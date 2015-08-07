@@ -37,6 +37,13 @@ eval {
     $have_pve_manager = 1;
 };
 
+my $have_lxc;
+eval {
+    require PVE::LXC;
+    $have_lxc = 1;
+};
+
+
 my $pve_fw_status_dir = "/var/lib/pve-firewall";
 
 mkdir $pve_fw_status_dir; # make sure this exists
@@ -1437,7 +1444,7 @@ sub rules_modify_permissions {
 	return {
 	    check => ['perm', '/', [ 'Sys.Modify' ]],
 	};
-    } elsif ($rule_env eq 'vm' ||   $rule_env eq 'ct') {
+    } elsif ($rule_env eq 'vm' || $rule_env eq 'ct') {
 	return {
 	    check => ['perm', '/vms/{vmid}', [ 'VM.Config.Network' ]],
 	}
@@ -1457,7 +1464,7 @@ sub rules_audit_permissions {
 	return {
 	    check => ['perm', '/', [ 'Sys.Audit' ]],
 	};
-    } elsif ($rule_env eq 'vm' ||   $rule_env eq 'ct') {
+    } elsif ($rule_env eq 'vm' || $rule_env eq 'ct') {
 	return {
 	    check => ['perm', '/vms/{vmid}', [ 'VM.Audit' ]],
 	}
@@ -2688,8 +2695,9 @@ sub read_local_vm_config {
 
     my $openvz = {};
     my $qemu = {};
+    my $lxc = {};
 
-    my $vmdata = { openvz => $openvz, qemu => $qemu };
+    my $vmdata = { openvz => $openvz, qemu => $qemu, lxc => $lxc };
 
     my $vmlist = PVE::Cluster::get_vmlist();
     return $vmdata if !$vmlist || !$vmlist->{ids};
@@ -2714,7 +2722,14 @@ sub read_local_vm_config {
 		    $qemu->{$vmid} = $conf;
 		}
 	    }
-	}
+        } elsif ($d->{type} eq 'lxc') {
+            if ($have_lxc) {
+                my $cfspath = PVE::LXC::cfs_config_path($vmid);
+                if (my $conf = PVE::Cluster::cfs_read_file($cfspath)) {
+                    $lxc->{$vmid} = $conf;
+                }
+            }
+        }
     }
 
     return $vmdata;
@@ -2879,6 +2894,11 @@ sub read_vm_firewall_configs {
 	my $vmfw_conf = load_vmfw_conf($cluster_conf, 'ct', $vmid, $dir, $verbose);
 	next if !$vmfw_conf->{options}; # skip if file does not exists
 	$vmfw_configs->{$vmid} = $vmfw_conf;
+    }
+    foreach my $vmid (keys %{$vmdata->{lxc}}) {
+        my $vmfw_conf = load_vmfw_conf($cluster_conf, 'ct', $vmid, $dir, $verbose);
+        next if !$vmfw_conf->{options}; # skip if file does not exists
+        $vmfw_configs->{$vmid} = $vmfw_conf;
     }
 
     return $vmfw_configs;
@@ -3213,6 +3233,32 @@ sub compile_iptables_filter {
 	    }
 	};
 	warn $@ if $@; # just to be sure - should not happen
+    }
+
+    # generate firewall rules for LXC containers
+    foreach my $vmid (keys %{$vmdata->{lxc}}) {
+        eval {
+            my $conf = $vmdata->{lxc}->{$vmid};
+            my $vmfw_conf = $vmfw_configs->{$vmid};
+            return if !$vmfw_conf;
+
+            generate_ipset_chains($ipset_ruleset, $cluster_conf, $vmfw_conf);
+
+            if ($vmfw_conf->{options}->{enable}) {
+		foreach my $netid (keys %$conf) {
+                    next if $netid !~ m/^net(\d+)$/;
+                    my $net = PVE::LXC::parse_lxc_network($conf->{$netid});
+                    next if !$net->{firewall};
+                    my $iface = "veth${vmid}i$1";
+		    my $macaddr = $net->{hwaddr};
+                    generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
+                                                 $vmfw_conf, $vmid, 'IN', $ipversion);
+                    generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
+                                                 $vmfw_conf, $vmid, 'OUT', $ipversion);
+		}
+            }
+        };
+        warn $@ if $@; # just to be sure - should not happen
     }
 
     # generate firewall rules for OpenVZ containers
