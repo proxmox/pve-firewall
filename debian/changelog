@@ -1,3 +1,14 @@
+pve-firewall (2.0-8) unstable; urgency=medium
+
+  * adopt regresion tests for lxc containers
+
+  * removed firewall code for openVZ
+
+  *  Subroutine verify_rule fixed to correctly check only for "net\d+"
+  interface device names
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 12 Aug 2015 12:01:43 +0200
+
 pve-firewall (2.0-7) unstable; urgency=medium
 
   * added firewall code for lxc
