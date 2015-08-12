@@ -118,12 +118,12 @@ my $vmdata = {
 	    net0 => "e1000=0E:0B:38:B8:B4:21,bridge=vmbr1,firewall=1",
 	},
     },
-    openvz => {
+    lxc => {
 	200 => {
-	    ip_address => { value => '10.0.200.1' },
+	    net0 => "name=eth0,hwaddr=0E:18:24:41:2C:43,bridge=vmbr0,firewall=1,ip=10.0.200.1/24",
 	},
 	201 => {
-	    ip_address => { value => '10.0.200.2' },
+	    net0 => "name=eth0,hwaddr=0E:18:24:41:2C:44,bridge=vmbr0,firewall=1,ip=10.0.200.2/24",
 	},
     },
 };

@@ -6,6 +6,8 @@ use Data::Dumper;
 use PVE::Firewall;
 use File::Basename;
 use Net::IP;
+use PVE::LXC;
+use PVE::QemuServer;
 
 my $mark;
 my $trace;
@@ -346,50 +348,11 @@ sub route_packet {
 		$pkg->{iface_out} = $target->{bridge} || die 'internal error';
 		$chain = 'PVEFW-OUTPUT';
 		$next_route_state = $target->{iface} || die 'internal error';
-	    } elsif ($target->{type} eq 'ct') {
-		$pkg->{iface_in} = 'lo';
-		$pkg->{iface_out} = 'venet0';
-		$chain = 'PVEFW-OUTPUT';
-		$next_route_state = 'venet-in';
-	    } elsif ($target->{type} eq 'vm') {
+	    } elsif ($target->{type} eq 'vm' || $target->{type} eq 'ct') {
 		$pkg->{iface_in} = 'lo';
 		$pkg->{iface_out} = $target->{bridge} || die 'internal error';
 		$chain = 'PVEFW-OUTPUT';
 		$next_route_state = 'fwbr-in';
-	    } else {
-		die "implement me";
-	    }
-
-	} elsif ($route_state eq 'venet-out') {
-
-	    if ($target->{type} eq 'host') {
-
-		$chain = 'PVEFW-INPUT';
-		$pkg->{iface_in} = 'venet0';
-		$pkg->{iface_out} = 'lo';
-		$next_route_state = 'host';
-
-	    } elsif ($target->{type} eq 'bport') {
-		
-		$chain = 'PVEFW-FORWARD';
-		$pkg->{iface_in} = 'venet0';
-		$pkg->{iface_out} = $target->{bridge} || die 'internal error';
-		$next_route_state = $target->{iface} || die 'internal error';
-
-	    } elsif ($target->{type} eq 'vm') {
-
-		$chain = 'PVEFW-FORWARD';
-		$pkg->{iface_in} = 'venet0';
-		$pkg->{iface_out} = $target->{bridge} || die 'internal error';
-		$next_route_state = 'fwbr-in';
-
-	    } elsif ($target->{type} eq 'ct') {
-
-		$chain = 'PVEFW-FORWARD';
-		$pkg->{iface_in} = 'venet0';
-		$pkg->{iface_out} = 'venet0';
-		$next_route_state = 'venet-in';
-
 	    } else {
 		die "implement me";
 	    }
@@ -436,14 +399,7 @@ sub route_packet {
 		}
 		$next_route_state = $target->{iface};
 
-	    } elsif ($target->{type} eq 'ct') {
-
-		$chain = 'PVEFW-FORWARD';
-		$pkg->{iface_in} = $route_state;
-		$pkg->{iface_out} = 'venet0';
-		$next_route_state = 'venet-in';
-
-	    } elsif ($target->{type} eq 'vm') {
+	    } elsif ($target->{type} eq 'vm' || $target->{type} eq 'ct') {
 
 		$chain = 'PVEFW-FORWARD';
 		$pkg->{iface_in} = $route_state;
@@ -482,16 +438,20 @@ sub route_packet {
 }
 
 sub extract_ct_info {
-    my ($vmdata, $vmid) = @_;
+    my ($vmdata, $vmid, $netnum) = @_;
 
     my $info = { type => 'ct', vmid => $vmid };
 
-    my $conf = $vmdata->{openvz}->{$vmid} || die "no such CT '$vmid'";
-    if ($conf->{ip_address}) {
-	$info->{ip_address} = $conf->{ip_address}->{value};
-    } else {
-	die "implement me";
-    }
+    my $conf = $vmdata->{lxc}->{$vmid} || die "no such CT '$vmid'";
+    my $net = PVE::LXC::parse_lxc_network($conf->{"net$netnum"});
+    $info->{macaddr} = $net->{hwaddr} || die "unable to get mac address";
+    $info->{bridge} = $net->{bridge} || die "unable to get bridge";
+    $info->{fwbr} = "fwbr${vmid}i$netnum";
+    $info->{tapdev} = "veth${vmid}i$netnum";
+    $info->{fwln} = "fwln${vmid}i$netnum";
+    $info->{fwpr} = "fwpr${vmid}p$netnum";
+    $info->{ip_address} = $net->{ip} || die "unable to get ip address";
+
     return $info;
 }
 
@@ -567,13 +527,9 @@ sub simulate_firewall {
 	$start_state = 'from-bport';
     } elsif ($from =~ m/^ct(\d+)$/) {
 	my $vmid = $1;
-	$from_info = extract_ct_info($vmdata, $vmid);
-	if ($from_info->{ip_address}) {
-	    $pkg->{source} = $from_info->{ip_address} if !defined($pkg->{source});
-	    $start_state = 'venet-out';
-	} else {
-	    die "implement me";
-	}
+	$from_info = extract_ct_info($vmdata, $vmid, 0);
+	$start_state = 'fwbr-out'; 
+	$pkg->{mac_source} = $from_info->{macaddr};
     } elsif ($from =~ m/^vm(\d+)(i(\d))?$/) {
 	my $vmid = $1;
 	my $netnum = $3 || 0;
@@ -604,14 +560,8 @@ sub simulate_firewall {
 	$target->{iface} = 'tapXYZ';
     } elsif ($to =~ m/^ct(\d+)$/) {
 	my $vmid = $1;
-	$target = extract_ct_info($vmdata, $vmid);
-	$target->{iface} = 'venet-in';
-
-	if ($target->{ip_address}) {
-	    $pkg->{dest} = $target->{ip_address};
-	} else {
-	    die "implement me";
-	}
+	$target = extract_ct_info($vmdata, $vmid, 0);
+	$target->{iface} = $target->{tapdev};
    } elsif ($to =~ m/^vm(\d+)$/) {
 	my $vmid = $1;
 	$target = extract_vm_info($vmdata, $vmid, 0);
