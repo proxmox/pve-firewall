@@ -2819,6 +2819,14 @@ sub save_vmfw_conf {
     PVE::Tools::file_set_contents($filename, $raw);
 }
 
+sub remove_vmfw_conf {
+    my ($vmid) = @_;
+
+    my $vmfw_conffile = "$pvefw_conf_dir/$vmid.fw";
+
+    unlink $vmfw_conffile;
+}
+
 sub read_vm_firewall_configs {
     my ($cluster_conf, $vmdata, $dir, $verbose) = @_;
 
