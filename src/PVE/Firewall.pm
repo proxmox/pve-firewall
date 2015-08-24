@@ -2827,6 +2827,21 @@ sub remove_vmfw_conf {
     unlink $vmfw_conffile;
 }
 
+sub clone_vmfw_conf {
+    my ($vmid, $newid) = @_;
+
+    my $sourcevm_conffile = "$pvefw_conf_dir/$vmid.fw";
+    my $clonevm_conffile = "$pvefw_conf_dir/$newid.fw";
+
+    if (-f $clonevm_conffile) {
+	unlink $clonevm_conffile;
+    }
+    if (-f $sourcevm_conffile) {
+	my $data = PVE::Tools::file_get_contents($sourcevm_conffile);
+	PVE::Tools::file_set_contents($clonevm_conffile, $data);
+    }
+}
+
 sub read_vm_firewall_configs {
     my ($cluster_conf, $vmdata, $dir, $verbose) = @_;
 
