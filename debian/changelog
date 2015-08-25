@@ -1,3 +1,9 @@
+pve-firewall (2.0-10) unstable; urgency=medium
+
+  * new helper: clone_vmfw_conf() 
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 25 Aug 2015 06:47:49 +0200
+
 pve-firewall (2.0-9) unstable; urgency=medium
 
   * remove firewall config file subroutine added
