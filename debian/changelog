@@ -1,3 +1,9 @@
+pve-firewall (2.0-11) unstable; urgency=medium
+
+  * iptables_get_chains: fix veth device name
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 08 Sep 2015 07:54:35 +0200
+
 pve-firewall (2.0-10) unstable; urgency=medium
 
   * new helper: clone_vmfw_conf() 
