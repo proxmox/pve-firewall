@@ -1515,7 +1515,7 @@ sub iptables_get_chains {
 
 	return 1 if $name =~ m/^tap\d+i\d+-(:?IN|OUT)$/;
 
-	return 1 if $name =~ m/^veth\d+.\d+-(:?IN|OUT)$/; # fixme: dev name is configurable
+	return 1 if $name =~ m/^veth\d+i\d+-(:?IN|OUT)$/;
 
 	return 1 if $name =~ m/^fwbr\d+(v\d+)?-(:?FW|IN|OUT|IPS)$/;
 	return 1 if $name =~ m/^GROUP-(:?[^\s\-]+)-(:?IN|OUT)$/;
