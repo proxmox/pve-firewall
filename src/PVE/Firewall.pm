@@ -592,7 +592,7 @@ $pve_std_chains->{4} = {
     'PVEFW-smurfs' => [
 	# same as shorewall smurfs action
 	# Filter packets for smurfs (packets with a broadcast address as the source).
-	"-s 0.0.0.0/32 -j RETURN",
+	"-s 0.0.0.0/32 -j RETURN", # allow DHCP
 	"-m addrtype --src-type BROADCAST -g PVEFW-smurflog",
 	"-s 224.0.0.0/4 -g PVEFW-smurflog",
     ],
