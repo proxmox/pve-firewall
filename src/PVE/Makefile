@@ -16,4 +16,4 @@ install:
 clean:
 	rm -rf *~
 	make -C API2 clean
-	make -C Service install
+	make -C Service clean
