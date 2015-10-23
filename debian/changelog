@@ -1,3 +1,9 @@
+pve-firewall (2.0-13) unstable; urgency=medium
+
+  * allow numeric icmp types
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 23 Oct 2015 13:21:53 +0200
+
 pve-firewall (2.0-12) unstable; urgency=medium
 
   * implement bash completions
