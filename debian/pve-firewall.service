@@ -2,7 +2,7 @@
 Description=Proxmox VE firewall
 ConditionPathExists=/usr/sbin/pve-firewall
 Wants=pve-cluster.service pvefw-logger.service
-After=pvefw-logger.service pve-cluster.service network.target stemd-modules-load.service
+After=pvefw-logger.service pve-cluster.service network.target systemd-modules-load.service
 DefaultDependencies=no
 Before=shutdown.target
 Conflicts=shutdown.target
