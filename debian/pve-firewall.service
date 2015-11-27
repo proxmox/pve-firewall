@@ -15,4 +15,4 @@ PIDFile=/var/run/pve-firewall.pid
 Type=forking
 
 [Install]
-WantedBy=network-online.target
+WantedBy=multi-user.target
