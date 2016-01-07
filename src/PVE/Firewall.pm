@@ -1518,7 +1518,7 @@ sub iptables_get_chains {
 	return 1 if $name =~ m/^veth\d+i\d+-(?:IN|OUT)$/;
 
 	return 1 if $name =~ m/^fwbr\d+(v\d+)?-(?:FW|IN|OUT|IPS)$/;
-	return 1 if $name =~ m/^GROUP-(?:[^\s\-]+)-(?:IN|OUT)$/;
+	return 1 if $name =~ m/^GROUP-(?:$security_group_name_pattern)-(?:IN|OUT)$/;
 
 	return undef;
     };
