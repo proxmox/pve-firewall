@@ -1,3 +1,11 @@
+pve-firewall (2.0-15) unstable; urgency=medium
+
+  * fix bug #859: use $security_group_name_pattern in iptables_get_chains
+
+  * fix some regular expressions mixups
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 07 Jan 2016 16:33:23 +0100
+
 pve-firewall (2.0-14) unstable; urgency=medium
 
   * fix systemd service dependencies
