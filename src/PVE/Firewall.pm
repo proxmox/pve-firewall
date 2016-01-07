@@ -1513,12 +1513,12 @@ sub iptables_get_chains {
 
 	return 1 if $name =~ m/^PVEFW-\S+$/;
 
-	return 1 if $name =~ m/^tap\d+i\d+-(:?IN|OUT)$/;
+	return 1 if $name =~ m/^tap\d+i\d+-(?:IN|OUT)$/;
 
-	return 1 if $name =~ m/^veth\d+i\d+-(:?IN|OUT)$/;
+	return 1 if $name =~ m/^veth\d+i\d+-(?:IN|OUT)$/;
 
-	return 1 if $name =~ m/^fwbr\d+(v\d+)?-(:?FW|IN|OUT|IPS)$/;
-	return 1 if $name =~ m/^GROUP-(:?[^\s\-]+)-(:?IN|OUT)$/;
+	return 1 if $name =~ m/^fwbr\d+(v\d+)?-(?:FW|IN|OUT|IPS)$/;
+	return 1 if $name =~ m/^GROUP-(?:[^\s\-]+)-(?:IN|OUT)$/;
 
 	return undef;
     };
