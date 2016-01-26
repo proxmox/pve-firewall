@@ -1904,15 +1904,28 @@ sub ruleset_create_vm_chain {
     my $accept = generate_nfqueue($options);
 
     if (!(defined($options->{dhcp}) && $options->{dhcp} == 0)) {
-	if ($direction eq 'OUT') {
-	    ruleset_generate_rule($ruleset, $chain, $ipversion, 
-				  { action => 'PVEFW-SET-ACCEPT-MARK',
-				    proto => 'udp', sport => 68, dport => 67 });
-	} else {
-	    ruleset_generate_rule($ruleset, $chain, $ipversion,
-				  { action => 'ACCEPT',
-				    proto => 'udp', sport => 67, dport => 68 });
+	if ($ipversion == 4) {
+	    if ($direction eq 'OUT') {
+		ruleset_generate_rule($ruleset, $chain, $ipversion, 
+				      { action => 'PVEFW-SET-ACCEPT-MARK',
+					proto => 'udp', sport => 68, dport => 67 });
+	    } else {
+		ruleset_generate_rule($ruleset, $chain, $ipversion,
+				      { action => 'ACCEPT',
+					proto => 'udp', sport => 67, dport => 68 });
+	    }
+	} elsif ($ipversion == 6) {
+	    if ($direction eq 'OUT') {
+		ruleset_generate_rule($ruleset, $chain, $ipversion,
+				      { action => 'PVEFW-SET-ACCEPT-MARK',
+					proto => 'udp', sport => 546, dport => 547 });
+	    } else {
+		ruleset_generate_rule($ruleset, $chain, $ipversion,
+				      { action => 'ACCEPT',
+					proto => 'udp', sport => 547, dport => 546 });
+	    }
 	}
+
     }
 
     if ($direction eq 'OUT') {
