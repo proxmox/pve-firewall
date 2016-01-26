@@ -319,6 +319,37 @@ print_sctp(struct log_entry *le, struct sctphdr *h, int payload_len)
 }
 
 static int
+print_ipproto(struct log_entry *le, char * nexthdr, int payload_len, u_int8_t proto)
+{
+    switch (proto) {
+    case IPPROTO_TCP:
+        print_tcp(le, (struct tcphdr *)nexthdr, payload_len);
+        break;
+    case IPPROTO_UDP:
+        print_udp(le, (struct udphdr *)nexthdr, payload_len);
+        break;
+    case IPPROTO_ICMP:
+        print_icmp(le, (struct icmphdr *)nexthdr, payload_len);
+        break;
+    case IPPROTO_SCTP:
+        print_sctp(le, (struct sctphdr *)nexthdr, payload_len);
+        break;
+    case IPPROTO_AH:
+        LEPRINTF("PROTO=AH ");
+        break;
+    case IPPROTO_ESP:
+        LEPRINTF("PROTO=ESP ");
+        break;
+    case IPPROTO_IGMP:
+        LEPRINTF("PROTO=IGMP ");
+        break;
+     default:
+        return -1;
+    }
+    return 0;
+}
+
+static int
 print_iphdr(struct log_entry *le, char * payload, int payload_len)
 {
     if (payload_len < sizeof(struct iphdr)) {
@@ -355,29 +386,7 @@ print_iphdr(struct log_entry *le, char * payload, int payload_len)
     void *nexthdr = (u_int32_t *)h + h->ihl;
     payload_len -= h->ihl * 4;
 
-    switch (h->protocol) {
-    case IPPROTO_TCP:
-        print_tcp(le, (struct tcphdr *)nexthdr, payload_len);
-        break;
-    case IPPROTO_UDP:
-        print_udp(le, (struct udphdr *)nexthdr, payload_len);
-        break;
-    case IPPROTO_ICMP:
-        print_icmp(le, (struct icmphdr *)nexthdr, payload_len);
-        break;
-    case IPPROTO_SCTP:
-        print_sctp(le, (struct sctphdr *)nexthdr, payload_len);
-        break;
-    case IPPROTO_AH:
-        LEPRINTF("PROTO=AH ");
-        break;
-    case IPPROTO_ESP:
-        LEPRINTF("PROTO=ESP ");
-        break;
-    case IPPROTO_IGMP:
-        LEPRINTF("PROTO=IGMP ");
-        break;
-     default:
+    if (print_ipproto(le, nexthdr, payload_len, h->protocol) < 0) {
         LEPRINTF("PROTO=%u ", h->protocol);
     }
 
