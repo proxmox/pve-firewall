@@ -42,6 +42,8 @@
 #include <libnetfilter_log/libnetfilter_log.h>
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
+#include <netinet/ip6.h>
+#include <netinet/icmp6.h>
 #include <netinet/udp.h>
 #include <netinet/tcp.h>
 #include <netinet/if_ether.h>
@@ -394,11 +396,262 @@ print_iphdr(struct log_entry *le, char * payload, int payload_len)
 }
 
 static int
-print_ip6hdr(struct log_entry *le, char * payload, int payload_len)
+print_routing(struct log_entry *le, struct ip6_rthdr *rthdr, int payload_len)
 {
-    LEPRINTF("IPV6 logging not implemented ");
+    char tmp[INET6_ADDRSTRLEN];
+    LEPRINTF("TYPE=%u SEGMENTS=%u", rthdr->ip6r_type, rthdr->ip6r_segleft);
+
+    if (payload_len < sizeof(*rthdr) || payload_len < rthdr->ip6r_len*8) {
+        LEPRINTF("LEN=%d ", payload_len);
+        LEPRINTF("INVALID=LEN ");
+        return -1;
+    }
+
+    if (rthdr->ip6r_type == 0) {
+        /* Route via waypoints (deprecated), this contains a list of waypoints
+         * to visit. (RFC2460 (4.4))
+         */
+        unsigned i;
+        struct ip6_rthdr0 *h = (struct ip6_rthdr0*)rthdr;
+        if (rthdr->ip6r_len*8 < sizeof(*h) + rthdr->ip6r_segleft * sizeof(struct in6_addr)) {
+            LEPRINTF("INVALID=SEGMENTS ");
+            return 0;
+        }
+        return 0;
+    } else if (rthdr->ip6r_type == 1) {
+        /* nimrod routing (RFC1992) */
+        return 0;
+    } else if (rthdr->ip6r_type == 2) {
+        /* RFC3375 (6.4), the layout is like type-0 but with exactly 1 address */
+        struct ip6_rthdr0 *h = (struct ip6_rthdr0*)rthdr;
+        if (rthdr->ip6r_len*8 < sizeof(*h) + sizeof(struct in6_addr)) {
+            LEPRINTF("LEN=%d ", payload_len);
+            LEPRINTF("INVALID=LEN ");
+            return -1;
+        }
+        inet_ntop(AF_INET6, &h->ip6r0_addr[0], tmp, sizeof(tmp));
+        LEPRINTF("HOME=%s ", tmp);
+        return 0;
+    }
 
     return 0;
+}
+
+static int
+print_fragment(struct log_entry *le, struct ip6_frag *frag, int payload_len)
+{
+    u_int16_t offlg;
+
+    if (payload_len < sizeof(*frag)) {
+        LEPRINTF("LEN=%d ", payload_len);
+        LEPRINTF("INVALID=LEN ");
+        return -1;
+    }
+
+    offlg = ntohs(frag->ip6f_offlg);
+    LEPRINTF("FRAG=%d ID=%d ", (offlg&0x2FFF), ntohl(frag->ip6f_ident));
+    if (offlg>>15) {
+        LEPRINTF("MF ");
+    }
+    return 0;
+}
+
+static int
+print_icmp6(struct log_entry *le, struct icmp6_hdr *h, int payload_len)
+{
+    struct nd_router_advert *ra;
+    struct nd_neighbor_advert *na;
+    struct nd_redirect *re;
+    char tmp[INET6_ADDRSTRLEN];
+
+    if (payload_len < sizeof(struct icmp6_hdr)) {
+        LEPRINTF("LEN=%d ", payload_len);
+        LEPRINTF("INVALID=LEN ");
+        return -1;
+    }
+
+    LEPRINTF("TYPE=%u CODE=%u ", h->icmp6_type, h->icmp6_code);
+
+    switch (h->icmp6_type) {
+    case ICMP6_ECHO_REQUEST:
+    case ICMP6_ECHO_REPLY:
+        LEPRINTF("ID=%u SEQ=%u ", ntohs(h->icmp6_id), ntohs(h->icmp6_seq));
+        break;
+
+    case ND_ROUTER_SOLICIT:
+        /* can be followed by options, otherwise nothing to print */
+        break;
+
+    case ND_ROUTER_ADVERT:
+        ra = (struct nd_router_advert*)h;
+        LEPRINTF("HOPLIMIT=%d ", ra->nd_ra_curhoplimit);
+        /* nd_ra_flags_reserved is only 8 bit, so no swapping here as
+         * opposed to the neighbor advertisement flags (see below).
+         */
+        LEPRINTF("RA=%02x LIFETIME=%d REACHABLE=%d RETRANSMIT=%d ",
+                 ra->nd_ra_flags_reserved,
+                 ntohs(ra->nd_ra_router_lifetime),
+                 ntohl(ra->nd_ra_reachable),
+                 ntohl(ra->nd_ra_retransmit));
+        /* can be followed by options */
+        break;
+
+    case ND_NEIGHBOR_SOLICIT:
+        /* can be followed by options */
+        break;
+
+    case ND_NEIGHBOR_ADVERT:
+        na = (struct nd_neighbor_advert*)h;
+        LEPRINTF("NA=%08x ", ntohl(na->nd_na_flags_reserved));
+        /* can be followed by options */
+        break;
+
+    case ND_REDIRECT:
+        re = (struct nd_redirect*)h;
+        inet_ntop(AF_INET6, &re->nd_rd_target, tmp, sizeof(tmp));
+        LEPRINTF("TARGET=%s ", tmp);
+        inet_ntop(AF_INET6, &re->nd_rd_dst, tmp, sizeof(tmp));
+        LEPRINTF("GATEWAY=%s ", tmp);
+        /* can be followed by options */
+        break;
+
+    case ICMP6_DST_UNREACH:
+        /* CODE shows the type, no extra parameters available in ipv6 */
+        break;
+
+    case ICMP6_PACKET_TOO_BIG:
+        LEPRINTF("MTU=%u ", ntohl(h->icmp6_mtu));
+        break;
+
+    case ICMP6_TIME_EXCEEDED:
+        /* CODE shows the type (0 = hop limit, 1 = reassembly timed out) */
+        break;
+
+    case ICMP6_PARAM_PROB:
+        switch (ntohl(h->icmp6_pptr)) {
+        case ICMP6_PARAMPROB_HEADER:
+            LEPRINTF("PARAMETER=HEADER "); /* erroneous header */
+            break;
+        case ICMP6_PARAMPROB_NEXTHEADER:
+            LEPRINTF("PARAMETER=NEXTHEADER "); /* bad next-header field */
+            break;
+        case ICMP6_PARAMPROB_OPTION:
+            LEPRINTF("PARAMETER=OPTION "); /* bad ipv6 option (hop/dst header?) */
+            break;
+        default:
+            LEPRINTF("PARAMETER=%u ", ntohl(h->icmp6_pptr)); /* unknown */
+            break;
+        }
+        break;
+    }
+
+    return 0;
+}
+
+static int
+check_ip6ext(struct log_entry *le, struct ip6_ext *exthdr, int payload_len)
+{
+    if (payload_len < sizeof(*exthdr) ||
+        payload_len < exthdr->ip6e_len)
+    {
+        LEPRINTF("LEN=%d ", payload_len);
+        LEPRINTF("INVALID=LEN ");
+        return -1;
+    }
+    return 0;
+}
+
+static int
+print_nexthdr(struct log_entry *le, char *hdr, int payload_len, u_int8_t proto)
+{
+    while (1) {
+        if (print_ipproto(le, hdr, payload_len, proto) == 0)
+            return 0;
+
+        struct ip6_ext *exthdr = (struct ip6_ext*)hdr;
+
+        switch (proto) {
+        /* protocols (these return) */
+        case IPPROTO_ICMPV6:
+            LEPRINTF("PROTO=ICMPV6 ");
+            if (check_ip6ext(le, exthdr, payload_len) < 0)
+                return -1;
+            if (print_icmp6(le, (struct icmp6_hdr*)(hdr + exthdr->ip6e_len),
+                            payload_len - exthdr->ip6e_len) < 0)
+            {
+                return -1;
+            }
+            return 0;
+
+        /* extension headers (these break to keep iterating) */
+        case IPPROTO_ROUTING:
+            if (check_ip6ext(le, exthdr, payload_len) < 0)
+                return -1;
+            if (print_routing(le, (struct ip6_rthdr*)hdr, payload_len) < 0)
+                return -1;
+            break;
+        case IPPROTO_FRAGMENT:
+            if (check_ip6ext(le, exthdr, payload_len) < 0)
+                return -1;
+            if (print_fragment(le, (struct ip6_frag*)hdr, payload_len) < 0)
+                return -1;
+            break;
+        case IPPROTO_HOPOPTS:
+            LEPRINTF("NEXTHDR=HOPOPTS ");
+            if (check_ip6ext(le, exthdr, payload_len) < 0)
+                return -1;
+            /* do we want to print these? */
+            break;
+        case IPPROTO_DSTOPTS:
+            LEPRINTF("NEXTHDR=DSTOPTS ");
+            if (check_ip6ext(le, exthdr, payload_len) < 0)
+                return -1;
+            /* do we want to print these? */
+            break;
+        case IPPROTO_MH:
+            LEPRINTF("NEXTHDR=MH ");
+            if (check_ip6ext(le, exthdr, payload_len) < 0)
+                return -1;
+            break;
+
+        /* unknown protocol */
+        default:
+            LEPRINTF("PROTO=%u ", proto);
+            return 0; /* bail */
+        }
+        /* next header: */
+        if (check_ip6ext(le, exthdr, payload_len) < 0)
+            return -1;
+        hdr += exthdr->ip6e_len;
+        payload_len -= exthdr->ip6e_len;
+    }
+}
+
+static int
+print_ip6hdr(struct log_entry *le, char * payload, int payload_len)
+{
+    if (payload_len < sizeof(struct ip6_hdr)) {
+        LEPRINTF("LEN=%d ", payload_len);
+        LEPRINTF("INVALID=LEN ");
+        return -1;
+    }
+
+    struct ip6_hdr *h = (struct ip6_hdr*)payload;
+
+    char tmp[INET6_ADDRSTRLEN];
+    inet_ntop(AF_INET6, &h->ip6_src, tmp, sizeof(tmp));
+    LEPRINTF("SRC=%s ", tmp);
+    inet_ntop(AF_INET6, &h->ip6_dst, tmp, sizeof(tmp));
+    LEPRINTF("DST=%s ", tmp);
+
+    LEPRINTF("LEN=%u ", ntohs(h->ip6_plen));
+
+    u_int32_t flow = ntohl(h->ip6_flow);
+    LEPRINTF("TC=%d FLOWLBL=%d ", (flow>>20)&0xFF, flow&0xFFFFF);
+
+    LEPRINTF("HOPLIMIT=%d ", h->ip6_hlim);
+
+    return print_nexthdr(le, (char *)(h+1), payload_len - sizeof(*h), h->ip6_nxt);
 }
 
 // ebtables -I FORWARD --nflog --nflog-group 0
