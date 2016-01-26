@@ -175,8 +175,17 @@ queue_log_entry(struct log_entry *le)
 }
 
 
-#define LEPRINTF(format, ...) { if (le->len < LE_MAX) le->len += snprintf(le->buf + le->len, LE_MAX - le->len, format, ##__VA_ARGS__); }
-#define LEPRINTTIME(sec) { time_t tmp_sec = sec; if (le->len < (LE_MAX - 30)) le->len += strftime(le->buf + le->len, LE_MAX - le->len, "%d/%b/%Y:%H:%M:%S %z ", localtime(&tmp_sec)); }
+#define LEPRINTF(format, ...) \
+    do { \
+        if (le->len < LE_MAX) \
+            le->len += snprintf(le->buf + le->len, LE_MAX - le->len, format, ##__VA_ARGS__); \
+    } while (0)
+#define LEPRINTTIME(sec) \
+    do { \
+        time_t tmp_sec = sec; \
+        if (le->len < (LE_MAX - 30)) \
+            le->len += strftime(le->buf + le->len, LE_MAX - le->len, "%d/%b/%Y:%H:%M:%S %z ", localtime(&tmp_sec)); \
+    } while (0)
 
 static void
 log_status_message(guint loglevel, const char *fmt, ...)
