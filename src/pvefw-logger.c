@@ -411,7 +411,6 @@ print_routing(struct log_entry *le, struct ip6_rthdr *rthdr, int payload_len)
         /* Route via waypoints (deprecated), this contains a list of waypoints
          * to visit. (RFC2460 (4.4))
          */
-        unsigned i;
         struct ip6_rthdr0 *h = (struct ip6_rthdr0*)rthdr;
         if (rthdr->ip6r_len*8 < sizeof(*h) + rthdr->ip6r_segleft * sizeof(struct in6_addr)) {
             LEPRINTF("INVALID=SEGMENTS ");
