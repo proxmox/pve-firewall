@@ -1,3 +1,9 @@
+pve-firewall (2.0-17) unstable; urgency=medium
+
+  * Don't leave empty FW config files behind
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 08 Feb 2016 14:09:24 +0100
+
 pve-firewall (2.0-16) unstable; urgency=medium
 
   * logger: basic ipv6 support
