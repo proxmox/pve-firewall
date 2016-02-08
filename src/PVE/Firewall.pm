@@ -2831,10 +2831,13 @@ sub save_vmfw_conf {
 	$raw .= "\n";
     }
 
-    mkdir $pvefw_conf_dir;
-
     my $filename = "$pvefw_conf_dir/$vmid.fw";
-    PVE::Tools::file_set_contents($filename, $raw);
+    if ($raw) {
+	mkdir $pvefw_conf_dir;
+	PVE::Tools::file_set_contents($filename, $raw);
+    } else {
+	unlink $filename;
+    }
 }
 
 sub remove_vmfw_conf {
@@ -3056,8 +3059,12 @@ sub save_clusterfw_conf {
 	}
     }
 
-    mkdir $pvefw_conf_dir;
-    PVE::Tools::file_set_contents($clusterfw_conf_filename, $raw);
+    if ($raw) {
+	mkdir $pvefw_conf_dir;
+	PVE::Tools::file_set_contents($clusterfw_conf_filename, $raw);
+    } else {
+	unlink $clusterfw_conf_filename;
+    }
 }
 
 sub load_hostfw_conf {
@@ -3087,7 +3094,11 @@ sub save_hostfw_conf {
 	$raw .= "\n";
     }
 
-    PVE::Tools::file_set_contents($hostfw_conf_filename, $raw);
+    if ($raw) {
+	PVE::Tools::file_set_contents($hostfw_conf_filename, $raw);
+    } else {
+	unlink $hostfw_conf_filename;
+    }
 }
 
 sub compile {
