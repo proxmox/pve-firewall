@@ -1,3 +1,13 @@
+pve-firewall (1.0-22) unstable; urgency=low
+
+  * allow numeric icmp types
+  
+  * add DHCPv6 macro
+  
+  * ipv6 neighbor discovery and solicitation macros
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 16 Feb 2016 11:28:40 +0100
+
 pve-firewall (1.0-21) unstable; urgency=low
 
   * allow admins to delete security groups
