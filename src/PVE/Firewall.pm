@@ -744,7 +744,9 @@ my $icmpv6_type_names = {
     'echo-reply' => 1,
     'router-solicitation' => 1,
     'router-advertisement' => 1,
+    'neighbor-solicitation' => 1,
     'neighbour-solicitation' => 1,
+    'neighbor-advertisement' => 1,
     'neighbour-advertisement' => 1,
     'redirect' => 1,
 };
