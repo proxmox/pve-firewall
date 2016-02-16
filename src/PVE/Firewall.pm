@@ -143,6 +143,9 @@ my $pve_ipv6fw_macros = {
 	{ action => 'PARAM', proto => 'icmpv6', dport => 'neighbor-solicitation' },
 	{ action => 'PARAM', proto => 'icmpv6', dport => 'neighbor-advertisement' },
     ],
+    'DHCPv6' => [
+	{ action => 'PARAM', proto => 'udp', dport => '546:547', sport => '546:547' },
+    ],
     'Trcrt' => [
 	{ action => 'PARAM', proto => 'udp', dport => '33434:33524' },
 	{ action => 'PARAM', proto => 'icmpv6', dport => 'echo-request' },
