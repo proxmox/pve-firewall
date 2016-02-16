@@ -5,6 +5,8 @@ pve-firewall (1.0-22) unstable; urgency=low
   * add DHCPv6 macro
   
   * ipv6 neighbor discovery and solicitation macros
+  
+  * Add ipv6 macros to the macro list
 
  -- Proxmox Support Team <support@proxmox.com>  Tue, 16 Feb 2016 11:28:40 +0100
 
