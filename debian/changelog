@@ -1,3 +1,11 @@
+pve-firewall (1.0-23) unstable; urgency=low
+
+  * Add ndp option to host and VM firewall options (enabled by default)
+  
+  * Add router-solicitation to NeighborDiscovery macro
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 19 Feb 2016 10:18:22 +0100
+
 pve-firewall (1.0-22) unstable; urgency=low
 
   * allow numeric icmp types
