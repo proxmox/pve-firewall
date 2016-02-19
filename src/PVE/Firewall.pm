@@ -1863,6 +1863,16 @@ sub ruleset_add_chain_policy {
     }
 }
 
+sub ruleset_chain_add_ndp {
+    my ($ruleset, $chain, $ipversion, $options) = @_;
+    return if $ipversion != 6 || (defined($options->{ndp}) && !$options->{ndp});
+
+    ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type router-solicitation -j ACCEPT");
+    ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type router-advertisement -j ACCEPT");
+    ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type neighbor-solicitation -j ACCEPT");
+    ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type neighbor-advertisement -j ACCEPT");
+}
+
 sub ruleset_chain_add_conn_filters {
     my ($ruleset, $chain, $accept) = @_;
 
@@ -1911,6 +1921,8 @@ sub ruleset_create_vm_chain {
 				    proto => 'udp', sport => 67, dport => 68 });
 	}
     }
+
+    ruleset_chain_add_ndp($ruleset, $chain, $ipversion, $options);
 
     if ($direction eq 'OUT') {
 	if (defined($macaddr) && !(defined($options->{macfilter}) && $options->{macfilter} == 0)) {
@@ -2118,6 +2130,7 @@ sub enable_host_firewall {
 
     ruleset_addrule($ruleset, $chain, "-i lo -j ACCEPT");
 
+    ruleset_chain_add_ndp($ruleset, $chain, $ipversion, $options);
     ruleset_chain_add_conn_filters($ruleset, $chain, 'ACCEPT');
     ruleset_chain_add_input_filters($ruleset, $chain, $ipversion, $options, $cluster_conf, $loglevel);
 
@@ -2176,6 +2189,7 @@ sub enable_host_firewall {
 
     ruleset_addrule($ruleset, $chain, "-o lo -j ACCEPT");
 
+    ruleset_chain_add_ndp($ruleset, $chain, $ipversion, $options);
     ruleset_chain_add_conn_filters($ruleset, $chain, 'ACCEPT');
 
     # we use RETURN because we may want to check other thigs later
@@ -2350,7 +2364,7 @@ sub parse_vmfw_option {
 
     my $loglevels = "emerg|alert|crit|err|warning|notice|info|debug|nolog";
 
-    if ($line =~ m/^(enable|dhcp|macfilter|ips):\s*(0|1)\s*$/i) {
+    if ($line =~ m/^(enable|dhcp|ndp|macfilter|ips):\s*(0|1)\s*$/i) {
 	$opt = lc($1);
 	$value = int($2);
     } elsif ($line =~ m/^(log_level_in|log_level_out):\s*(($loglevels)\s*)?$/i) {
@@ -2376,7 +2390,7 @@ sub parse_hostfw_option {
 
     my $loglevels = "emerg|alert|crit|err|warning|notice|info|debug|nolog";
 
-    if ($line =~ m/^(enable|nosmurfs|tcpflags):\s*(0|1)\s*$/i) {
+    if ($line =~ m/^(enable|nosmurfs|tcpflags|ndp):\s*(0|1)\s*$/i) {
 	$opt = lc($1);
 	$value = int($2);
     } elsif ($line =~ m/^(log_level_in|log_level_out|tcp_flags_log_level|smurf_log_level):\s*(($loglevels)\s*)?$/i) {

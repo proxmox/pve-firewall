@@ -84,7 +84,12 @@ my $option_properties = {
 	type => 'integer',
 	optional => 1,
 	minimum => 7875,
-    }
+    },
+    ndp => {
+	description => "Enable NDP.",
+	type => 'boolean',
+	optional => 1,
+    },
 };
 
 my $add_option_properties = sub {

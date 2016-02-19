@@ -28,6 +28,11 @@ my $option_properties = {
 	type => 'boolean',
 	optional => 1,
     },
+    ndp => {
+	description => "Enable NDP.",
+	type => 'boolean',
+	optional => 1,
+    },
     policy_in => {
 	description => "Input policy.",
 	type => 'string',
