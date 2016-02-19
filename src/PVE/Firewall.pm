@@ -139,6 +139,7 @@ my $pve_ipv6fw_macros = {
     ],
     'NeighborDiscovery' => [
 	"IPv6 neighbor solicitation, neighbor and router advertisement",
+	{ action => 'PARAM', proto => 'icmpv6', dport => 'router-solicitation' },
 	{ action => 'PARAM', proto => 'icmpv6', dport => 'router-advertisement' },
 	{ action => 'PARAM', proto => 'icmpv6', dport => 'neighbor-solicitation' },
 	{ action => 'PARAM', proto => 'icmpv6', dport => 'neighbor-advertisement' },
