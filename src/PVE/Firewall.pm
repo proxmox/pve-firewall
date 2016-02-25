@@ -1877,11 +1877,13 @@ sub ruleset_add_chain_policy {
 }
 
 sub ruleset_chain_add_ndp {
-    my ($ruleset, $chain, $ipversion, $options) = @_;
+    my ($ruleset, $chain, $ipversion, $options, $direction) = @_;
     return if $ipversion != 6 || (defined($options->{ndp}) && !$options->{ndp});
 
     ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type router-solicitation -j ACCEPT");
-    ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type router-advertisement -j ACCEPT");
+    if ($direction ne 'OUT' || $options->{radv}) {
+	ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type router-advertisement -j ACCEPT");
+    }
     ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type neighbor-solicitation -j ACCEPT");
     ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type neighbor-advertisement -j ACCEPT");
 }
@@ -1935,11 +1937,14 @@ sub ruleset_create_vm_chain {
 	}
     }
 
-    ruleset_chain_add_ndp($ruleset, $chain, $ipversion, $options);
+    ruleset_chain_add_ndp($ruleset, $chain, $ipversion, $options, $direction);
 
     if ($direction eq 'OUT') {
 	if (defined($macaddr) && !(defined($options->{macfilter}) && $options->{macfilter} == 0)) {
 	    ruleset_addrule($ruleset, $chain, "-m mac ! --mac-source $macaddr -j DROP");
+	}
+	if ($ipversion == 6 && !$options->{radv}) {
+	    ruleset_addrule($ruleset, $chain, '-p icmpv6 --icmpv6-type router-advertisement -j DROP');
 	}
 	if ($ipfilter_ipset) {
 	    ruleset_addrule($ruleset, $chain, "-m set ! --match-set $ipfilter_ipset src -j DROP");
@@ -2377,7 +2382,7 @@ sub parse_vmfw_option {
 
     my $loglevels = "emerg|alert|crit|err|warning|notice|info|debug|nolog";
 
-    if ($line =~ m/^(enable|dhcp|ndp|macfilter|ips):\s*(0|1)\s*$/i) {
+    if ($line =~ m/^(enable|dhcp|ndp|radv|macfilter|ips):\s*(0|1)\s*$/i) {
 	$opt = lc($1);
 	$value = int($2);
     } elsif ($line =~ m/^(log_level_in|log_level_out):\s*(($loglevels)\s*)?$/i) {

@@ -33,6 +33,11 @@ my $option_properties = {
 	type => 'boolean',
 	optional => 1,
     },
+    radv => {
+	description => "Allow sending Router Advertisement.",
+	type => 'boolean',
+	optional => 1,
+    },
     policy_in => {
 	description => "Input policy.",
 	type => 'string',
