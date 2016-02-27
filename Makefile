@@ -1,7 +1,7 @@
 RELEASE=4.1
 
 VERSION=2.0
-PKGREL=18
+PKGREL=19
 
 PACKAGE=pve-firewall
 

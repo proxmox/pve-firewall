@@ -1,3 +1,9 @@
+pve-firewall (2.0-19) unstable; urgency=medium
+
+  * Add radv option to VM options
+
+ -- Proxmox Support Team <support@proxmox.com>  Sat, 27 Feb 2016 10:24:42 +0100
+
 pve-firewall (2.0-18) unstable; urgency=medium
 
   * Add ndp option to host and VM firewall options
