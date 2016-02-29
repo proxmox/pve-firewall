@@ -1093,7 +1093,10 @@ sub copy_list_with_digest {
 	    next if !defined($v);
 	    $data->{$k} = $v;
 	    # Note: digest ignores refs ($rule->{errors})
-	    $sha->add($k, ':', $v, "\n") if !ref($v); ;
+	    # since Digest::SHA expects a series of bytes,
+	    #  we have to encode the value here to prevent errors when
+	    #  using utf8 characters (eg. in comments)
+	    $sha->add($k, ':', encode_utf8($v), "\n") if !ref($v); ;
 	}
 	push @$res, $data;
     }
