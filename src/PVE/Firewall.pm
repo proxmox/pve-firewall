@@ -985,7 +985,7 @@ sub parse_address_list {
 }
 
 sub parse_port_name_number_or_range {
-    my ($str) = @_;
+    my ($str, $dport) = @_;
 
     my $services = PVE::Firewall::get_etc_services();
     my $count = 0;
@@ -1001,9 +1001,9 @@ sub parse_port_name_number_or_range {
 	    my $port = $1;
 	    die "invalid port '$port'\n" if $port > 65535;
 	} else {
-	    if ($icmp_type_names->{$item}) {
+	    if ($dport && $icmp_type_names->{$item}) {
 		$icmp_port = 1;
-	    } elsif ($icmpv6_type_names->{$item}) {
+	    } elsif ($dport && $icmpv6_type_names->{$item}) {
 		$icmp_port = 1;
 	    } else {
 		die "invalid port '$item'\n" if !$services->{byname}->{$item};
@@ -1016,11 +1016,20 @@ sub parse_port_name_number_or_range {
     return $count;
 }
 
-PVE::JSONSchema::register_format('pve-fw-port-spec', \&pve_fw_verify_port_spec);
-sub pve_fw_verify_port_spec {
+PVE::JSONSchema::register_format('pve-fw-sport-spec', \&pve_fw_verify_sport_spec);
+sub pve_fw_verify_sport_spec {
    my ($portstr) = @_;
 
-   parse_port_name_number_or_range($portstr);
+   parse_port_name_number_or_range($portstr, 0);
+
+   return $portstr;
+}
+
+PVE::JSONSchema::register_format('pve-fw-dport-spec', \&pve_fw_verify_dport_spec);
+sub pve_fw_verify_dport_spec {
+   my ($portstr) = @_;
+
+   parse_port_name_number_or_range($portstr, 1);
 
    return $portstr;
 }
@@ -1144,11 +1153,11 @@ my $rule_properties = {
 	optional => 1,
     },
     sport => {
-	type => 'string', format => 'pve-fw-port-spec',
+	type => 'string', format => 'pve-fw-sport-spec',
 	optional => 1,
     },
     dport => {
-	type => 'string', format => 'pve-fw-port-spec',
+	type => 'string', format => 'pve-fw-dport-spec',
 	optional => 1,
     },
     comment => {
@@ -1355,14 +1364,14 @@ sub verify_rule {
     }
 
     if ($rule->{dport}) {
-	eval { parse_port_name_number_or_range($rule->{dport}); };
+	eval { parse_port_name_number_or_range($rule->{dport}, 1); };
 	&$add_error('dport', $@) if $@;
 	&$add_error('proto', "missing property - 'dport' requires this property")
 	    if !$rule->{proto};
     }
 
     if ($rule->{sport}) {
-	eval { parse_port_name_number_or_range($rule->{sport}); };
+	eval { parse_port_name_number_or_range($rule->{sport}, 0); };
 	&$add_error('sport', $@) if $@;
 	&$add_error('proto', "missing property - 'sport' requires this property")
 	    if !$rule->{proto};
@@ -1619,8 +1628,8 @@ sub ruleset_generate_cmdstr {
 
     die "unable to emit macro - internal error" if $rule->{macro}; # should not happen
 
-    my $nbdport = defined($rule->{dport}) ? parse_port_name_number_or_range($rule->{dport}) : 0;
-    my $nbsport = defined($rule->{sport}) ? parse_port_name_number_or_range($rule->{sport}) : 0;
+    my $nbdport = defined($rule->{dport}) ? parse_port_name_number_or_range($rule->{dport}, 1) : 0;
+    my $nbsport = defined($rule->{sport}) ? parse_port_name_number_or_range($rule->{sport}, 0) : 0;
 
     my @cmd = ();
 
