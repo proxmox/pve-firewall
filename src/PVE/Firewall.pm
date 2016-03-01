@@ -3470,7 +3470,7 @@ sub apply_ruleset {
     enable_bridge_firewall();
 
     my ($ipset_create_cmdlist, $ipset_delete_cmdlist, $ipset_changes) =
-	get_ipset_cmdlist($ipset_ruleset, undef, $verbose);
+	get_ipset_cmdlist($ipset_ruleset, $verbose);
 
     my ($cmdlist, $changes) = get_ruleset_cmdlist($ruleset, $verbose);
     my ($cmdlistv6, $changesv6) = get_ruleset_cmdlist($rulesetv6, $verbose, "ip6tables");
