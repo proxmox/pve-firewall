@@ -1883,15 +1883,15 @@ sub ruleset_add_chain_policy {
 }
 
 sub ruleset_chain_add_ndp {
-    my ($ruleset, $chain, $ipversion, $options, $direction) = @_;
+    my ($ruleset, $chain, $ipversion, $options, $direction, $accept) = @_;
     return if $ipversion != 6 || (defined($options->{ndp}) && !$options->{ndp});
 
-    ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type router-solicitation -j ACCEPT");
+    ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type router-solicitation $accept");
     if ($direction ne 'OUT' || $options->{radv}) {
-	ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type router-advertisement -j ACCEPT");
+	ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type router-advertisement $accept");
     }
-    ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type neighbor-solicitation -j ACCEPT");
-    ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type neighbor-advertisement -j ACCEPT");
+    ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type neighbor-solicitation $accept");
+    ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type neighbor-advertisement $accept");
 }
 
 sub ruleset_chain_add_conn_filters {
@@ -1956,8 +1956,6 @@ sub ruleset_create_vm_chain {
 
     }
 
-    ruleset_chain_add_ndp($ruleset, $chain, $ipversion, $options, $direction);
-
     if ($direction eq 'OUT') {
 	if (defined($macaddr) && !(defined($options->{macfilter}) && $options->{macfilter} == 0)) {
 	    ruleset_addrule($ruleset, $chain, "-m mac ! --mac-source $macaddr -j DROP");
@@ -1970,6 +1968,9 @@ sub ruleset_create_vm_chain {
 	}
 	ruleset_addrule($ruleset, $chain, "-j MARK --set-mark 0"); # clear mark
     }
+
+    my $accept_action = $direction eq 'OUT' ? '-g PVEFW-SET-ACCEPT-MARK' : "-j $accept";
+    ruleset_chain_add_ndp($ruleset, $chain, $ipversion, $options, $direction, $accept_action);
 }
 
 sub ruleset_add_group_rule {
@@ -2125,8 +2126,8 @@ sub enable_host_firewall {
 
     ruleset_addrule($ruleset, $chain, "-i lo -j ACCEPT");
 
-    ruleset_chain_add_ndp($ruleset, $chain, $ipversion, $options);
     ruleset_chain_add_conn_filters($ruleset, $chain, 'ACCEPT');
+    ruleset_chain_add_ndp($ruleset, $chain, $ipversion, $options, 'IN', '-j RETURN');
     ruleset_chain_add_input_filters($ruleset, $chain, $ipversion, $options, $cluster_conf, $loglevel);
 
     # we use RETURN because we need to check also tap rules
@@ -2184,11 +2185,11 @@ sub enable_host_firewall {
 
     ruleset_addrule($ruleset, $chain, "-o lo -j ACCEPT");
 
-    ruleset_chain_add_ndp($ruleset, $chain, $ipversion, $options);
     ruleset_chain_add_conn_filters($ruleset, $chain, 'ACCEPT');
 
     # we use RETURN because we may want to check other thigs later
     $accept_action = 'RETURN';
+    ruleset_chain_add_ndp($ruleset, $chain, $ipversion, $options, 'OUT', "-j $accept_action");
 
     ruleset_addrule($ruleset, $chain, "-p igmp -j $accept_action"); # important for multicast
 
