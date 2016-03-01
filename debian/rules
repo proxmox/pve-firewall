@@ -8,4 +8,4 @@
 
 override_dh_installinit:
 	dh_installinit -R --name pvefw-logger
-	dh_installinit -R -p pve-firewall
+	dh_installinit -p pve-firewall --no-restart-on-upgrade

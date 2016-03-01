@@ -4,6 +4,7 @@ set -e
 
 case "$1" in
     configure)
+	systemctl reload-or-restart pve-firewall
     ;;
 
     abort-upgrade|abort-remove|abort-deconfigure)
