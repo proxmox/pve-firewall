@@ -3157,14 +3157,7 @@ sub compile {
 	$vmfw_configs = read_vm_firewall_configs($cluster_conf, $vmdata, undef, $verbose);
     }
 
-    my ($ruleset, $ipset_ruleset) = compile_iptables_filter($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, 4, $verbose);
-    my ($rulesetv6) = compile_iptables_filter($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, 6, $verbose);
-
-    return ($ruleset, $ipset_ruleset, $rulesetv6);
-}
-
-sub compile_iptables_filter {
-    my ($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, $ipversion, $verbose) = @_;
+    return ({},{},{}) if !$cluster_conf->{options}->{enable};
 
     my $localnet;
     if ($cluster_conf->{aliases}->{local_network}) {
@@ -3179,7 +3172,15 @@ sub compile_iptables_filter {
 
     push @{$cluster_conf->{ipset}->{management}}, { cidr => $localnet };
 
-    return ({}, {}) if !$cluster_conf->{options}->{enable};
+    my $ruleset = compile_iptables_filter($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, 4, $verbose);
+    my $rulesetv6 = compile_iptables_filter($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, 6, $verbose);
+    my $ipset_ruleset = compile_ipsets($cluster_conf, $vmfw_configs, $vmdata);
+
+    return ($ruleset, $ipset_ruleset, $rulesetv6);
+}
+
+sub compile_iptables_filter {
+    my ($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, $ipversion, $verbose) = @_;
 
     my $ruleset = {};
 
@@ -3207,8 +3208,6 @@ sub compile_iptables_filter {
 
     my $hostfw_enable = !(defined($hostfw_options->{enable}) && ($hostfw_options->{enable} == 0));
 
-    my $ipset_ruleset = {};
-
     if ($hostfw_enable) {
 	eval { enable_host_firewall($ruleset, $hostfw_conf, $cluster_conf, $ipversion); };
 	warn $@ if $@; # just to be sure - should not happen
@@ -3220,8 +3219,6 @@ sub compile_iptables_filter {
 	    my $conf = $vmdata->{qemu}->{$vmid};
 	    my $vmfw_conf = $vmfw_configs->{$vmid};
 	    return if !$vmfw_conf;
-
-	    generate_ipset_chains($ipset_ruleset, $cluster_conf, $vmfw_conf);
 
 	    foreach my $netid (keys %$conf) {
 		next if $netid !~ m/^net(\d+)$/;
@@ -3246,8 +3243,6 @@ sub compile_iptables_filter {
             my $vmfw_conf = $vmfw_configs->{$vmid};
             return if !$vmfw_conf;
 
-            generate_ipset_chains($ipset_ruleset, $cluster_conf, $vmfw_conf);
-
             if ($vmfw_conf->{options}->{enable}) {
 		foreach my $netid (keys %$conf) {
                     next if $netid !~ m/^net(\d+)$/;
@@ -3269,9 +3264,55 @@ sub compile_iptables_filter {
 	ruleset_insertrule($ruleset, "PVEFW-FORWARD", "-m conntrack --ctstate RELATED,ESTABLISHED -j PVEFW-IPS");
     }
 
+    return $ruleset;
+}
+
+sub compile_ipsets {
+    my ($cluster_conf, $vmfw_configs, $vmdata) = @_;
+
+    my $localnet;
+    if ($cluster_conf->{aliases}->{local_network}) {
+	$localnet = $cluster_conf->{aliases}->{local_network}->{cidr};
+    } else {
+	my $localnet_ver;
+	($localnet, $localnet_ver) = parse_ip_or_cidr(local_network() || '127.0.0.0/8');
+
+	$cluster_conf->{aliases}->{local_network} = { 
+	    name => 'local_network', cidr => $localnet, ipversion => $localnet_ver };
+    }
+
+    push @{$cluster_conf->{ipset}->{management}}, { cidr => $localnet };
+
+
+    my $ipset_ruleset = {};
+
+    # generate ipsets for QEMU VMs
+    foreach my $vmid (keys %{$vmdata->{qemu}}) {
+	eval {
+	    my $conf = $vmdata->{qemu}->{$vmid};
+	    my $vmfw_conf = $vmfw_configs->{$vmid};
+	    return if !$vmfw_conf;
+
+	    generate_ipset_chains($ipset_ruleset, $cluster_conf, $vmfw_conf);
+	};
+	warn $@ if $@; # just to be sure - should not happen
+    }
+
+    # generate firewall rules for LXC containers
+    foreach my $vmid (keys %{$vmdata->{lxc}}) {
+        eval {
+            my $conf = $vmdata->{lxc}->{$vmid};
+            my $vmfw_conf = $vmfw_configs->{$vmid};
+            return if !$vmfw_conf;
+
+            generate_ipset_chains($ipset_ruleset, $cluster_conf, $vmfw_conf);
+        };
+        warn $@ if $@; # just to be sure - should not happen
+    }
+
     generate_ipset_chains($ipset_ruleset, undef, $cluster_conf);
 
-    return ($ruleset, $ipset_ruleset);
+    return $ipset_ruleset;
 }
 
 sub get_ruleset_status {
