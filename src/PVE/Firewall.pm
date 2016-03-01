@@ -2985,8 +2985,10 @@ sub generate_ipset_chains {
 		}
 		#http://backreference.org/2013/03/01/ipv6-address-normalization/
 		if ($ver == 6) {
-		    my $ipv6 = inet_pton(AF_INET6, lc($cidr));
-		    $cidr = inet_ntop(AF_INET6, $ipv6);
+		    # ip_compress_address takes an address only, no CIDR
+		    my ($addr, $prefix_len) = ($cidr =~ m@^([^/]*)(/.*)?$@);
+		    $cidr = lc(Net::IP::ip_compress_address($addr, 6));
+		    $cidr .= $prefix_len if defined($prefix_len);
 		    $cidr =~ s|/128$||;
 		} else {
 		    $cidr =~ s|/32$||;
