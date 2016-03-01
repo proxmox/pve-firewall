@@ -2972,11 +2972,17 @@ sub generate_std_chains {
 }
 
 sub generate_ipset_chains {
-    my ($ipset_ruleset, $clusterfw_conf, $fw_conf) = @_; #fixme
+    my ($ipset_ruleset, $clusterfw_conf, $fw_conf, $device_ips) = @_; #fixme
 
     foreach my $ipset (keys %{$fw_conf->{ipset}}) {
 
 	my $options = $fw_conf->{ipset}->{$ipset};
+
+	if ($device_ips && $ipset =~ /^ipfilter-(net\d+)$/) {
+	    if (my $ips = $device_ips->{$1}) {
+		$options = [@$options, @$ips];
+	    }
+	}
 
 	# remove duplicates
 	my $nethash = {};
@@ -3267,6 +3273,18 @@ sub compile_iptables_filter {
     return $ruleset;
 }
 
+sub mac_to_linklocal {
+    my ($macaddr) = @_;
+    my @parts = split(/:/, $macaddr);
+    # The standard link local address uses the fe80::/64 prefix with the
+    # modified EUI-64 identifier derived from the MAC address by flipping the
+    # universal/local bit and inserting FF:FE in the middle.
+    # See RFC 4291.
+    $parts[0] = sprintf("%02x", hex($parts[0]) ^ 0x02);
+    my @meui64 = (@parts[0,1,2], 'ff', 'fe', @parts[3,4,5]);
+    return "fe80::$parts[0]$parts[1]:$parts[2]FF:FE$parts[3]:$parts[4]$parts[5]";
+}
+
 sub compile_ipsets {
     my ($cluster_conf, $vmfw_configs, $vmdata) = @_;
 
@@ -3293,7 +3311,21 @@ sub compile_ipsets {
 	    my $vmfw_conf = $vmfw_configs->{$vmid};
 	    return if !$vmfw_conf;
 
-	    generate_ipset_chains($ipset_ruleset, $cluster_conf, $vmfw_conf);
+	    my $device_ips = {};
+	    foreach my $netid (keys %$conf) {
+		next if $netid !~ m/^net(\d+)$/;
+		my $net = PVE::QemuServer::parse_net($conf->{$netid});
+		next if !$net->{firewall};
+
+		my $macaddr = $net->{macaddr};
+		my $linklocal = mac_to_linklocal($macaddr);
+		$device_ips->{$netid} = [
+		    { cidr => $linklocal },
+		    { cidr => 'fe80::/10', nomatch => 1 }
+		];
+	    }
+
+	    generate_ipset_chains($ipset_ruleset, $cluster_conf, $vmfw_conf, $device_ips);
 	};
 	warn $@ if $@; # just to be sure - should not happen
     }
@@ -3305,12 +3337,26 @@ sub compile_ipsets {
             my $vmfw_conf = $vmfw_configs->{$vmid};
             return if !$vmfw_conf;
 
-            generate_ipset_chains($ipset_ruleset, $cluster_conf, $vmfw_conf);
+	    my $device_ips = {};
+	    foreach my $netid (keys %$conf) {
+		next if $netid !~ m/^net(\d+)$/;
+		my $net = PVE::LXC::parse_lxc_network($conf->{$netid});
+		next if !$net->{firewall};
+
+		my $macaddr = $net->{hwaddr};
+		my $linklocal = mac_to_linklocal($macaddr);
+		$device_ips->{$netid} = [
+		    { cidr => $linklocal },
+		    { cidr => 'fe80::/10', nomatch => 1 }
+		];
+	    }
+
+            generate_ipset_chains($ipset_ruleset, $cluster_conf, $vmfw_conf, $device_ips);
         };
         warn $@ if $@; # just to be sure - should not happen
     }
 
-    generate_ipset_chains($ipset_ruleset, undef, $cluster_conf);
+    generate_ipset_chains($ipset_ruleset, undef, $cluster_conf, undef);
 
     return $ipset_ruleset;
 }
