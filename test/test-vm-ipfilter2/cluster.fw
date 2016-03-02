@@ -1,0 +1,7 @@
+[options]
+
+enable: 1
+
+[rules]
+
+IN ACCEPT -p tcp -dport 80
