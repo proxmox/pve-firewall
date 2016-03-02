@@ -3348,10 +3348,10 @@ sub compile_ipsets {
 
     # generate firewall rules for LXC containers
     foreach my $vmid (keys %{$vmdata->{lxc}}) {
-        eval {
-            my $conf = $vmdata->{lxc}->{$vmid};
-            my $vmfw_conf = $vmfw_configs->{$vmid};
-            return if !$vmfw_conf;
+	eval {
+	    my $conf = $vmdata->{lxc}->{$vmid};
+	    my $vmfw_conf = $vmfw_configs->{$vmid};
+	    return if !$vmfw_conf;
 
 	    # When the 'ipfilter' option is enabled every device for which there
 	    # is no 'ipfilter-netX' ipset defiend gets an implicit empty default
@@ -3388,8 +3388,8 @@ sub compile_ipsets {
 
 	    generate_ipset_chains($ipset_ruleset, $cluster_conf, $vmfw_conf, $device_ips, $ipsets);
 	    generate_ipset_chains($ipset_ruleset, $cluster_conf, $vmfw_conf, $device_ips, $implicit_sets);
-        };
-        warn $@ if $@; # just to be sure - should not happen
+	};
+	warn $@ if $@; # just to be sure - should not happen
     }
 
     generate_ipset_chains($ipset_ruleset, undef, $cluster_conf, undef, $cluster_conf->{ipset});
