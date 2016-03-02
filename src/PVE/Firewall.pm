@@ -3357,7 +3357,8 @@ sub compile_ipsets {
 	    # is no 'ipfilter-netX' ipset defiend gets an implicit empty default
 	    # ipset.
 	    # The reason is that ipfilter ipsets are always filled with standard
-	    # IPv6 link-local filters.
+	    # IPv6 link-local filters, as well as the IP addresses configured
+	    # for the container.
 	    my $ipsets = $vmfw_conf->{ipset};
 	    my $implicit_sets = {};
 
@@ -3373,10 +3374,16 @@ sub compile_ipsets {
 
 		my $macaddr = $net->{hwaddr};
 		my $linklocal = mac_to_linklocal($macaddr);
-		$device_ips->{$netid} = [
+		my $set = $device_ips->{$netid} = [
 		    { cidr => $linklocal },
 		    { cidr => 'fe80::/10', nomatch => 1 }
 		];
+		if ($net->{ip} =~ m!^($IPV4RE)(?:/\d+)?$!) {
+		    push @$set, { cidr => $1 };
+		}
+		if ($net->{ip6} =~ m!^($IPV6RE)(?:/\d+)?$!) {
+		    push @$set, { cidr => $1 };
+		}
 	    }
 
 	    generate_ipset_chains($ipset_ruleset, $cluster_conf, $vmfw_conf, $device_ips, $ipsets);

@@ -43,7 +43,8 @@ my $option_properties = {
 	   "This is equivalent to adding an empty ipfilter-net<id> ipset " .
 	   "for every interface. Such ipsets implicitly contain sane default " .
 	   "restrictions such as restricting IPv6 link local addresses to " .
-	   "the one derived from the interface's MAC address.",
+	   "the one derived from the interface's MAC address. For containers " .
+	   "the configured IP addresses will be implicitly added.",
 	type => 'boolean',
 	optional => 1,
     },
