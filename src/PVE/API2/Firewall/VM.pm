@@ -38,6 +38,15 @@ my $option_properties = {
 	type => 'boolean',
 	optional => 1,
     },
+    ipfilter => {
+	description => "Enable default IP filters. " .
+	   "This is equivalent to adding an empty ipfilter-net<id> ipset " .
+	   "for every interface. Such ipsets implicitly contain sane default " .
+	   "restrictions such as restricting IPv6 link local addresses to " .
+	   "the one derived from the interface's MAC address.",
+	type => 'boolean',
+	optional => 1,
+    },
     policy_in => {
 	description => "Input policy.",
 	type => 'string',

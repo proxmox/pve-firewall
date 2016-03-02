@@ -2073,7 +2073,7 @@ sub generate_tap_rules_direction {
 
     my $ipfilter_name = compute_ipfilter_ipset_name($netid);
     my $ipfilter_ipset = compute_ipset_chain_name($vmid, $ipfilter_name, $ipversion)
-	if $vmfw_conf->{ipset}->{$ipfilter_name};	
+	if $options->{ipfilter} || $vmfw_conf->{ipset}->{$ipfilter_name};
 
     # create chain with mac and ip filter
     ruleset_create_vm_chain($ruleset, $tapchain, $ipversion, $options, $macaddr, $ipfilter_ipset, $direction);
@@ -2360,7 +2360,7 @@ sub parse_vmfw_option {
 
     my $loglevels = "emerg|alert|crit|err|warning|notice|info|debug|nolog";
 
-    if ($line =~ m/^(enable|dhcp|ndp|radv|macfilter|ips):\s*(0|1)\s*$/i) {
+    if ($line =~ m/^(enable|dhcp|ndp|radv|macfilter|ipfilter|ips):\s*(0|1)\s*$/i) {
 	$opt = lc($1);
 	$value = int($2);
     } elsif ($line =~ m/^(log_level_in|log_level_out):\s*(($loglevels)\s*)?$/i) {
@@ -2972,11 +2972,11 @@ sub generate_std_chains {
 }
 
 sub generate_ipset_chains {
-    my ($ipset_ruleset, $clusterfw_conf, $fw_conf, $device_ips) = @_; #fixme
+    my ($ipset_ruleset, $clusterfw_conf, $fw_conf, $device_ips, $ipsets) = @_;
 
-    foreach my $ipset (keys %{$fw_conf->{ipset}}) {
+    foreach my $ipset (keys %{$ipsets}) {
 
-	my $options = $fw_conf->{ipset}->{$ipset};
+	my $options = $ipsets->{$ipset};
 
 	if ($device_ips && $ipset =~ /^ipfilter-(net\d+)$/) {
 	    if (my $ips = $device_ips->{$1}) {
@@ -3314,11 +3314,23 @@ sub compile_ipsets {
 	    my $vmfw_conf = $vmfw_configs->{$vmid};
 	    return if !$vmfw_conf;
 
+	    # When the 'ipfilter' option is enabled every device for which there
+	    # is no 'ipfilter-netX' ipset defiend gets an implicit empty default
+	    # ipset.
+	    # The reason is that ipfilter ipsets are always filled with standard
+	    # IPv6 link-local filters.
+	    my $ipsets = $vmfw_conf->{ipset};
+	    my $implicit_sets = {};
+
 	    my $device_ips = {};
 	    foreach my $netid (keys %$conf) {
 		next if $netid !~ m/^net(\d+)$/;
 		my $net = PVE::QemuServer::parse_net($conf->{$netid});
 		next if !$net->{firewall};
+
+		if ($vmfw_conf->{options}->{ipfilter} && !$ipsets->{"ipfilter-$netid"}) {
+		    $implicit_sets->{"ipfilter-$netid"} = [];
+		}
 
 		my $macaddr = $net->{macaddr};
 		my $linklocal = mac_to_linklocal($macaddr);
@@ -3328,7 +3340,8 @@ sub compile_ipsets {
 		];
 	    }
 
-	    generate_ipset_chains($ipset_ruleset, $cluster_conf, $vmfw_conf, $device_ips);
+	    generate_ipset_chains($ipset_ruleset, $cluster_conf, $vmfw_conf, $device_ips, $ipsets);
+	    generate_ipset_chains($ipset_ruleset, $cluster_conf, $vmfw_conf, $device_ips, $implicit_sets);
 	};
 	warn $@ if $@; # just to be sure - should not happen
     }
@@ -3340,11 +3353,23 @@ sub compile_ipsets {
             my $vmfw_conf = $vmfw_configs->{$vmid};
             return if !$vmfw_conf;
 
+	    # When the 'ipfilter' option is enabled every device for which there
+	    # is no 'ipfilter-netX' ipset defiend gets an implicit empty default
+	    # ipset.
+	    # The reason is that ipfilter ipsets are always filled with standard
+	    # IPv6 link-local filters.
+	    my $ipsets = $vmfw_conf->{ipset};
+	    my $implicit_sets = {};
+
 	    my $device_ips = {};
 	    foreach my $netid (keys %$conf) {
 		next if $netid !~ m/^net(\d+)$/;
 		my $net = PVE::LXC::parse_lxc_network($conf->{$netid});
 		next if !$net->{firewall};
+
+		if ($vmfw_conf->{options}->{ipfilter} && !$ipsets->{"ipfilter-$netid"}) {
+		    $implicit_sets->{"ipfilter-$netid"} = [];
+		}
 
 		my $macaddr = $net->{hwaddr};
 		my $linklocal = mac_to_linklocal($macaddr);
@@ -3354,12 +3379,13 @@ sub compile_ipsets {
 		];
 	    }
 
-            generate_ipset_chains($ipset_ruleset, $cluster_conf, $vmfw_conf, $device_ips);
+	    generate_ipset_chains($ipset_ruleset, $cluster_conf, $vmfw_conf, $device_ips, $ipsets);
+	    generate_ipset_chains($ipset_ruleset, $cluster_conf, $vmfw_conf, $device_ips, $implicit_sets);
         };
         warn $@ if $@; # just to be sure - should not happen
     }
 
-    generate_ipset_chains($ipset_ruleset, undef, $cluster_conf, undef);
+    generate_ipset_chains($ipset_ruleset, undef, $cluster_conf, undef, $cluster_conf->{ipset});
 
     return $ipset_ruleset;
 }
