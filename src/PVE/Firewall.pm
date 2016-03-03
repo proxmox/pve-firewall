@@ -2714,7 +2714,7 @@ sub read_local_vm_config {
 	    }
         } elsif ($d->{type} eq 'lxc') {
             if ($have_lxc) {
-                my $cfspath = PVE::LXC::cfs_config_path($vmid);
+                my $cfspath = PVE::LXC::Config->cfs_config_path($vmid);
                 if (my $conf = PVE::Cluster::cfs_read_file($cfspath)) {
                     $lxc->{$vmid} = $conf;
                 }
@@ -3255,7 +3255,7 @@ sub compile_iptables_filter {
             if ($vmfw_conf->{options}->{enable}) {
 		foreach my $netid (keys %$conf) {
                     next if $netid !~ m/^net(\d+)$/;
-                    my $net = PVE::LXC::parse_lxc_network($conf->{$netid});
+                    my $net = PVE::LXC::Config->parse_lxc_network($conf->{$netid});
                     next if !$net->{firewall};
                     my $iface = "veth${vmid}i$1";
 		    my $macaddr = $net->{hwaddr};
@@ -3365,7 +3365,7 @@ sub compile_ipsets {
 	    my $device_ips = {};
 	    foreach my $netid (keys %$conf) {
 		next if $netid !~ m/^net(\d+)$/;
-		my $net = PVE::LXC::parse_lxc_network($conf->{$netid});
+		my $net = PVE::LXC::Config->parse_lxc_network($conf->{$netid});
 		next if !$net->{firewall};
 
 		if ($vmfw_conf->{options}->{ipfilter} && !$ipsets->{"ipfilter-$netid"}) {

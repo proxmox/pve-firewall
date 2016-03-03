@@ -443,7 +443,7 @@ sub extract_ct_info {
     my $info = { type => 'ct', vmid => $vmid };
 
     my $conf = $vmdata->{lxc}->{$vmid} || die "no such CT '$vmid'";
-    my $net = PVE::LXC::parse_lxc_network($conf->{"net$netnum"});
+    my $net = PVE::LXC::Config->parse_lxc_network($conf->{"net$netnum"});
     $info->{macaddr} = $net->{hwaddr} || die "unable to get mac address";
     $info->{bridge} = $net->{bridge} || die "unable to get bridge";
     $info->{fwbr} = "fwbr${vmid}i$netnum";
