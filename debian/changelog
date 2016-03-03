@@ -1,3 +1,9 @@
+pve-firewall (2.0-21) unstable; urgency=medium
+
+  * added new 'ipfilter' option
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 03 Mar 2016 09:43:39 +0100
+
 pve-firewall (2.0-20) unstable; urgency=medium
 
   * fix 901: encode unicode characters in sha digest
