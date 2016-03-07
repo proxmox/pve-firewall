@@ -28,6 +28,7 @@ my $clusterfw_conf_filename = "$pvefw_conf_dir/cluster.fw";
 my $have_qemu_server;
 eval {
     require PVE::QemuServer;
+    require PVE::QemuConfig;
     $have_qemu_server = 1;
 };
 
@@ -2707,7 +2708,7 @@ sub read_local_vm_config {
 	next if !$d->{type};
 	if ($d->{type} eq 'qemu') {
 	    if ($have_qemu_server) {
-		my $cfspath = PVE::QemuServer::cfs_config_path($vmid);
+		my $cfspath = PVE::QemuConfig->cfs_config_path($vmid);
 		if (my $conf = PVE::Cluster::cfs_read_file($cfspath)) {
 		    $qemu->{$vmid} = $conf;
 		}
