@@ -1,3 +1,9 @@
+pve-firewall (2.0-22) unstable; urgency=medium
+
+  * Use cfs_config_path from PVE::QemuConfig
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 08 Mar 2016 11:47:40 +0100
+
 pve-firewall (2.0-21) unstable; urgency=medium
 
   * added new 'ipfilter' option
