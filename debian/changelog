@@ -1,3 +1,17 @@
+pve-firewall (1.0-24) unstable; urgency=low
+
+  * ipv6: fix ipv6 address normalization
+  
+  * ndp: use PVEFW-SET-ACCEPT-MARK and move rules further down
+  
+  * Add radv option to VM options
+  
+  * only allow icmp names in the destination port field
+  
+  * fix 901: encode unicode characters in sha digest
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 09 Mar 2016 12:13:13 +0100
+
 pve-firewall (1.0-23) unstable; urgency=low
 
   * Add ndp option to host and VM firewall options (enabled by default)
