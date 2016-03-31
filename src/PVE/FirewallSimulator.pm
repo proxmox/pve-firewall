@@ -13,6 +13,8 @@ my $mark;
 my $trace;
 my $debug = 0;
 
+my $NUMBER_RE = qr/0x[0-9a-fA-F]+|\d+/;
+
 sub debug {
     my $new_value = shift;
 
@@ -211,15 +213,17 @@ sub rule_match {
 	    next;
 	}
 
-	if ($rule =~ s/^-m mark --mark (\d+)\s*//) {
-	    return undef if !defined($mark) || $mark != $1;
+	if ($rule =~ s@^-m mark --mark ($NUMBER_RE)(?:/($NUMBER_RE))?\s*@@) {
+	    my ($value, $mask) = PVE::Firewall::get_mark_values($1, $2);
+	    return undef if !defined($mark) || ($mark & $mask) != $value;
 	    next;
 	}
 
 	# final actions
 
-	if ($rule =~ s/^-j MARK --set-mark (\d+)\s*$//) {
-	    $mark = $1;
+	if ($rule =~ s@^-j MARK --set-mark ($NUMBER_RE)(?:/($NUMBER_RE))?\s*$@@) {
+	    my ($value, $mask) = PVE::Firewall::get_mark_values($1, $2);
+	    $mark = ($mark & ~$mask) | $value;
 	    return undef;
 	}
 

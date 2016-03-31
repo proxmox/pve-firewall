@@ -516,10 +516,13 @@ my $pve_fw_macro_descr;
 my $pve_fw_macro_ipversion = {};
 my $pve_fw_preferred_macro_names = {};
 
+my $FWACCEPTMARK_ON  = "0x80000000/0x80000000";
+my $FWACCEPTMARK_OFF = "0x00000000/0x80000000";
+
 my $pve_std_chains = {};
 $pve_std_chains->{4} = {
     'PVEFW-SET-ACCEPT-MARK' => [
-	"-j MARK --set-mark 1",
+	"-j MARK --set-mark $FWACCEPTMARK_ON",
     ],
     'PVEFW-DropBroadcast' => [
 	# same as shorewall 'Broadcast'
@@ -606,7 +609,7 @@ $pve_std_chains->{4} = {
 
 $pve_std_chains->{6} = {
     'PVEFW-SET-ACCEPT-MARK' => [
-        "-j MARK --set-mark 1",
+        "-j MARK --set-mark $FWACCEPTMARK_ON",
     ],
     'PVEFW-DropBroadcast' => [
         # same as shorewall 'Broadcast'
@@ -1981,7 +1984,7 @@ sub ruleset_create_vm_chain {
 	if ($ipfilter_ipset) {
 	    ruleset_addrule($ruleset, $chain, "-m set ! --match-set $ipfilter_ipset src -j DROP");
 	}
-	ruleset_addrule($ruleset, $chain, "-j MARK --set-mark 0"); # clear mark
+	ruleset_addrule($ruleset, $chain, "-j MARK --set-mark $FWACCEPTMARK_OFF"); # clear mark
     }
 
     my $accept_action = $direction eq 'OUT' ? '-g PVEFW-SET-ACCEPT-MARK' : "-j $accept";
@@ -2005,7 +2008,7 @@ sub ruleset_add_group_rule {
 	ruleset_addrule($ruleset, $chain, "-j $group_chain");
     }
 
-    ruleset_addrule($ruleset, $chain, "-m mark --mark 1 -j $action");
+    ruleset_addrule($ruleset, $chain, "-m mark --mark $FWACCEPTMARK_ON -j $action");
 }
 
 sub ruleset_generate_vm_rules {
@@ -2260,7 +2263,7 @@ sub generate_group_rules {
     my $chain = "GROUP-${group}-IN";
 
     ruleset_create_chain($ruleset, $chain);
-    ruleset_addrule($ruleset, $chain, "-j MARK --set-mark 0"); # clear mark
+    ruleset_addrule($ruleset, $chain, "-j MARK --set-mark $FWACCEPTMARK_OFF"); # clear mark
 
     foreach my $rule (@$rules) {
 	next if $rule->{type} ne 'in';
@@ -2273,7 +2276,7 @@ sub generate_group_rules {
     $chain = "GROUP-${group}-OUT";
 
     ruleset_create_chain($ruleset, $chain);
-    ruleset_addrule($ruleset, $chain, "-j MARK --set-mark 0"); # clear mark
+    ruleset_addrule($ruleset, $chain, "-j MARK --set-mark $FWACCEPTMARK_OFF"); # clear mark
 
     foreach my $rule (@$rules) {
 	next if $rule->{type} ne 'out';
@@ -2290,6 +2293,14 @@ my $MAX_NETS = 32;
 my $valid_netdev_names = {};
 for (my $i = 0; $i < $MAX_NETS; $i++)  {
     $valid_netdev_names->{"net$i"} = 1;
+}
+
+sub get_mark_values {
+    my ($value, $mask) = @_;
+    $value = hex($value) if $value =~ /^0x/;
+    $mask = hex($mask) if defined($mask) && $mask =~ /^0x/;
+    $mask = 0xffffffff if !defined($mask);
+    return ($value, $mask);
 }
 
 sub parse_fw_rule {
