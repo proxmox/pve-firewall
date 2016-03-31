@@ -1121,7 +1121,7 @@ sub copy_list_with_digest {
 }
 
 
-my $addr_list_descr = "This can refer to a single IP address, an IP set (`+ipsetname`) or an IP alias definition. You can also specify an address range like '20.34.101.207-201.3.9.99', or a list of IP addresses and networks (entries are separated by ','). Please do not mix IPv4 and IPv6 addresses inside such lists.";
+my $addr_list_descr = "This can refer to a single IP address, an IP set (`+ipsetname`) or an IP alias definition. You can also specify an address range like '20.34.101.207-201.3.9.99', or a list of IP addresses and networks (entries are separated by comma). Please do not mix IPv4 and IPv6 addresses inside such lists.";
 
 my $port_descr = "You can use service names or simple numbers (0-65535), as defined in '/etc/services'. Port ranges can be specified with `\\d+:\\d+`, for example `80:85', and you can use comma separated list to match several ports or ranges.";
 
@@ -1152,7 +1152,7 @@ my $rule_properties = {
 	maxLength => 128,
     },
     iface => get_standard_option('pve-iface', {
-	description => "Network interface name. You have to use network configuration key names for VMs and containers ('net\d+'). Host related rules can use arbitrary strings.",
+	description => "Network interface name. You have to use network configuration key names for VMs and containers ('net\\d+'). Host related rules can use arbitrary strings.",
 	optional => 1
     }),
     source => {
