@@ -145,6 +145,7 @@ my $pve_ipv6fw_macros = {
 	{ action => 'PARAM', proto => 'icmpv6', dport => 'neighbor-advertisement' },
     ],
     'DHCPv6' => [
+	"DHCPv6 traffic",
 	{ action => 'PARAM', proto => 'udp', dport => '546:547', sport => '546:547' },
     ],
     'Trcrt' => [
