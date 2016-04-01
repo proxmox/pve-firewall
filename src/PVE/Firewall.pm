@@ -1124,6 +1124,125 @@ sub copy_list_with_digest {
     return wantarray ? ($res, $digest) : $res;
 }
 
+our $cluster_option_properties = {
+    enable => {
+	description => "Enable or disable the firewall cluster wide.",
+	type => 'integer',
+	minimum => 0,
+	optional => 1,
+    },
+    policy_in => {
+	description => "Input policy.",
+	type => 'string',
+	optional => 1,
+	enum => ['ACCEPT', 'REJECT', 'DROP'],
+    },
+    policy_out => {
+	description => "Output policy.",
+	type => 'string',
+	optional => 1,
+	enum => ['ACCEPT', 'REJECT', 'DROP'],
+    },
+};
+
+our $host_option_properties = {
+    enable => {
+	description => "Enable host firewall rules.",
+	type => 'boolean',
+	optional => 1,
+    },
+    log_level_in =>  get_standard_option('pve-fw-loglevel', {
+	description => "Log level for incoming traffic." }),
+    log_level_out =>  get_standard_option('pve-fw-loglevel', {
+	description => "Log level for outgoing traffic." }),
+    tcp_flags_log_level =>  get_standard_option('pve-fw-loglevel', {
+	description => "Log level for illegal tcp flags filter." }),
+    smurf_log_level =>  get_standard_option('pve-fw-loglevel', {
+	description => "Log level for SMURFS filter." }),
+    nosmurfs => {
+	description => "Enable SMURFS filter.",
+	type => 'boolean',
+	optional => 1,
+    },
+    tcpflags => {
+	description => "Filter illegal combinations of TCP flags.",
+	type => 'boolean',
+	optional => 1,
+    },
+    nf_conntrack_max => {
+	description => "Maximum number of tracked connections.",
+	type => 'integer',
+	optional => 1,
+	minimum => 32768,
+    },
+    nf_conntrack_tcp_timeout_established => {
+	description => "Conntrack established timeout.",
+	type => 'integer',
+	optional => 1,
+	minimum => 7875,
+    },
+    ndp => {
+	description => "Enable NDP.",
+	type => 'boolean',
+	optional => 1,
+    },
+};
+
+our $vm_option_properties = {
+    enable => {
+	description => "Enable/disable firewall rules.",
+	type => 'boolean',
+	optional => 1,
+    },
+    macfilter => {
+	description => "Enable/disable MAC address filter.",
+	type => 'boolean',
+	optional => 1,
+    },
+    dhcp => {
+	description => "Enable DHCP.",
+	type => 'boolean',
+	optional => 1,
+    },
+    ndp => {
+	description => "Enable NDP.",
+	type => 'boolean',
+	optional => 1,
+    },
+    radv => {
+	description => "Allow sending Router Advertisement.",
+	type => 'boolean',
+	optional => 1,
+    },
+    ipfilter => {
+	description => "Enable default IP filters. " .
+	   "This is equivalent to adding an empty ipfilter-net<id> ipset " .
+	   "for every interface. Such ipsets implicitly contain sane default " .
+	   "restrictions such as restricting IPv6 link local addresses to " .
+	   "the one derived from the interface's MAC address. For containers " .
+	   "the configured IP addresses will be implicitly added.",
+	type => 'boolean',
+	optional => 1,
+    },
+    policy_in => {
+	description => "Input policy.",
+	type => 'string',
+	optional => 1,
+	enum => ['ACCEPT', 'REJECT', 'DROP'],
+    },
+    policy_out => {
+	description => "Output policy.",
+	type => 'string',
+	optional => 1,
+	enum => ['ACCEPT', 'REJECT', 'DROP'],
+    },
+    log_level_in =>  get_standard_option('pve-fw-loglevel', {
+	description => "Log level for incoming traffic." }),
+    log_level_out =>  get_standard_option('pve-fw-loglevel', {
+	description => "Log level for outgoing traffic." }),
+
+};
+
 
 my $addr_list_descr = "This can refer to a single IP address, an IP set ('+ipsetname') or an IP alias definition. You can also specify an address range like '20.34.101.207-201.3.9.99', or a list of IP addresses and networks (entries are separated by comma). Please do not mix IPv4 and IPv6 addresses inside such lists.";
 

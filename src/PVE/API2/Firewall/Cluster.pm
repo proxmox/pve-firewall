@@ -71,25 +71,7 @@ __PACKAGE__->register_method({
 	return $result;
     }});
 
-my $option_properties = {
-    enable => {
-	type => 'integer',
-	minimum => 0,
-	optional => 1,
-    },
-    policy_in => {
-	description => "Input policy.",
-	type => 'string',
-	optional => 1,
-	enum => ['ACCEPT', 'REJECT', 'DROP'],
-    },
-    policy_out => {
-	description => "Output policy.",
-	type => 'string',
-	optional => 1,
-	enum => ['ACCEPT', 'REJECT', 'DROP'],
-    },
-};
+my $option_properties = $PVE::Firewall::cluster_option_properties;
 
 my $add_option_properties = sub {
     my ($properties) = @_;

@@ -12,60 +12,7 @@ use Data::Dumper; # fixme: remove
 
 use base qw(PVE::RESTHandler);
 
-my $option_properties = {
-    enable => {
-	description => "Enable host firewall rules.",
-	type => 'boolean',
-	optional => 1,
-    },
-    macfilter => {
-	description => "Enable/disable MAC address filter.",
-	type => 'boolean',
-	optional => 1,
-    },
-    dhcp => {
-	description => "Enable DHCP.",
-	type => 'boolean',
-	optional => 1,
-    },
-    ndp => {
-	description => "Enable NDP.",
-	type => 'boolean',
-	optional => 1,
-    },
-    radv => {
-	description => "Allow sending Router Advertisement.",
-	type => 'boolean',
-	optional => 1,
-    },
-    ipfilter => {
-	description => "Enable default IP filters. " .
-	   "This is equivalent to adding an empty ipfilter-net<id> ipset " .
-	   "for every interface. Such ipsets implicitly contain sane default " .
-	   "restrictions such as restricting IPv6 link local addresses to " .
-	   "the one derived from the interface's MAC address. For containers " .
-	   "the configured IP addresses will be implicitly added.",
-	type => 'boolean',
-	optional => 1,
-    },
-    policy_in => {
-	description => "Input policy.",
-	type => 'string',
-	optional => 1,
-	enum => ['ACCEPT', 'REJECT', 'DROP'],
-    },
-    policy_out => { 
-	description => "Output policy.",
-	type => 'string',
-	optional => 1,
-	enum => ['ACCEPT', 'REJECT', 'DROP'],
-    },
-    log_level_in =>  get_standard_option('pve-fw-loglevel', {
-	description => "Log level for incoming traffic." }),
-    log_level_out =>  get_standard_option('pve-fw-loglevel', {
-	description => "Log level for outgoing traffic." }),
-
-};
+my $option_properties = $PVE::Firewall::vm_option_properties;
 
 my $add_option_properties = sub {
     my ($properties) = @_;

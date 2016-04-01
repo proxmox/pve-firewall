@@ -49,48 +49,7 @@ __PACKAGE__->register_method({
 	return $result;
     }});
 
-my $option_properties = {
-    enable => {
-	description => "Enable host firewall rules.",
-	type => 'boolean',
-	optional => 1,
-    },
-    log_level_in =>  get_standard_option('pve-fw-loglevel', {
-	description => "Log level for incoming traffic." }),
-    log_level_out =>  get_standard_option('pve-fw-loglevel', {
-	description => "Log level for outgoing traffic." }),
-    tcp_flags_log_level =>  get_standard_option('pve-fw-loglevel', {
-	description => "Log level for illegal tcp flags filter." }),
-    smurf_log_level =>  get_standard_option('pve-fw-loglevel', {
-	description => "Log level for SMURFS filter." }),
-    nosmurfs => {
-	description => "Enable SMURFS filter.",
-	type => 'boolean',
-	optional => 1,
-    },
-    tcpflags => {
-	description => "Filter illegal combinations of TCP flags.",
-	type => 'boolean',
-	optional => 1,
-    },
-    nf_conntrack_max => {
-	description => "Maximum number of tracked connections.",
-	type => 'integer',
-	optional => 1,
-	minimum => 32768,
-    },
-    nf_conntrack_tcp_timeout_established => {
- 	description => "Conntrack established timeout.",
-	type => 'integer',
-	optional => 1,
-	minimum => 7875,
-    },
-    ndp => {
-	description => "Enable NDP.",
-	type => 'boolean',
-	optional => 1,
-    },
-};
+my $option_properties = $PVE::Firewall::host_option_properties;
 
 my $add_option_properties = sub {
     my ($properties) = @_;
