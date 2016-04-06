@@ -4,22 +4,15 @@ export BINDIR=${PREFIX}/bin
 export SBINDIR=${PREFIX}/sbin
 export MANDIR=${PREFIX}/share/man
 export DOCDIR=${PREFIX}/share/doc/pve-firewall
-export PODDIR=${DOCDIR}/pod
 export MAN1DIR=${MANDIR}/man1/
 export MAN8DIR=${MANDIR}/man8/
 export PERLDIR=${PREFIX}/share/perl5
 export BASHCOMPLDIR=${PREFIX}/share/bash-completion/completions
 
+export NOVIEW=1
+include /usr/share/pve-doc-generator/pve-doc-generator.mk
+
 all: pve-firewall.8 pvefw-logger
-
-%.8: %.8.pod
-	rm -f $@
-	cat $<|pod2man -n $* -s 8 -r ${VERSION} -c "Proxmox Documentation" >$@.tmp
-	mv $@.tmp $@
-
-pve-firewall.8.pod: PVE/Service/pve_firewall.pm
-	perl -I. -T -e "use PVE::Service::pve_firewall; PVE::Service::pve_firewall->generate_pod_manpage();" >$@.tmp
-	mv $@.tmp $@
 
 pve-firewall.bash-completion: PVE/Service/pve_firewall.pm
 	perl -I. -T -e "use PVE::Service::pve_firewall; PVE::Service::pve_firewall->generate_bash_completions();" >$@.tmp
@@ -35,21 +28,20 @@ pvefw-logger: pvefw-logger.c
 	$(shell pkg-config libnetfilter_log glib-2.0 gthread-2.0 --libs --cflags)
 
 .PHONY: install
-install: pve-firewall pve-firewall.8 pve-firewall.bash-completion pve-firewall.8.pod pvefw-logger
+install: pve-firewall pve-firewall.8 pve-firewall.bash-completion pvefw-logger
 	make -C PVE install
 	install -d -m 0755 ${DESTDIR}/${SBINDIR}
 	install -m 0755 pve-firewall ${DESTDIR}/${SBINDIR}
 	install -m 0755 --strip pvefw-logger ${DESTDIR}/${SBINDIR}
 	install -d ${DESTDIR}/${MAN8DIR}
 	install -m 0644 pve-firewall.8 ${DESTDIR}/${MAN8DIR}
-	install -d ${DESTDIR}/${PODDIR}
-	install -m 0644 pve-firewall.8.pod ${DESTDIR}/${PODDIR}
 	install -m 0644 -D pve-firewall.bash-completion ${DESTDIR}/${BASHCOMPLDIR}/pve-firewall
 
 .PHONY: clean
 clean: 	
 	make -C PVE clean
-	rm -rf pvefw-logger
+	make cleanup-docgen
+	rm -rf pvefw-logger 
 	find . -name '*~' -exec rm {} ';'
 
 

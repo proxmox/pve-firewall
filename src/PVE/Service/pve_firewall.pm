@@ -395,19 +395,3 @@ our $cmddef = {
  };
 
 1;
-
-__END__
-
-=head1 NAME
-                                          
-pve-firewall - PVE Firewall Daemon
-
-=head1 SYNOPSIS
-
-=include synopsis
-
-=head1 DESCRIPTION
-
-This service updates iptables rules periodically.
-
-=include pve_copyright
