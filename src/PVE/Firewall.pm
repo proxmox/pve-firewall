@@ -3523,10 +3523,10 @@ sub compile_ipsets {
 		    { cidr => $linklocal },
 		    { cidr => 'fe80::/10', nomatch => 1 }
 		];
-		if ($net->{ip} =~ m!^($IPV4RE)(?:/\d+)?$!) {
+		if (defined($net->{ip}) && $net->{ip} =~ m!^($IPV4RE)(?:/\d+)?$!) {
 		    push @$set, { cidr => $1 };
 		}
-		if ($net->{ip6} =~ m!^($IPV6RE)(?:/\d+)?$!) {
+		if (defined($net->{ip6}) && $net->{ip6} =~ m!^($IPV6RE)(?:/\d+)?$!) {
 		    push @$set, { cidr => $1 };
 		}
 	    }
