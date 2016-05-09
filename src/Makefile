@@ -36,6 +36,8 @@ install: pve-firewall pve-firewall.8 pve-firewall.bash-completion pvefw-logger
 	install -d ${DESTDIR}/${MAN8DIR}
 	install -m 0644 pve-firewall.8 ${DESTDIR}/${MAN8DIR}
 	install -m 0644 -D pve-firewall.bash-completion ${DESTDIR}/${BASHCOMPLDIR}/pve-firewall
+	install -d -m 0755 ${DESTDIR}/usr/lib/sysctl.d/
+	install -m 0644 pve-firewall-sysctl.conf ${DESTDIR}/usr/lib/sysctl.d/pve-firewall.conf
 
 .PHONY: clean
 clean: 	
