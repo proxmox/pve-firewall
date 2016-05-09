@@ -1,3 +1,9 @@
+pve-firewall (2.0-26) unstable; urgency=medium
+
+  * fix #988: set rp_filter=2
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 09 May 2016 10:01:28 +0200
+
 pve-firewall (2.0-25) unstable; urgency=medium
 
   * fix #945: add uninitialized check in lxc ipset compilation
