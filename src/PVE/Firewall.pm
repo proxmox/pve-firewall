@@ -3368,13 +3368,13 @@ sub compile_iptables_filter {
     }
 
     # generate firewall rules for QEMU VMs
-    foreach my $vmid (keys %{$vmdata->{qemu}}) {
+    foreach my $vmid (sort keys %{$vmdata->{qemu}}) {
 	eval {
 	    my $conf = $vmdata->{qemu}->{$vmid};
 	    my $vmfw_conf = $vmfw_configs->{$vmid};
 	    return if !$vmfw_conf;
 
-	    foreach my $netid (keys %$conf) {
+	    foreach my $netid (sort keys %$conf) {
 		next if $netid !~ m/^net(\d+)$/;
 		my $net = PVE::QemuServer::parse_net($conf->{$netid});
 		next if !$net->{firewall};
@@ -3391,14 +3391,14 @@ sub compile_iptables_filter {
     }
 
     # generate firewall rules for LXC containers
-    foreach my $vmid (keys %{$vmdata->{lxc}}) {
+    foreach my $vmid (sort keys %{$vmdata->{lxc}}) {
         eval {
             my $conf = $vmdata->{lxc}->{$vmid};
             my $vmfw_conf = $vmfw_configs->{$vmid};
             return if !$vmfw_conf;
 
             if ($vmfw_conf->{options}->{enable}) {
-		foreach my $netid (keys %$conf) {
+		foreach my $netid (sort keys %$conf) {
                     next if $netid !~ m/^net(\d+)$/;
                     my $net = PVE::LXC::Config->parse_lxc_network($conf->{$netid});
                     next if !$net->{firewall};
