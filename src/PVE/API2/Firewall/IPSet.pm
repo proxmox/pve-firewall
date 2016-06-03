@@ -587,6 +587,11 @@ sub register_create {
 		raise_param_exc({ name => "IPSet '$param->{rename}' does not exists" }) 
 		    if !$fw_conf->{ipset}->{$param->{rename}};
 
+		# prevent overwriting existing ipset
+		raise_param_exc({ name => "IPSet '$param->{name}' does already exist"})
+		    if $fw_conf->{ipset}->{$param->{name}} &&
+		    $param->{name} ne $param->{rename};
+
 		my $data = delete $fw_conf->{ipset}->{$param->{rename}};
 		$fw_conf->{ipset}->{$param->{name}} = $data;
 		if (my $comment = delete $fw_conf->{ipset_comments}->{$param->{rename}}) {

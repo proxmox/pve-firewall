@@ -101,6 +101,11 @@ __PACKAGE__->register_method({
 	    raise_param_exc({ group => "Security group '$param->{rename}' does not exists" }) 
 		if !$cluster_conf->{groups}->{$param->{rename}};
 
+	    # prevent overwriting an existing group
+	    raise_param_exc({ group => "Security group '$param->{group}' does already exist" })
+		if $cluster_conf->{groups}->{$param->{group}} &&
+		$param->{group} ne $param->{rename};
+
 	    my $data = delete $cluster_conf->{groups}->{$param->{rename}};
 	    $cluster_conf->{groups}->{$param->{group}} = $data;
 	    if (my $comment = delete $cluster_conf->{group_comments}->{$param->{rename}}) {
