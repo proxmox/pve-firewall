@@ -50,7 +50,7 @@ our $ip_alias_pattern = '[A-Za-z][A-Za-z0-9\-\_]+';
 
 my $max_alias_name_length = 64;
 my $max_ipset_name_length = 64;
-my $max_group_name_length = 20;
+my $max_group_name_length = 18;
 
 PVE::JSONSchema::register_format('IPorCIDR', \&pve_verify_ip_or_cidr);
 sub pve_verify_ip_or_cidr {
