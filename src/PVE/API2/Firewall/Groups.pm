@@ -16,7 +16,7 @@ my $get_security_group_list = sub {
     my ($cluster_conf) = @_;
 
     my $res = [];
-    foreach my $group (keys %{$cluster_conf->{groups}}) {
+    foreach my $group (sort keys %{$cluster_conf->{groups}}) {
 	my $data = { 
 	    group => $group,
 	};
