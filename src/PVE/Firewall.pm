@@ -12,6 +12,7 @@ use PVE::JSONSchema qw(register_standard_option get_standard_option);
 use PVE::Cluster;
 use PVE::ProcFSTools;
 use PVE::Tools qw($IPV4RE $IPV6RE);
+use PVE::Network;
 use File::Basename;
 use File::Path;
 use IO::File;
@@ -875,24 +876,6 @@ sub get_etc_protocols {
     return $etc_protocols;
 }
 
-my $ipv4_mask_hash_localnet = {
-    '255.255.0.0' => 16,
-    '255.255.128.0' => 17,
-    '255.255.192.0' => 18,
-    '255.255.224.0' => 19,
-    '255.255.240.0' => 20,
-    '255.255.248.0' => 21,
-    '255.255.252.0' => 22,
-    '255.255.254.0' => 23,
-    '255.255.255.0' => 24,
-    '255.255.255.128' => 25,
-    '255.255.255.192' => 26,
-    '255.255.255.224' => 27,
-    '255.255.255.240' => 28,
-    '255.255.255.248' => 29,
-    '255.255.255.252' => 30,
-};
-
 my $__local_network;
 
 sub local_network {
@@ -917,7 +900,7 @@ sub local_network {
 	    if ($isv6) {
 		$mask = $entry->{prefix};
 	    } else {
-		$mask = $ipv4_mask_hash_localnet->{$entry->{mask}};
+		$mask = $PVE::Network::ipv4_mask_hash_localnet->{$entry->{mask}};
 		next if !defined($mask);
 	    }
 	    my $cidr = "$entry->{dest}/$mask";
