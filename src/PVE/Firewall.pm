@@ -1240,6 +1240,7 @@ my $rule_properties = {
     },
     digest => get_standard_option('pve-config-digest'),
     type => {
+	description => "Rule type.",
 	type => 'string',
 	optional => 1,
 	enum => ['in', 'out', 'group'],
@@ -1253,6 +1254,7 @@ my $rule_properties = {
 	minLength => 2,
     },
     macro => {
+	description => "Use predefined standard macro.",
 	type => 'string',
 	optional => 1,
 	maxLength => 128,
@@ -1277,6 +1279,7 @@ my $rule_properties = {
 	optional => 1,
     },
     enable => {
+	description => "Flag to enable/disable a rule.",
         type => 'integer',
 	minimum => 0,
 	optional => 1,
@@ -1292,6 +1295,7 @@ my $rule_properties = {
 	optional => 1,
     },
     comment => {
+	description => "Descriptive comment.",
 	type => 'string',
 	optional => 1,
     },
