@@ -322,6 +322,10 @@ my $pve_fw_macros = {
 	{ action => 'PARAM', proto => 'tcp', dport => '465' },
 	{ action => 'PARAM', proto => 'tcp', dport => '587' },
     ],
+    'MDNS' => [
+	"Multicast DNS",
+	{ action => 'PARAM', proto => 'udp', dport => '5353' },
+    ],
     'Munin' => [
 	"Munin networked resource monitoring traffic",
 	{ action => 'PARAM', proto => 'tcp', dport => '4949' },
