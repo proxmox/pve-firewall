@@ -1,3 +1,13 @@
+pve-firewall (2.0-30) unstable; urgency=medium
+
+  * add multicast DNS to the list of Macros
+
+  * add missing parameter descriptions
+
+  * build-depends: add dh-systemd
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 16 Sep 2016 08:53:16 +0200
+
 pve-firewall (2.0-29) unstable; urgency=medium
 
   * prevent overwriting ipsets/sec. groups by renaming
