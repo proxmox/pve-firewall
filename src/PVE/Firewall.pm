@@ -52,6 +52,14 @@ my $max_alias_name_length = 64;
 my $max_ipset_name_length = 64;
 my $max_group_name_length = 18;
 
+my $PROTOCOLS_WITH_PORTS = {
+    udp => 1,     17 => 1,
+    udplite => 1, 136 => 1,
+    tcp => 1,     6 => 1,
+    dccp => 1,    33 => 1,
+    sctp => 1,    132 => 1,
+};
+
 PVE::JSONSchema::register_format('IPorCIDR', \&pve_verify_ip_or_cidr);
 sub pve_verify_ip_or_cidr {
     my ($cidr, $noerr) = @_;
@@ -1502,15 +1510,22 @@ sub verify_rule {
     if ($rule->{dport}) {
 	eval { parse_port_name_number_or_range($rule->{dport}, 1); };
 	&$add_error('dport', $@) if $@;
+	my $proto = $rule->{proto};
 	&$add_error('proto', "missing property - 'dport' requires this property")
-	    if !$rule->{proto};
+	    if !$proto;
+	&$add_error('dport', "protocol '$proto' does not support ports")
+	    if !$PROTOCOLS_WITH_PORTS->{$proto} &&
+		$proto ne 'icmp' && $proto ne 'icmpv6'; # special cases
     }
 
     if ($rule->{sport}) {
 	eval { parse_port_name_number_or_range($rule->{sport}, 0); };
 	&$add_error('sport', $@) if $@;
+	my $proto = $rule->{proto};
 	&$add_error('proto', "missing property - 'sport' requires this property")
-	    if !$rule->{proto};
+	    if !$proto;
+	&$add_error('sport', "protocol '$proto' does not support ports")
+	    if !$PROTOCOLS_WITH_PORTS->{$proto};
     }
 
     if ($rule->{source}) {
@@ -1854,6 +1869,8 @@ sub ruleset_generate_cmdstr {
 		die "unknown icmpv6-type '$rule->{dport}'\n"
 		    if $rule->{dport} !~ /^\d+$/ && !defined($icmpv6_type_names->{$rule->{dport}});
 		push @cmd, "-m icmpv6 --icmpv6-type $rule->{dport}";
+	    } elsif (!$PROTOCOLS_WITH_PORTS->{$proto}) {
+		die "protocol $proto does not have ports\n";
 	    } else {
 		if ($nbdport > 1) {
 		    if ($multiport == 2) {
@@ -1868,6 +1885,8 @@ sub ruleset_generate_cmdstr {
 	}
 
 	if ($rule->{sport}) {
+	    die "protocol $proto does not have ports\n"
+		 if !$PROTOCOLS_WITH_PORTS->{$proto};
 	    if ($nbsport > 1) {
 		push @cmd, "--sports $rule->{sport}" if $multiport != 2;
 	    } else {
