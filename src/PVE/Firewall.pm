@@ -1831,8 +1831,8 @@ sub ruleset_generate_cmdstr {
         }
     }
 
-    if ($rule->{proto}) {
-	push @cmd, "-p $rule->{proto}";
+    if (my $proto = $rule->{proto}) {
+	push @cmd, "-p $proto";
 
 	my $multiport = 0;
 	$multiport++ if $nbdport > 1;
@@ -1844,12 +1844,12 @@ sub ruleset_generate_cmdstr {
 	    if ($multiport == 2) && ($rule->{dport} ne $rule->{sport});
 
 	if ($rule->{dport}) {
-	    if ($rule->{proto} && $rule->{proto} eq 'icmp') {
+	    if ($proto eq 'icmp') {
 		# Note: we use dport to store --icmp-type
 		die "unknown icmp-type '$rule->{dport}'\n"
 		    if $rule->{dport} !~ /^\d+$/ && !defined($icmp_type_names->{$rule->{dport}});
 		push @cmd, "-m icmp --icmp-type $rule->{dport}";
-	    } elsif ($rule->{proto} && $rule->{proto} eq 'icmpv6') {
+	    } elsif ($proto eq 'icmpv6') {
 		# Note: we use dport to store --icmpv6-type
 		die "unknown icmpv6-type '$rule->{dport}'\n"
 		    if $rule->{dport} !~ /^\d+$/ && !defined($icmpv6_type_names->{$rule->{dport}});
