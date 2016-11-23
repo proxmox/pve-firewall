@@ -911,13 +911,17 @@ sub local_network {
 	    my $mask;
 	    if ($isv6) {
 		$mask = $entry->{prefix};
+		next if !$mask; # skip the default route...
 	    } else {
 		$mask = $PVE::Network::ipv4_mask_hash_localnet->{$entry->{mask}};
 		next if !defined($mask);
 	    }
 	    my $cidr = "$entry->{dest}/$mask";
 	    my $testnet = Net::IP->new($cidr);
-	    if ($testnet->overlaps($testip) == $Net::IP::IP_B_IN_A_OVERLAP) {
+	    my $overlap = $testnet->overlaps($testip);
+	    if ($overlap == $Net::IP::IP_B_IN_A_OVERLAP ||
+	        $overlap == $Net::IP::IP_IDENTICAL)
+	    {
 		$__local_network = $cidr;
 		return;
 	    }
