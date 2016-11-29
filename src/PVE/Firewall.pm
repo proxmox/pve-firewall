@@ -2773,6 +2773,10 @@ sub generic_fw_config_parser {
 		$errors->{cidr} = $err;
 	    }
 
+	    if ($cidr =~ m!/0+$!) {
+		$errors->{cidr} = "a zero prefix is not allowed in ipset entries\n";
+	    }
+
 	    my $entry = { cidr => $cidr };
 	    $entry->{nomatch} = 1 if $nomatch;
 	    $entry->{comment} = $comment if $comment;
