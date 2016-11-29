@@ -187,6 +187,9 @@ sub register_create_ip {
 		    if $entry->{cidr} eq $cidr;
 	    }
 
+	    raise_param_exc({ cidr => "a zero prefix is not allowed in ipset entries" })
+		if $cidr =~ m!/0+$!;
+
 	    # make sure alias exists (if $cidr is an alias)
 	    PVE::Firewall::resolve_alias($cluster_conf, $fw_conf, $cidr)
 		if $cidr =~ m/^${PVE::Firewall::ip_alias_pattern}$/;
