@@ -1,3 +1,9 @@
+pve-firewall (2.0-33) unstable; urgency=medium
+
+  * ipset: don't allow zero-prefix entries
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 29 Nov 2016 12:18:04 +0100
+
 pve-firewall (2.0-32) unstable; urgency=medium
 
   * improve search for local-network
