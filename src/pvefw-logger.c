@@ -982,7 +982,7 @@ main(int argc, char *argv[])
         exit(-1);
     }
 
-    if (!nflog_bind_pf(logh, AF_INET) <= 0) {
+    if (nflog_bind_pf(logh, AF_INET) < 0) {
         fprintf(stderr, "nflog_bind_pf AF_INET failed\n");
         exit(-1);
     }
@@ -994,7 +994,7 @@ main(int argc, char *argv[])
     }
 #endif
 
-    if (!nflog_bind_pf(logh, AF_BRIDGE) <= 0) {
+    if (nflog_bind_pf(logh, AF_BRIDGE) < 0) {
         fprintf(stderr, "nflog_bind_pf AF_BRIDGE failed\n");
         exit(-1);
     }
