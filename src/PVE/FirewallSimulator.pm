@@ -6,8 +6,20 @@ use Data::Dumper;
 use PVE::Firewall;
 use File::Basename;
 use Net::IP;
-use PVE::LXC;
-use PVE::QemuServer;
+
+# dynamically include PVE::QemuServer and PVE::LXC
+# to avoid dependency problems
+my $have_qemu_server;
+eval {
+    require PVE::QemuServer;
+    $have_qemu_server = 1;
+};
+
+my $have_lxc;
+eval {
+    require PVE::LXC;
+    $have_lxc = 1;
+};
 
 my $mark;
 my $trace;
@@ -530,11 +542,13 @@ sub simulate_firewall {
 	$from_info->{iface} = 'tapXYZ';
 	$start_state = 'from-bport';
     } elsif ($from =~ m/^ct(\d+)$/) {
+	return 'SKIPPED' if !$have_lxc;
 	my $vmid = $1;
 	$from_info = extract_ct_info($vmdata, $vmid, 0);
 	$start_state = 'fwbr-out'; 
 	$pkg->{mac_source} = $from_info->{macaddr};
     } elsif ($from =~ m/^vm(\d+)(i(\d))?$/) {
+	return 'SKIPPED' if !$have_qemu_server;
 	my $vmid = $1;
 	my $netnum = $3 || 0;
 	$from_info = extract_vm_info($vmdata, $vmid, $netnum);
@@ -563,10 +577,12 @@ sub simulate_firewall {
 	$target->{bridge} = 'vmbr0';
 	$target->{iface} = 'tapXYZ';
     } elsif ($to =~ m/^ct(\d+)$/) {
+	return 'SKIPPED' if !$have_lxc;
 	my $vmid = $1;
 	$target = extract_ct_info($vmdata, $vmid, 0);
 	$target->{iface} = $target->{tapdev};
    } elsif ($to =~ m/^vm(\d+)$/) {
+	return 'SKIPPED' if !$have_qemu_server;
 	my $vmid = $1;
 	$target = extract_vm_info($vmdata, $vmid, 0);
 	$target->{iface} = $target->{tapdev};
