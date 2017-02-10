@@ -11,7 +11,7 @@ DOCDIR=${PREFIX}/share/doc
 MAN1DIR=${MANDIR}/man1/
 PERLDIR=${PREFIX}/share/perl5
 
-ARCH=amd64
+ARCH:=$(shell dpkg-architecture -qDEB_BUILD_ARCH)
 GITVERSION:=$(shell cat .git/refs/heads/master)
 
 DEB=${PACKAGE}_${VERSION}-${PKGREL}_${ARCH}.deb
