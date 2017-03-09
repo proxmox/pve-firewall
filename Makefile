@@ -31,7 +31,7 @@ ${DEB}: check
 	rsync -a debian/ build/debian
 	echo "git clone git://git.proxmox.com/git/pve-firewall.git\\ngit checkout ${GITVERSION}" > build/debian/SOURCE
 	# install
-	cd build; dpkg-buildpackage -rfakeroot -b -us -uc
+	cd build; dpkg-buildpackage -b -us -uc
 	lintian ${DEB}
 
 .PHONY: check
