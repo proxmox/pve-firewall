@@ -13,6 +13,7 @@ use PVE::Cluster;
 use PVE::ProcFSTools;
 use PVE::Tools qw($IPV4RE $IPV6RE);
 use PVE::Network;
+use PVE::SafeSyslog;
 use File::Basename;
 use File::Path;
 use IO::File;
@@ -2506,10 +2507,14 @@ sub parse_fw_rule {
     die "unable to parse rule parameters: $line\n" if length($line);
 
     $rule = verify_rule($rule, $cluster_conf, $fw_conf, $rule_env, 1);
-    if ($verbose && $rule->{errors}) {
-	warn "$prefix - errors in rule parameters: $orig_line\n";
+    if ($rule->{errors}) {
+	# The verbose flag really means we're running from the CLI and want
+	# output on the console - in the other case we really want such errors
+	# to go into the syslog instead.
+	my $log = $verbose ? sub { warn @_ } : sub { syslog(err => @_) };
+	$log->("$prefix - errors in rule parameters: $orig_line\n");
 	foreach my $p (keys %{$rule->{errors}}) {
-	    warn "  $p: $rule->{errors}->{$p}\n";
+	    $log->("  $p: $rule->{errors}->{$p}\n");
 	}
     }
 
