@@ -976,7 +976,9 @@ sub parse_address_list {
     my $iprange = 0;
     my $ipversion;
 
-    foreach my $elem (split(/,/, $str)) {
+    my @elements = split(/,/, $str);
+    die "extraneous commas in list\n" if $str ne join(',', @elements);
+    foreach my $elem (@elements) {
 	$count++;
 	my $ip = Net::IP->new($elem);
 	if (!$ip) {
@@ -1005,7 +1007,9 @@ sub parse_port_name_number_or_range {
     my $count = 0;
     my $icmp_port = 0;
 
-    foreach my $item (split(/,/, $str)) {
+    my @elements = split(/,/, $str);
+    die "extraneous commas in list\n" if $str ne join(',', @elements);
+    foreach my $item (@elements) {
 	$count++;
 	if ($item =~ m/^(\d+):(\d+)$/) {
 	    my ($port1, $port2) = ($1, $2);
