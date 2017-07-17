@@ -1,3 +1,14 @@
+pve-firewall (3.0-2) unstable; urgency=medium
+
+  * Fix #1446: remove masks in case the package had previously been removed but
+    not purged.
+
+  * improve logging on errors in the firewall configuration
+
+  * forbid trailing commas in lists as iptables-restore doesn't support them
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 17 Jul 2017 15:24:40 +0200
+
 pve-firewall (3.0-1) unstable; urgency=medium
 
   * rebuild for Debian Stretch
