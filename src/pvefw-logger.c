@@ -753,9 +753,11 @@ static int print_pkt(struct log_entry *le, struct nflog_data *ldata, u_int8_t fa
     LEPRINTF("%s ", chain_name);
 
     struct timeval ts;
-    nflog_get_timestamp(ldata, &ts);
-
-    LEPRINTTIME(ts.tv_sec);
+    if (nflog_get_timestamp(ldata, &ts) == 0) {
+        LEPRINTTIME(ts.tv_sec);
+    } else {
+        LEPRINTTIME(time(NULL));
+    }
 
     if (prefix != NULL) {
         LEPRINTF("%s", prefix);
