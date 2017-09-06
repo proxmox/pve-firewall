@@ -43,7 +43,7 @@ check:
 clean: 	
 	make -C src clean
 	make -C test clean
-	rm -rf *~ debian/*~ example/*~ *.deb *.changes build ${PACKAGE}-*.tar.gz
+	rm -rf *~ debian/*~ example/*~ *.deb *.changes *.buildinfo build ${PACKAGE}-*.tar.gz
 
 .PHONY: distclean
 distclean: clean
