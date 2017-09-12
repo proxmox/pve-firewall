@@ -1,3 +1,9 @@
+pve-firewall (3.0-3) unstable; urgency=medium
+
+  * Fix #1492: logger: use current timestamp if the packet doesn't have one
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 12 Sep 2017 14:43:06 +0200
+
 pve-firewall (3.0-2) unstable; urgency=medium
 
   * Fix #1446: remove masks in case the package had previously been removed but

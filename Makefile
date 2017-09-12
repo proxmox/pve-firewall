@@ -1,5 +1,5 @@
 VERSION=3.0
-PKGREL=2
+PKGREL=3
 
 PACKAGE=pve-firewall
 
