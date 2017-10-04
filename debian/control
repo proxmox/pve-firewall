@@ -2,12 +2,24 @@ Source: pve-firewall
 Section: admin
 Priority: extra
 Maintainer: Proxmox Support Team <support@proxmox.com>
-Build-Depends: debhelper (>= 7.0.50~), libnetfilter-log-dev, libglib2.0-dev, pve-doc-generator, dh-systemd
+Build-Depends: debhelper (>= 7.0.50~),
+               dh-systemd,
+               libglib2.0-dev,
+               libnetfilter-log-dev,
+               pve-doc-generator,
 Standards-Version: 3.8.4
 
 Package: pve-firewall
 Architecture: any
-Conflicts: ulogd
-Depends: ${shlibs:Depends}, ${perl:Depends}, ${misc:Depends}, libpve-common-perl, pve-cluster, libpve-access-control, iptables, ipset, lsb-base
+Conflicts: ulogd,
+Depends: ipset,
+         iptables,
+         libpve-access-control,
+         libpve-common-perl,
+         lsb-base,
+         pve-cluster,
+         ${misc:Depends},
+         ${perl:Depends},
+         ${shlibs:Depends},
 Description: Proxmox VE Firewall
  This package contains the Proxmox VE Firewall.
