@@ -22,4 +22,4 @@ my $prepare = sub {
     $rpcenv->set_user('root@pam');
 };
 
-PVE::Service::pve_firewall->run_cli(undef, undef, $prepare);
+PVE::Service::pve_firewall->run_cli_handler(prepare => $prepare);
