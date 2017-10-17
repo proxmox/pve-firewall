@@ -925,7 +925,7 @@ main(int argc, char *argv[])
 
     gboolean wrote_pidfile = FALSE;
 
-    openlog("pvepw-logger", LOG_CONS|LOG_PID, LOG_DAEMON);
+    openlog("pvefw-logger", LOG_CONS|LOG_PID, LOG_DAEMON);
 
     GOptionContext *context;
 
