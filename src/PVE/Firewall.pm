@@ -2002,10 +2002,14 @@ sub ruleset_addrule_old {
 }
 
 sub ruleset_addrule {
-   my ($ruleset, $chain, $match, $action, $log) = @_;
+   my ($ruleset, $chain, $match, $action, $log, $logmsg, $vmid) = @_;
 
    die "no such chain '$chain'\n" if !$ruleset->{$chain};
 
+   if (defined($log) && $log) {
+	my $logaction = get_log_rule_base($chain, $vmid, $logmsg, $log);
+	push @{$ruleset->{$chain}}, "-A $chain $match $logaction";
+   }
    push @{$ruleset->{$chain}}, "-A $chain $match $action";
 }
 
@@ -2020,25 +2024,13 @@ sub ruleset_insertrule {
 sub get_log_rule_base {
     my ($chain, $vmid, $msg, $loglevel) = @_;
 
-    die "internal error - no log level" if !defined($loglevel);
-
     $vmid = 0 if !defined($vmid);
+    $msg = "" if !defined($msg);
 
     # Note: we use special format for prefix to pass further
-    # info to log daemon (VMID, LOGVELEL and CHAIN)
+    # info to log daemon (VMID, LOGLEVEL and CHAIN)
 
     return "-j NFLOG --nflog-prefix \":$vmid:$loglevel:$chain: $msg\"";
-}
-
-sub ruleset_addlog {
-    my ($ruleset, $chain, $vmid, $msg, $loglevel, $match) = @_;
-
-    return if !defined($loglevel);
-
-    my $logaction = get_log_rule_base($chain, $vmid, $msg, $loglevel);
-
-    $match = "" if !defined $match;
-    ruleset_addrule($ruleset, $chain, $match, $logaction);
 }
 
 sub ruleset_add_chain_policy {
@@ -2053,15 +2045,11 @@ sub ruleset_add_chain_policy {
 
 	ruleset_addrule($ruleset, $chain, "", "-j PVEFW-Drop");
 
-	ruleset_addlog($ruleset, $chain, $vmid, "policy $policy: ", $loglevel);
-
-	ruleset_addrule($ruleset, $chain, "", "-j DROP");
+	ruleset_addrule($ruleset, $chain, "", "-j DROP", $loglevel, "policy $policy: ", $vmid);
     } elsif ($policy eq 'REJECT') {
 	ruleset_addrule($ruleset, $chain, "", "-j PVEFW-Reject");
 
-	ruleset_addlog($ruleset, $chain, $vmid, "policy $policy: ", $loglevel);
-
-	ruleset_addrule($ruleset, $chain, "", "-g PVEFW-reject");
+	ruleset_addrule($ruleset, $chain, "", "-g PVEFW-reject", $loglevel, "policy $policy:", $vmid);
     } else {
 	# should not happen
 	die "internal error: unknown policy '$policy'";
@@ -2093,8 +2081,7 @@ sub ruleset_chain_add_input_filters {
     if ($cluster_conf->{ipset}->{blacklist}){
 	if (!ruleset_chain_exist($ruleset, "PVEFW-blacklist")) {
 	    ruleset_create_chain($ruleset, "PVEFW-blacklist");
-	    ruleset_addlog($ruleset, "PVEFW-blacklist", 0, "DROP: ", $loglevel) if $loglevel;
-	    ruleset_addrule($ruleset, "PVEFW-blacklist", "", "-j DROP");
+	    ruleset_addrule($ruleset, "PVEFW-blacklist", "", "-j DROP", $loglevel, "DROP: ");
 	}
 	my $ipset_chain = compute_ipset_chain_name(0, 'blacklist', $ipversion);
 	ruleset_addrule($ruleset, $chain, "-m set --match-set ${ipset_chain} src", "-j PVEFW-blacklist");
