@@ -1648,8 +1648,6 @@ sub enable_bridge_firewall {
     $bridge_firewall_enabled = 1;
 }
 
-my $rule_format = "%-15s %-30s %-30s %-15s %-15s %-15s\n";
-
 sub iptables_restore_cmdlist {
     my ($cmdlist) = @_;
 
