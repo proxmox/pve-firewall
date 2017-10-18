@@ -586,10 +586,10 @@ $pve_std_chains_conf->{4} = {
 	# Drop packets with INVALID state
 	{ action => 'DROP', match => '-m conntrack --ctstate INVALID', },
 	# Drop Microsoft SMB noise
-	{ action => 'DROP', proto => 'udp', dport => '135,445', nbdport => 2 },
-	{ action => 'DROP', proto => 'udp', dport => '137:139'},
+	{ action => 'DROP', proto => 'udp', dport => '135,445' },
+	{ action => 'DROP', proto => 'udp', dport => '137:139' },
 	{ action => 'DROP', proto => 'udp', dport => '1024:65535', sport => 137 },
-	{ action => 'DROP', proto => 'tcp', dport => '135,139,445', nbdport => 3 },
+	{ action => 'DROP', proto => 'tcp', dport => '135,139,445' },
 	{ action => 'DROP', proto => 'udp', dport => 1900 }, # UPnP
 	# Drop new/NotSyn traffic so that it doesn't get logged
 	{ action => 'DROP', match => '-p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN' },
@@ -609,10 +609,10 @@ $pve_std_chains_conf->{4} = {
 	# Drop packets with INVALID state
 	{ action => 'DROP', match => '-m conntrack --ctstate INVALID', },
 	# Drop Microsoft SMB noise
-	{ action => 'PVEFW-reject', proto => 'udp', dport => '135,445', nbdport => 2 },
+	{ action => 'PVEFW-reject', proto => 'udp', dport => '135,445' },
 	{ action => 'PVEFW-reject', proto => 'udp', dport => '137:139'},
 	{ action => 'PVEFW-reject', proto => 'udp', dport => '1024:65535', sport => 137 },
-	{ action => 'PVEFW-reject', proto => 'tcp', dport => '135,139,445', nbdport => 3 },
+	{ action => 'PVEFW-reject', proto => 'tcp', dport => '135,139,445' },
 	{ action => 'DROP', proto => 'udp', dport => 1900 }, # UPnP
 	# Drop new/NotSyn traffic so that it doesn't get logged
 	{ action => 'DROP', match => '-p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN' },
@@ -682,10 +682,10 @@ $pve_std_chains_conf->{6} = {
 	# Drop packets with INVALID state
 	{ action => 'DROP', match => '-m conntrack --ctstate INVALID', },
 	# Drop Microsoft SMB noise
-	{ action => 'DROP', proto => 'udp', dport => '135,445', nbdport => 2 },
+	{ action => 'DROP', proto => 'udp', dport => '135,445' },
 	{ action => 'DROP', proto => 'udp', dport => '137:139'},
 	{ action => 'DROP', proto => 'udp', dport => '1024:65535', sport => 137 },
-	{ action => 'DROP', proto => 'tcp', dport => '135,139,445', nbdport => 3 },
+	{ action => 'DROP', proto => 'tcp', dport => '135,139,445' },
 	{ action => 'DROP', proto => 'udp', dport => 1900 }, # UPnP
 	# Drop new/NotSyn traffic so that it doesn't get logged
 	{ action => 'DROP', match => '-p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN' },
@@ -706,10 +706,10 @@ $pve_std_chains_conf->{6} = {
 	# Drop packets with INVALID state
 	{ action => 'DROP', match => '-m conntrack --ctstate INVALID', },
 	# Drop Microsoft SMB noise
-	{ action => 'PVEFW-reject', proto => 'udp', dport => '135,445', nbdport => 2 },
-	{ action => 'PVEFW-reject', proto => 'udp', dport => '137:139'},
+	{ action => 'PVEFW-reject', proto => 'udp', dport => '135,445' },
+	{ action => 'PVEFW-reject', proto => 'udp', dport => '137:139' },
 	{ action => 'PVEFW-reject', proto => 'udp', dport => '1024:65535', sport => 137 },
-	{ action => 'PVEFW-reject', proto => 'tcp', dport => '135,139,445', nbdport => 3 },
+	{ action => 'PVEFW-reject', proto => 'tcp', dport => '135,139,445' },
 	{ action => 'DROP', proto => 'udp', dport => 1900 }, # UPnP
 	# Drop new/NotSyn traffic so that it doesn't get logged
 	{ action => 'DROP', match => '-p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN' },
