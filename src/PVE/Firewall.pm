@@ -1776,7 +1776,7 @@ sub ipset_get_chains {
     return $res;
 }
 
-sub ruleset_generate_cmdstr {
+sub ruleset_generate_match {
     my ($ruleset, $chain, $ipversion, $rule, $actions, $goto, $cluster_conf, $fw_conf) = @_;
 
     return if defined($rule->{enable}) && !$rule->{enable};
@@ -1907,6 +1907,14 @@ sub ruleset_generate_cmdstr {
 
     push @cmd, "-m addrtype --dst-type $rule->{dsttype}" if $rule->{dsttype};
 
+    return scalar(@cmd) ? join(' ', @cmd) : undef;
+}
+
+sub ruleset_generate_action {
+    my ($ruleset, $chain, $ipversion, $rule, $actions, $goto, $cluster_conf, $fw_conf) = @_;
+
+    my @cmd = ();
+
     if (my $action = $rule->{action}) {
 	$action = $actions->{$action} if defined($actions->{$action});
 	$goto = 1 if !defined($goto) && $action eq 'PVEFW-SET-ACCEPT-MARK';
@@ -1914,6 +1922,17 @@ sub ruleset_generate_cmdstr {
     }
 
     return scalar(@cmd) ? join(' ', @cmd) : undef;
+}
+
+sub ruleset_generate_cmdstr {
+    my ($ruleset, $chain, $ipversion, $rule, $actions, $goto, $cluster_conf, $fw_conf) = @_;
+    my $match = ruleset_generate_match($ruleset, $chain, $ipversion, $rule, $actions, $goto, $cluster_conf, $fw_conf);
+    my $action = ruleset_generate_action($ruleset, $chain, $ipversion, $rule, $actions, $goto, $cluster_conf, $fw_conf);
+
+    return undef if !(defined($match) or defined($action));
+    my $ret = defined($match) ? $match : "";
+    $ret = "$ret $action" if defined($action);
+    return $ret;
 }
 
 sub ruleset_generate_rule {
@@ -1929,15 +1948,19 @@ sub ruleset_generate_rule {
 
     # update all or nothing
 
-    my @cmds = ();
+    my @mstrs = ();
+    my @astrs = ();
     foreach my $tmp (@$rules) {
-	if (my $cmdstr = ruleset_generate_cmdstr($ruleset, $chain, $ipversion, $tmp, $actions, $goto, $cluster_conf, $fw_conf)) {
-	    push @cmds, $cmdstr;
+	my $m = ruleset_generate_match($ruleset, $chain, $ipversion, $tmp, $actions, $goto, $cluster_conf, $fw_conf);
+	my $a = ruleset_generate_action($ruleset, $chain, $ipversion, $tmp, $actions, $goto, $cluster_conf, $fw_conf);
+	if (defined $m or defined $a) {
+	    push @mstrs, defined($m) ? $m : "";
+	    push @astrs, defined($a) ? $a : "";
 	}
     }
 
-    foreach my $cmdstr (@cmds) {
-	ruleset_addrule($ruleset, $chain, $cmdstr);
+    for my $i (0 .. $#mstrs) {
+	ruleset_addrule($ruleset, $chain, $mstrs[$i], $astrs[$i]);
     }
 }
 
@@ -1946,8 +1969,10 @@ sub ruleset_generate_rule_insert {
 
     die "implement me" if $rule->{macro}; # not implemented, because not needed so far
 
-    if (my $cmdstr = ruleset_generate_cmdstr($ruleset, $chain, $ipversion, $rule, $actions, $goto)) {
-	ruleset_insertrule($ruleset, $chain, $cmdstr);
+    my $match = ruleset_generate_match($ruleset, $chain, $ipversion, $rule, $actions, $goto);
+    my $action = ruleset_generate_action($ruleset, $chain, $ipversion, $rule, $actions, $goto);
+    if (defined $match && defined $action) {
+	ruleset_insertrule($ruleset, $chain, $match, $action);
     }
 }
 
@@ -1968,7 +1993,7 @@ sub ruleset_chain_exist {
     return $ruleset->{$chain} ? 1 : undef;
 }
 
-sub ruleset_addrule {
+sub ruleset_addrule_old {
    my ($ruleset, $chain, $rule) = @_;
 
    die "no such chain '$chain'\n" if !$ruleset->{$chain};
@@ -1976,12 +2001,20 @@ sub ruleset_addrule {
    push @{$ruleset->{$chain}}, "-A $chain $rule";
 }
 
-sub ruleset_insertrule {
-   my ($ruleset, $chain, $rule) = @_;
+sub ruleset_addrule {
+   my ($ruleset, $chain, $match, $action, $log) = @_;
 
    die "no such chain '$chain'\n" if !$ruleset->{$chain};
 
-   unshift @{$ruleset->{$chain}}, "-A $chain $rule";
+   push @{$ruleset->{$chain}}, "-A $chain $match $action";
+}
+
+sub ruleset_insertrule {
+   my ($ruleset, $chain, $match, $action, $log) = @_;
+
+   die "no such chain '$chain'\n" if !$ruleset->{$chain};
+
+   unshift @{$ruleset->{$chain}}, "-A $chain $match $action";
 }
 
 sub get_log_rule_base {
@@ -1998,15 +2031,14 @@ sub get_log_rule_base {
 }
 
 sub ruleset_addlog {
-    my ($ruleset, $chain, $vmid, $msg, $loglevel, $rule) = @_;
+    my ($ruleset, $chain, $vmid, $msg, $loglevel, $match) = @_;
 
     return if !defined($loglevel);
 
-    my $logrule = get_log_rule_base($chain, $vmid, $msg, $loglevel);
+    my $logaction = get_log_rule_base($chain, $vmid, $msg, $loglevel);
 
-    $logrule = "$rule $logrule" if defined($rule);
-
-    ruleset_addrule($ruleset, $chain, $logrule);
+    $match = "" if !defined $match;
+    ruleset_addrule($ruleset, $chain, $match, $logaction);
 }
 
 sub ruleset_add_chain_policy {
@@ -2019,17 +2051,17 @@ sub ruleset_add_chain_policy {
 
     } elsif ($policy eq 'DROP') {
 
-	ruleset_addrule($ruleset, $chain, "-j PVEFW-Drop");
+	ruleset_addrule($ruleset, $chain, "", "-j PVEFW-Drop");
 
 	ruleset_addlog($ruleset, $chain, $vmid, "policy $policy: ", $loglevel);
 
-	ruleset_addrule($ruleset, $chain, "-j DROP");
+	ruleset_addrule($ruleset, $chain, "", "-j DROP");
     } elsif ($policy eq 'REJECT') {
-	ruleset_addrule($ruleset, $chain, "-j PVEFW-Reject");
+	ruleset_addrule($ruleset, $chain, "", "-j PVEFW-Reject");
 
 	ruleset_addlog($ruleset, $chain, $vmid, "policy $policy: ", $loglevel);
 
-	ruleset_addrule($ruleset, $chain, "-g PVEFW-reject");
+	ruleset_addrule($ruleset, $chain, "", "-g PVEFW-reject");
     } else {
 	# should not happen
 	die "internal error: unknown policy '$policy'";
@@ -2040,19 +2072,19 @@ sub ruleset_chain_add_ndp {
     my ($ruleset, $chain, $ipversion, $options, $direction, $accept) = @_;
     return if $ipversion != 6 || (defined($options->{ndp}) && !$options->{ndp});
 
-    ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type router-solicitation $accept");
+    ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type router-solicitation", $accept);
     if ($direction ne 'OUT' || $options->{radv}) {
-	ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type router-advertisement $accept");
+	ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type router-advertisement", $accept);
     }
-    ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type neighbor-solicitation $accept");
-    ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type neighbor-advertisement $accept");
+    ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type neighbor-solicitation", $accept);
+    ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type neighbor-advertisement", $accept);
 }
 
 sub ruleset_chain_add_conn_filters {
     my ($ruleset, $chain, $accept) = @_;
 
-    ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate INVALID -j DROP");
-    ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate RELATED,ESTABLISHED -j $accept");
+    ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate INVALID", "-j DROP");
+    ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate RELATED,ESTABLISHED", "-j $accept");
 }
 
 sub ruleset_chain_add_input_filters {
@@ -2062,20 +2094,20 @@ sub ruleset_chain_add_input_filters {
 	if (!ruleset_chain_exist($ruleset, "PVEFW-blacklist")) {
 	    ruleset_create_chain($ruleset, "PVEFW-blacklist");
 	    ruleset_addlog($ruleset, "PVEFW-blacklist", 0, "DROP: ", $loglevel) if $loglevel;
-	    ruleset_addrule($ruleset, "PVEFW-blacklist", "-j DROP");
+	    ruleset_addrule($ruleset, "PVEFW-blacklist", "", "-j DROP");
 	}
 	my $ipset_chain = compute_ipset_chain_name(0, 'blacklist', $ipversion);
-	ruleset_addrule($ruleset, $chain, "-m set --match-set ${ipset_chain} src -j PVEFW-blacklist");
+	ruleset_addrule($ruleset, $chain, "-m set --match-set ${ipset_chain} src", "-j PVEFW-blacklist");
     }
 
     if (!(defined($options->{nosmurfs}) && $options->{nosmurfs} == 0)) {
 	if ($ipversion == 4) {
-	    ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate INVALID,NEW -j PVEFW-smurfs");
+	    ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate INVALID,NEW", "-j PVEFW-smurfs");
 	}
     }
 
     if ($options->{tcpflags}) {
-	ruleset_addrule($ruleset, $chain, "-p tcp -j PVEFW-tcpflags");
+	ruleset_addrule($ruleset, $chain, "-p tcp", "-j PVEFW-tcpflags");
     }
 }
 
@@ -2112,15 +2144,15 @@ sub ruleset_create_vm_chain {
 
     if ($direction eq 'OUT') {
 	if (defined($macaddr) && !(defined($options->{macfilter}) && $options->{macfilter} == 0)) {
-	    ruleset_addrule($ruleset, $chain, "-m mac ! --mac-source $macaddr -j DROP");
+	    ruleset_addrule($ruleset, $chain, "-m mac ! --mac-source $macaddr", "-j DROP");
 	}
 	if ($ipversion == 6 && !$options->{radv}) {
-	    ruleset_addrule($ruleset, $chain, '-p icmpv6 --icmpv6-type router-advertisement -j DROP');
+	    ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type router-advertisement", "-j DROP");
 	}
 	if ($ipfilter_ipset) {
-	    ruleset_addrule($ruleset, $chain, "-m set ! --match-set $ipfilter_ipset src -j DROP");
+	    ruleset_addrule($ruleset, $chain, "-m set ! --match-set $ipfilter_ipset src", "-j DROP");
 	}
-	ruleset_addrule($ruleset, $chain, "-j MARK --set-mark $FWACCEPTMARK_OFF"); # clear mark
+	ruleset_addrule($ruleset, $chain, "", "-j MARK --set-mark $FWACCEPTMARK_OFF"); # clear mark
     }
 
     my $accept_action = $direction eq 'OUT' ? '-g PVEFW-SET-ACCEPT-MARK' : "-j $accept";
@@ -2137,14 +2169,14 @@ sub ruleset_add_group_rule {
     }
 
     if ($direction eq 'OUT' && $rule->{iface_out}) {
-	ruleset_addrule($ruleset, $chain, "-o $rule->{iface_out} -j $group_chain");
+	ruleset_addrule($ruleset, $chain, "-o $rule->{iface_out}", "-j $group_chain");
     } elsif ($direction eq 'IN' && $rule->{iface_in}) {
-	ruleset_addrule($ruleset, $chain, "-i $rule->{iface_in} -j $group_chain");
+	ruleset_addrule($ruleset, $chain, "-i $rule->{iface_in}", "-j $group_chain");
     } else {
-	ruleset_addrule($ruleset, $chain, "-j $group_chain");
+	ruleset_addrule($ruleset, $chain, "", "-j $group_chain");
     }
 
-    ruleset_addrule($ruleset, $chain, "-m mark --mark $FWACCEPTMARK_ON -j $action");
+    ruleset_addrule($ruleset, $chain, "-m mark --mark $FWACCEPTMARK_ON", "-j $action");
 }
 
 sub ruleset_generate_vm_rules {
@@ -2209,7 +2241,7 @@ sub ruleset_generate_vm_ipsrules {
 	    ruleset_create_chain($ruleset, "PVEFW-IPS");
 	}
 
-        ruleset_addrule($ruleset, "PVEFW-IPS", "-m physdev --physdev-out $iface --physdev-is-bridged -j $nfqueue");
+        ruleset_addrule($ruleset, "PVEFW-IPS", "-m physdev --physdev-out $iface --physdev-is-bridged", "-j $nfqueue");
     }
 }
 
@@ -2257,10 +2289,10 @@ sub generate_tap_rules_direction {
     # plug the tap chain to bridge chain
     if ($direction eq 'IN') {
 	ruleset_addrule($ruleset, "PVEFW-FWBR-IN",
-			"-m physdev --physdev-is-bridged --physdev-out $iface -j $tapchain");
+			"-m physdev --physdev-is-bridged --physdev-out $iface", "-j $tapchain");
     } else {
 	ruleset_addrule($ruleset, "PVEFW-FWBR-OUT",
-			"-m physdev --physdev-is-bridged --physdev-in $iface -j $tapchain");
+			"-m physdev --physdev-is-bridged --physdev-in $iface", "-j $tapchain");
     }
 }
 
@@ -2278,7 +2310,7 @@ sub enable_host_firewall {
 
     my $loglevel = get_option_log_level($options, "log_level_in");
 
-    ruleset_addrule($ruleset, $chain, "-i lo -j ACCEPT");
+    ruleset_addrule($ruleset, $chain, "-i lo", "-j ACCEPT");
 
     ruleset_chain_add_conn_filters($ruleset, $chain, 'ACCEPT');
     ruleset_chain_add_ndp($ruleset, $chain, $ipversion, $options, 'IN', '-j RETURN');
@@ -2287,7 +2319,7 @@ sub enable_host_firewall {
     # we use RETURN because we need to check also tap rules
     my $accept_action = 'RETURN';
 
-    ruleset_addrule($ruleset, $chain, "-p igmp -j $accept_action"); # important for multicast
+    ruleset_addrule($ruleset, $chain, "-p igmp", "-j $accept_action"); # important for multicast
 
     # add host rules first, so that cluster wide rules can be overwritten
     foreach my $rule (@$rules, @$cluster_rules) {
@@ -2312,19 +2344,19 @@ sub enable_host_firewall {
     # allow standard traffic for management ipset (includes cluster network)
     my $mngmnt_ipset_chain = compute_ipset_chain_name(0, "management", $ipversion);
     my $mngmntsrc = "-m set --match-set ${mngmnt_ipset_chain} src";
-    ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 8006 -j $accept_action");  # PVE API
-    ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 5900:5999 -j $accept_action");  # PVE VNC Console
-    ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 3128 -j $accept_action");  # SPICE Proxy
-    ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 22 -j $accept_action");  # SSH
+    ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 8006", "-j $accept_action");  # PVE API
+    ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 5900:5999", "-j $accept_action");  # PVE VNC Console
+    ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 3128", "-j $accept_action");  # SPICE Proxy
+    ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 22", "-j $accept_action");  # SSH
 
     my $localnet = $cluster_conf->{aliases}->{local_network}->{cidr};
     my $localnet_ver = $cluster_conf->{aliases}->{local_network}->{ipversion};
 
     # corosync
     if ($localnet && ($ipversion == $localnet_ver)) {
-	my $corosync_rule = "-p udp --dport 5404:5405 -j $accept_action";
-	ruleset_addrule($ruleset, $chain, "-s $localnet -d $localnet $corosync_rule");
-	ruleset_addrule($ruleset, $chain, "-s $localnet -m addrtype --dst-type MULTICAST $corosync_rule");
+	my $corosync_rule = "-p udp --dport 5404:5405";
+	ruleset_addrule($ruleset, $chain, "-s $localnet -d $localnet $corosync_rule", "-j $accept_action");
+	ruleset_addrule($ruleset, $chain, "-s $localnet -m addrtype --dst-type MULTICAST $corosync_rule", "-j $accept_action");
     }
 
     # implement input policy
@@ -2337,7 +2369,7 @@ sub enable_host_firewall {
 
     $loglevel = get_option_log_level($options, "log_level_out");
 
-    ruleset_addrule($ruleset, $chain, "-o lo -j ACCEPT");
+    ruleset_addrule($ruleset, $chain, "-o lo", "-j ACCEPT");
 
     ruleset_chain_add_conn_filters($ruleset, $chain, 'ACCEPT');
 
@@ -2345,7 +2377,7 @@ sub enable_host_firewall {
     $accept_action = 'RETURN';
     ruleset_chain_add_ndp($ruleset, $chain, $ipversion, $options, 'OUT', "-j $accept_action");
 
-    ruleset_addrule($ruleset, $chain, "-p igmp -j $accept_action"); # important for multicast
+    ruleset_addrule($ruleset, $chain, "-p igmp", "-j $accept_action"); # important for multicast
 
     # add host rules first, so that cluster wide rules can be overwritten
     foreach my $rule (@$rules, @$cluster_rules) {
@@ -2368,22 +2400,22 @@ sub enable_host_firewall {
 
     # allow standard traffic on cluster network
     if ($localnet && ($ipversion == $localnet_ver)) {
-	ruleset_addrule($ruleset, $chain, "-d $localnet -p tcp --dport 8006 -j $accept_action");  # PVE API
-	ruleset_addrule($ruleset, $chain, "-d $localnet -p tcp --dport 22 -j $accept_action");  # SSH
-	ruleset_addrule($ruleset, $chain, "-d $localnet -p tcp --dport 5900:5999 -j $accept_action");  # PVE VNC Console
-	ruleset_addrule($ruleset, $chain, "-d $localnet -p tcp --dport 3128 -j $accept_action");  # SPICE Proxy
+	ruleset_addrule($ruleset, $chain, "-d $localnet -p tcp --dport 8006", "-j $accept_action");  # PVE API
+	ruleset_addrule($ruleset, $chain, "-d $localnet -p tcp --dport 22", "-j $accept_action");  # SSH
+	ruleset_addrule($ruleset, $chain, "-d $localnet -p tcp --dport 5900:5999", "-j $accept_action");  # PVE VNC Console
+	ruleset_addrule($ruleset, $chain, "-d $localnet -p tcp --dport 3128", "-j $accept_action");  # SPICE Proxy
 
-	my $corosync_rule = "-p udp --dport 5404:5405 -j $accept_action";
-	ruleset_addrule($ruleset, $chain, "-d $localnet $corosync_rule");
-	ruleset_addrule($ruleset, $chain, "-m addrtype --dst-type MULTICAST $corosync_rule");
+	my $corosync_rule = "-p udp --dport 5404:5405";
+	ruleset_addrule($ruleset, $chain, "-d $localnet $corosync_rule", "-j $accept_action");
+	ruleset_addrule($ruleset, $chain, "-m addrtype --dst-type MULTICAST $corosync_rule", "-j $accept_action");
     }
 
     # implement output policy
     $policy = $cluster_options->{policy_out} || 'ACCEPT'; # allow everything by default
     ruleset_add_chain_policy($ruleset, $chain, $ipversion, 0, $policy, $loglevel, $accept_action);
 
-    ruleset_addrule($ruleset, "PVEFW-OUTPUT", "-j PVEFW-HOST-OUT");
-    ruleset_addrule($ruleset, "PVEFW-INPUT", "-j PVEFW-HOST-IN");
+    ruleset_addrule($ruleset, "PVEFW-OUTPUT", "", "-j PVEFW-HOST-OUT");
+    ruleset_addrule($ruleset, "PVEFW-INPUT", "", "-j PVEFW-HOST-IN");
 }
 
 sub generate_group_rules {
@@ -2399,7 +2431,7 @@ sub generate_group_rules {
     my $chain = "GROUP-${group}-IN";
 
     ruleset_create_chain($ruleset, $chain);
-    ruleset_addrule($ruleset, $chain, "-j MARK --set-mark $FWACCEPTMARK_OFF"); # clear mark
+    ruleset_addrule($ruleset, $chain, "", "-j MARK --set-mark $FWACCEPTMARK_OFF"); # clear mark
 
     foreach my $rule (@$rules) {
 	next if $rule->{type} ne 'in';
@@ -2412,7 +2444,7 @@ sub generate_group_rules {
     $chain = "GROUP-${group}-OUT";
 
     ruleset_create_chain($ruleset, $chain);
-    ruleset_addrule($ruleset, $chain, "-j MARK --set-mark $FWACCEPTMARK_OFF"); # clear mark
+    ruleset_addrule($ruleset, $chain, "", "-j MARK --set-mark $FWACCEPTMARK_OFF"); # clear mark
 
     foreach my $rule (@$rules) {
 	next if $rule->{type} ne 'out';
@@ -3135,7 +3167,7 @@ sub generate_std_chains {
 	    if (ref($rule)) {
 		ruleset_generate_rule($ruleset, $chain, $ipversion, $rule);
 	    } else {
-		ruleset_addrule($ruleset, $chain, $rule);
+		ruleset_addrule_old($ruleset, $chain, $rule);
 	    }
 	}
     }
@@ -3378,10 +3410,10 @@ sub compile_iptables_filter {
     ruleset_create_chain($ruleset, "PVEFW-FWBR-IN");
     ruleset_chain_add_input_filters($ruleset, "PVEFW-FWBR-IN", $ipversion, $hostfw_options, $cluster_conf, $loglevel);
 
-    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m physdev --physdev-is-bridged --physdev-in fwln+ -j PVEFW-FWBR-IN");
+    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m physdev --physdev-is-bridged --physdev-in fwln+", "-j PVEFW-FWBR-IN");
 
     ruleset_create_chain($ruleset, "PVEFW-FWBR-OUT");
-    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m physdev --physdev-is-bridged --physdev-out fwln+ -j PVEFW-FWBR-OUT");
+    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m physdev --physdev-is-bridged --physdev-out fwln+", "-j PVEFW-FWBR-OUT");
 
     generate_std_chains($ruleset, $hostfw_options, $ipversion);
 
@@ -3440,7 +3472,7 @@ sub compile_iptables_filter {
     }
 
     if(ruleset_chain_exist($ruleset, "PVEFW-IPS")){
-	ruleset_insertrule($ruleset, "PVEFW-FORWARD", "-m conntrack --ctstate RELATED,ESTABLISHED -j PVEFW-IPS");
+	ruleset_insertrule($ruleset, "PVEFW-FORWARD", "-m conntrack --ctstate RELATED,ESTABLISHED", "-j PVEFW-IPS");
     }
 
     return $ruleset;

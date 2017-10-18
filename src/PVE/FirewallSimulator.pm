@@ -111,7 +111,7 @@ sub ipset_match {
 sub rule_match {
     my ($ipset_ruleset, $chain, $rule, $pkg) = @_;
 
-    $rule =~ s/^-A $chain // || die "got strange rule: $rule";
+    $rule =~ s/^-A $chain +// || die "got strange rule: $rule";
 
     while (length($rule)) {
 
