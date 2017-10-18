@@ -1800,6 +1800,15 @@ sub ipset_get_chains {
     return $res;
 }
 
+# substitude action of rule according to action hash
+sub rule_substitude_action {
+    my ($rule, $actions) = @_;
+
+    if (my $action = $rule->{action}) {
+	$rule->{action} = $actions->{$action} if defined($actions->{$action});
+    }
+}
+
 # generate a src or dst match
 # $dir(ection) is either d or s
 sub ipt_gen_src_or_dst_match {
@@ -2061,40 +2070,6 @@ sub ruleset_generate_rule {
     }
 }
 
-sub ruleset_generate_rule_old {
-    my ($ruleset, $chain, $ipversion, $rule, $actions, $goto, $cluster_conf, $fw_conf) = @_;
-
-    my $rules;
-
-    if ($rule->{macro}) {
-	$rules = &$apply_macro($rule->{macro}, $rule, 0, $ipversion);
-    } else {
-	$rules = [ $rule ];
-    }
-
-    # update all or nothing
-
-    # fixme: lots of temporary ugliness
-    my @mstrs = ();
-    my @astrs = ();
-    my @logging = ();
-    my @logmsg = ();
-    foreach my $tmp (@$rules) {
-	my $m = ruleset_generate_match($ruleset, $chain, $ipversion, $tmp, $actions, $goto, $cluster_conf, $fw_conf);
-	my $a = ruleset_generate_action($ruleset, $chain, $ipversion, $tmp, $actions, $goto, $cluster_conf, $fw_conf);
-	if (defined $m or defined $a) {
-	    push @mstrs, defined($m) ? $m : "";
-	    push @astrs, defined($a) ? $a : "";
-	    push @logging, $tmp->{log};
-	    push @logmsg, $tmp->{logmsg};
-	}
-    }
-
-    for my $i (0 .. $#mstrs) {
-	ruleset_addrule($ruleset, $chain, $mstrs[$i], $astrs[$i], $logging[$i], $logmsg[$i]);
-    }
-}
-
 sub ruleset_generate_rule_insert {
     my ($ruleset, $chain, $ipversion, $rule, $actions, $goto) = @_;
 
@@ -2170,8 +2145,9 @@ sub ruleset_add_chain_policy {
 
     if ($policy eq 'ACCEPT') {
 
-	ruleset_generate_rule_old($ruleset, $chain, $ipversion, { action => 'ACCEPT' },
-			      { ACCEPT =>  $accept_action});
+	my $rule = { action => 'ACCEPT' };
+	rule_substitude_action($rule, { ACCEPT =>  $accept_action});
+	ruleset_generate_rule($ruleset, $chain, $ipversion, $rule);
 
     } elsif ($policy eq 'DROP') {
 
@@ -2317,12 +2293,12 @@ sub ruleset_generate_vm_rules {
 	    next if $rule->{type} ne $lc_direction;
 	    eval {
 		if ($direction eq 'OUT') {
-		    ruleset_generate_rule_old($ruleset, $chain, $ipversion, $rule,
-					  { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" },
+		    rule_substitude_action($rule, { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" });
+		    ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, undef,
 					  undef, $cluster_conf, $vmfw_conf);
 		} else {
-		    ruleset_generate_rule_old($ruleset, $chain, $ipversion, $rule,
-					  { ACCEPT => $in_accept , REJECT => "PVEFW-reject" },
+		    rule_substitude_action($rule, { ACCEPT => $in_accept , REJECT => "PVEFW-reject" });
+		    ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, undef,
 					  undef, $cluster_conf, $vmfw_conf);
 		}
 	    };
@@ -2451,8 +2427,8 @@ sub enable_host_firewall {
 	    if ($rule->{type} eq 'group') {
 		ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, 'IN', $accept_action, $ipversion);
 	    } elsif ($rule->{type} eq 'in') {
-		ruleset_generate_rule_old($ruleset, $chain, $ipversion, $rule,
-				      { ACCEPT => $accept_action, REJECT => "PVEFW-reject" },
+		rule_substitude_action($rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" });
+		ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, undef,
 				      undef, $cluster_conf, $hostfw_conf);
 	    }
 	};
@@ -2508,8 +2484,8 @@ sub enable_host_firewall {
 	    if ($rule->{type} eq 'group') {
 		ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, 'OUT', $accept_action, $ipversion);
 	    } elsif ($rule->{type} eq 'out') {
-		ruleset_generate_rule_old($ruleset, $chain, $ipversion,
-				      $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" },
+		rule_substitude_action($rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" });
+		ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, undef,
 				      undef, $cluster_conf, $hostfw_conf);
 	    }
 	};
@@ -2555,9 +2531,8 @@ sub generate_group_rules {
     foreach my $rule (@$rules) {
 	next if $rule->{type} ne 'in';
 	next if $rule->{ipversion} && $rule->{ipversion} ne $ipversion;
-	ruleset_generate_rule_old($ruleset, $chain, $ipversion, $rule,
-			      { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" }, 
-			      undef, $cluster_conf);
+	rule_substitude_action($rule, { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" });
+	ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, undef, undef, $cluster_conf);
     }
 
     $chain = "GROUP-${group}-OUT";
@@ -2570,8 +2545,8 @@ sub generate_group_rules {
 	next if $rule->{ipversion} && $rule->{ipversion} ne $ipversion;
 	# we use PVEFW-SET-ACCEPT-MARK (Instead of ACCEPT) because we need to
 	# check also other tap rules later
-	ruleset_generate_rule_old($ruleset, $chain, $ipversion, $rule,
-			      { ACCEPT => 'PVEFW-SET-ACCEPT-MARK', REJECT => "PVEFW-reject" }, 
+	rule_substitude_action($rule, { ACCEPT => 'PVEFW-SET-ACCEPT-MARK', REJECT => "PVEFW-reject" });
+	ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, undef,
 			      undef, $cluster_conf);
     }
 }
