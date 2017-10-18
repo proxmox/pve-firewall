@@ -142,6 +142,20 @@ my $log_level_hash = {
     emerg => 0,
 };
 
+# %rule
+#
+# name => optional
+# action =>
+# proto =>
+# sport =>
+# dport =>
+# log => optional, loglevel
+# logmsg => optional, logmsg - overwrites default
+# iface_in
+# iface_out
+# match => optional, overwrites generation of match
+# target => optional, overwrites action
+
 # we need to overwrite some macros for ipv6
 my $pve_ipv6fw_macros = {
     'Ping' => [
@@ -536,7 +550,7 @@ my $FWACCEPTMARK_OFF = "0x00000000/0x80000000";
 my $pve_std_chains = {};
 $pve_std_chains->{4} = {
     'PVEFW-SET-ACCEPT-MARK' => [
-	"-j MARK --set-mark $FWACCEPTMARK_ON",
+	{ target => "-j MARK --set-mark $FWACCEPTMARK_ON" },
     ],
     'PVEFW-DropBroadcast' => [
 	# same as shorewall 'Broadcast'
@@ -552,10 +566,10 @@ $pve_std_chains->{4} = {
 	{ action => 'DROP', dsttype => 'BROADCAST' },
 	{ action => 'DROP', source => '224.0.0.0/4' },
 	{ action => 'DROP', proto => 'icmp' },
-	"-p tcp -j REJECT --reject-with tcp-reset",
-	"-p udp -j REJECT --reject-with icmp-port-unreachable",
-	"-p icmp -j REJECT --reject-with icmp-host-unreachable",
-	"-j REJECT --reject-with icmp-host-prohibited",
+	{ match => '-p tcp', target => '-j REJECT --reject-with tcp-reset' },
+	{ match => '-p udp', target => '-j REJECT --reject-with icmp-port-unreachable' },
+	{ match => '-p icmp', target => '-j REJECT --reject-with icmp-host-unreachable' },
+	{ target => '-j REJECT --reject-with icmp-host-prohibited' },
     ],
     'PVEFW-Drop' => [
 	# same as shorewall 'Drop', which is equal to DROP,
@@ -568,7 +582,7 @@ $pve_std_chains->{4} = {
 	{ action => 'ACCEPT', proto => 'icmp', dport => 'fragmentation-needed' },
 	{ action => 'ACCEPT', proto => 'icmp', dport => 'time-exceeded' },
 	# Drop packets with INVALID state
-	"-m conntrack --ctstate INVALID -j DROP",
+	{ action => 'DROP', match => '-m conntrack --ctstate INVALID', },
 	# Drop Microsoft SMB noise
 	{ action => 'DROP', proto => 'udp', dport => '135,445', nbdport => 2 },
 	{ action => 'DROP', proto => 'udp', dport => '137:139'},
@@ -576,7 +590,7 @@ $pve_std_chains->{4} = {
 	{ action => 'DROP', proto => 'tcp', dport => '135,139,445', nbdport => 3 },
 	{ action => 'DROP', proto => 'udp', dport => 1900 }, # UPnP
 	# Drop new/NotSyn traffic so that it doesn't get logged
-	"-p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN -j DROP",
+	{ action => 'DROP', match => '-p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN' },
 	# Drop DNS replies
 	{ action => 'DROP', proto => 'udp', sport => 53 },
     ],
@@ -591,7 +605,7 @@ $pve_std_chains->{4} = {
 	{ action => 'ACCEPT', proto => 'icmp', dport => 'fragmentation-needed' },
 	{ action => 'ACCEPT', proto => 'icmp', dport => 'time-exceeded' },
 	# Drop packets with INVALID state
-	"-m conntrack --ctstate INVALID -j DROP",
+	{ action => 'DROP', match => '-m conntrack --ctstate INVALID', },
 	# Drop Microsoft SMB noise
 	{ action => 'PVEFW-reject', proto => 'udp', dport => '135,445', nbdport => 2 },
 	{ action => 'PVEFW-reject', proto => 'udp', dport => '137:139'},
@@ -599,111 +613,118 @@ $pve_std_chains->{4} = {
 	{ action => 'PVEFW-reject', proto => 'tcp', dport => '135,139,445', nbdport => 3 },
 	{ action => 'DROP', proto => 'udp', dport => 1900 }, # UPnP
 	# Drop new/NotSyn traffic so that it doesn't get logged
-	"-p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN -j DROP",
+	{ action => 'DROP', match => '-p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN' },
 	# Drop DNS replies
 	{ action => 'DROP', proto => 'udp', sport => 53 },
     ],
     'PVEFW-tcpflags' => [
 	# same as shorewall tcpflags action.
 	# Packets arriving on this interface are checked for som illegal combinations of TCP flags
-	"-p tcp -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG FIN,PSH,URG -g PVEFW-logflags",
-	"-p tcp -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG NONE -g PVEFW-logflags",
-	"-p tcp -m tcp --tcp-flags SYN,RST SYN,RST -g PVEFW-logflags",
-	"-p tcp -m tcp --tcp-flags FIN,SYN FIN,SYN -g PVEFW-logflags",
-	"-p tcp -m tcp --sport 0 --tcp-flags FIN,SYN,RST,ACK SYN -g PVEFW-logflags",
+	{ match => '-p tcp -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG FIN,PSH,URG', target => '-g PVEFW-logflags' },
+	{ match => '-p tcp -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG NONE', target => '-g PVEFW-logflags' },
+	{ match => '-p tcp -m tcp --tcp-flags SYN,RST SYN,RST', target => '-g PVEFW-logflags' },
+	{ match => '-p tcp -m tcp --tcp-flags FIN,SYN FIN,SYN', target => '-g PVEFW-logflags' },
+	{ match => '-p tcp -m tcp --sport 0 --tcp-flags FIN,SYN,RST,ACK SYN', target => '-g PVEFW-logflags' },
     ],
     'PVEFW-smurfs' => [
 	# same as shorewall smurfs action
 	# Filter packets for smurfs (packets with a broadcast address as the source).
-	"-s 0.0.0.0/32 -j RETURN", # allow DHCP
-	"-m addrtype --src-type BROADCAST -g PVEFW-smurflog",
-	"-s 224.0.0.0/4 -g PVEFW-smurflog",
+	{ match => '-s 0.0.0.0/32', target => '-j RETURN' }, # allow DHCP
+	{ match => '-m addrtype --src-type BROADCAST', target => '-g PVEFW-smurflog' },
+	{ match => '-s 224.0.0.0/4', target => '-g PVEFW-smurflog' },
+    ],
+    'PVEFW-smurflog' => [
+	{ action => 'DROP', logmsg => 'DROP: ' },
+    ],
+    'PVEFW-logflags' => [
+	{ action => 'DROP', logmsg => 'DROP: ' },
     ],
 };
 
 $pve_std_chains->{6} = {
     'PVEFW-SET-ACCEPT-MARK' => [
-        "-j MARK --set-mark $FWACCEPTMARK_ON",
+	{ target => "-j MARK --set-mark $FWACCEPTMARK_ON" },
     ],
     'PVEFW-DropBroadcast' => [
-        # same as shorewall 'Broadcast'
-        # simply DROP BROADCAST/MULTICAST/ANYCAST
-        # we can use this to reduce logging
-        #{ action => 'DROP', dsttype => 'BROADCAST' }, #no broadcast in ipv6
+	# same as shorewall 'Broadcast'
+	# simply DROP BROADCAST/MULTICAST/ANYCAST
+	# we can use this to reduce logging
+	#{ action => 'DROP', dsttype => 'BROADCAST' }, #no broadcast in ipv6
 	# ipv6 addrtype does not work with kernel 2.6.32
 	#{ action => 'DROP', dsttype => 'MULTICAST' },
-        #{ action => 'DROP', dsttype => 'ANYCAST' },
-        { action => 'DROP', dest => 'ff00::/8' },
-        #{ action => 'DROP', dest => '224.0.0.0/4' },
+	#{ action => 'DROP', dsttype => 'ANYCAST' },
+	{ action => 'DROP', dest => 'ff00::/8' },
+	#{ action => 'DROP', dest => '224.0.0.0/4' },
     ],
     'PVEFW-reject' => [
-        # same as shorewall 'reject'
-        #{ action => 'DROP', dsttype => 'BROADCAST' },
-        #{ action => 'DROP', source => '224.0.0.0/4' },
+	# same as shorewall 'reject'
+	#{ action => 'DROP', dsttype => 'BROADCAST' },
+	#{ action => 'DROP', source => '224.0.0.0/4' },
 	{ action => 'DROP', proto => 'icmpv6' },
-        "-p tcp -j REJECT --reject-with tcp-reset",
-        #"-p udp -j REJECT --reject-with icmp-port-unreachable",
-        #"-p icmp -j REJECT --reject-with icmp-host-unreachable",
-        #"-j REJECT --reject-with icmp-host-prohibited",
+	{ match => '-p tcp', target => '-j REJECT --reject-with tcp-reset' },
+	#"-p udp -j REJECT --reject-with icmp-port-unreachable",
+	#"-p icmp -j REJECT --reject-with icmp-host-unreachable",
+	#"-j REJECT --reject-with icmp-host-prohibited",
     ],
     'PVEFW-Drop' => [
-        # same as shorewall 'Drop', which is equal to DROP,
-        # but REJECT/DROP some packages to reduce logging,
-        # and ACCEPT critical ICMP types
+	# same as shorewall 'Drop', which is equal to DROP,
+	# but REJECT/DROP some packages to reduce logging,
+	# and ACCEPT critical ICMP types
 	{ action => 'PVEFW-reject', proto => 'tcp', dport => '43' }, # REJECT 'auth'
-        # we are not interested in BROADCAST/MULTICAST/ANYCAST
-        { action => 'PVEFW-DropBroadcast' },
-        # ACCEPT critical ICMP types
-        { action => 'ACCEPT', proto => 'icmpv6', dport => 'destination-unreachable' },
-        { action => 'ACCEPT', proto => 'icmpv6', dport => 'time-exceeded' },
-        { action => 'ACCEPT', proto => 'icmpv6', dport => 'packet-too-big' },
-
-        # Drop packets with INVALID state
-        "-m conntrack --ctstate INVALID -j DROP",
-        # Drop Microsoft SMB noise
+	# we are not interested in BROADCAST/MULTICAST/ANYCAST
+	{ action => 'PVEFW-DropBroadcast' },
+	# ACCEPT critical ICMP types
+	{ action => 'ACCEPT', proto => 'icmpv6', dport => 'destination-unreachable' },
+	{ action => 'ACCEPT', proto => 'icmpv6', dport => 'time-exceeded' },
+	{ action => 'ACCEPT', proto => 'icmpv6', dport => 'packet-too-big' },
+	# Drop packets with INVALID state
+	{ action => 'DROP', match => '-m conntrack --ctstate INVALID', },
+	# Drop Microsoft SMB noise
 	{ action => 'DROP', proto => 'udp', dport => '135,445', nbdport => 2 },
 	{ action => 'DROP', proto => 'udp', dport => '137:139'},
 	{ action => 'DROP', proto => 'udp', dport => '1024:65535', sport => 137 },
 	{ action => 'DROP', proto => 'tcp', dport => '135,139,445', nbdport => 3 },
 	{ action => 'DROP', proto => 'udp', dport => 1900 }, # UPnP
-        # Drop new/NotSyn traffic so that it doesn't get logged
-        "-p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN -j DROP",
-        # Drop DNS replies
+	# Drop new/NotSyn traffic so that it doesn't get logged
+	{ action => 'DROP', match => '-p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN' },
+	# Drop DNS replies
 	{ action => 'DROP', proto => 'udp', sport => 53 },
     ],
     'PVEFW-Reject' => [
-        # same as shorewall 'Reject', which is equal to Reject,
-        # but REJECT/DROP some packages to reduce logging,
-        # and ACCEPT critical ICMP types
-        { action => 'PVEFW-reject',  proto => 'tcp', dport => '43' }, # REJECT 'auth'
-        # we are not interested in BROADCAST/MULTICAST/ANYCAST
-        { action => 'PVEFW-DropBroadcast' },
-        # ACCEPT critical ICMP types
-        { action => 'ACCEPT', proto => 'icmpv6', dport => 'destination-unreachable' },
-        { action => 'ACCEPT', proto => 'icmpv6', dport => 'time-exceeded' },
-        { action => 'ACCEPT', proto => 'icmpv6', dport => 'packet-too-big' },
-
-        # Drop packets with INVALID state
-        "-m conntrack --ctstate INVALID -j DROP",
-        # Drop Microsoft SMB noise
-        { action => 'PVEFW-reject', proto => 'udp', dport => '135,445', nbdport => 2 },
-        { action => 'PVEFW-reject', proto => 'udp', dport => '137:139'},
-        { action => 'PVEFW-reject', proto => 'udp', dport => '1024:65535', sport => 137 },
-        { action => 'PVEFW-reject', proto => 'tcp', dport => '135,139,445', nbdport => 3 },
-        { action => 'DROP', proto => 'udp', dport => 1900 }, # UPnP
-        # Drop new/NotSyn traffic so that it doesn't get logged
-        "-p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN -j DROP",
-        # Drop DNS replies
-        { action => 'DROP', proto => 'udp', sport => 53 },
+	# same as shorewall 'Reject', which is equal to Reject,
+	# but REJECT/DROP some packages to reduce logging,
+	# and ACCEPT critical ICMP types
+	{ action => 'PVEFW-reject',  proto => 'tcp', dport => '43' }, # REJECT 'auth'
+	# we are not interested in BROADCAST/MULTICAST/ANYCAST
+	{ action => 'PVEFW-DropBroadcast' },
+	# ACCEPT critical ICMP types
+	{ action => 'ACCEPT', proto => 'icmpv6', dport => 'destination-unreachable' },
+	{ action => 'ACCEPT', proto => 'icmpv6', dport => 'time-exceeded' },
+	{ action => 'ACCEPT', proto => 'icmpv6', dport => 'packet-too-big' },
+	# Drop packets with INVALID state
+	{ action => 'DROP', match => '-m conntrack --ctstate INVALID', },
+	# Drop Microsoft SMB noise
+	{ action => 'PVEFW-reject', proto => 'udp', dport => '135,445', nbdport => 2 },
+	{ action => 'PVEFW-reject', proto => 'udp', dport => '137:139'},
+	{ action => 'PVEFW-reject', proto => 'udp', dport => '1024:65535', sport => 137 },
+	{ action => 'PVEFW-reject', proto => 'tcp', dport => '135,139,445', nbdport => 3 },
+	{ action => 'DROP', proto => 'udp', dport => 1900 }, # UPnP
+	# Drop new/NotSyn traffic so that it doesn't get logged
+	{ action => 'DROP', match => '-p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN' },
+	# Drop DNS replies
+	{ action => 'DROP', proto => 'udp', sport => 53 },
     ],
     'PVEFW-tcpflags' => [
-        # same as shorewall tcpflags action.
-        # Packets arriving on this interface are checked for som illegal combinations of TCP flags
-        "-p tcp -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG FIN,PSH,URG -g PVEFW-logflags",
-        "-p tcp -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG NONE -g PVEFW-logflags",
-        "-p tcp -m tcp --tcp-flags SYN,RST SYN,RST -g PVEFW-logflags",
-        "-p tcp -m tcp --tcp-flags FIN,SYN FIN,SYN -g PVEFW-logflags",
-        "-p tcp -m tcp --sport 0 --tcp-flags FIN,SYN,RST,ACK SYN -g PVEFW-logflags",
+	# same as shorewall tcpflags action.
+	# Packets arriving on this interface are checked for som illegal combinations of TCP flags
+	{ match => '-p tcp -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG FIN,PSH,URG', target => '-g PVEFW-logflags' },
+	{ match => '-p tcp -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG NONE', target => '-g PVEFW-logflags' },
+	{ match => '-p tcp -m tcp --tcp-flags SYN,RST SYN,RST', target => '-g PVEFW-logflags' },
+	{ match => '-p tcp -m tcp --tcp-flags FIN,SYN FIN,SYN', target => '-g PVEFW-logflags' },
+	{ match => '-p tcp -m tcp --sport 0 --tcp-flags FIN,SYN,RST,ACK SYN', target => '-g PVEFW-logflags' },
+    ],
+    'PVEFW-logflags' => [
+	{ action => 'DROP', logmsg => 'DROP: ' },
     ],
 };
 
@@ -1782,6 +1803,8 @@ sub ruleset_generate_match {
     return if defined($rule->{enable}) && !$rule->{enable};
     return if $rule->{errors};
 
+    return $rule->{match} if defined $rule->{match};
+
     die "unable to emit macro - internal error" if $rule->{macro}; # should not happen
 
     my $nbdport = defined($rule->{dport}) ? parse_port_name_number_or_range($rule->{dport}, 1) : 0;
@@ -1913,6 +1936,8 @@ sub ruleset_generate_match {
 sub ruleset_generate_action {
     my ($ruleset, $chain, $ipversion, $rule, $actions, $goto, $cluster_conf, $fw_conf) = @_;
 
+    return $rule->{target} if defined $rule->{target};
+
     my @cmd = ();
 
     if (my $action = $rule->{action}) {
@@ -1948,19 +1973,24 @@ sub ruleset_generate_rule {
 
     # update all or nothing
 
+    # fixme: lots of temporary ugliness
     my @mstrs = ();
     my @astrs = ();
+    my @logging = ();
+    my @logmsg = ();
     foreach my $tmp (@$rules) {
 	my $m = ruleset_generate_match($ruleset, $chain, $ipversion, $tmp, $actions, $goto, $cluster_conf, $fw_conf);
 	my $a = ruleset_generate_action($ruleset, $chain, $ipversion, $tmp, $actions, $goto, $cluster_conf, $fw_conf);
 	if (defined $m or defined $a) {
 	    push @mstrs, defined($m) ? $m : "";
 	    push @astrs, defined($a) ? $a : "";
+	    push @logging, $tmp->{log};
+	    push @logmsg, $tmp->{logmsg};
 	}
     }
 
     for my $i (0 .. $#mstrs) {
-	ruleset_addrule($ruleset, $chain, $mstrs[$i], $astrs[$i]);
+	ruleset_addrule($ruleset, $chain, $mstrs[$i], $astrs[$i], $logging[$i], $logmsg[$i]);
     }
 }
 
@@ -1991,14 +2021,6 @@ sub ruleset_chain_exist {
     my ($ruleset, $chain) = @_;
 
     return $ruleset->{$chain} ? 1 : undef;
-}
-
-sub ruleset_addrule_old {
-   my ($ruleset, $chain, $rule) = @_;
-
-   die "no such chain '$chain'\n" if !$ruleset->{$chain};
-
-   push @{$ruleset->{$chain}}, "-A $chain $rule";
 }
 
 sub ruleset_addrule {
@@ -3127,26 +3149,21 @@ sub generate_std_chains {
     my $std_chains = $pve_std_chains->{$ipversion} || die "internal error";
 
     my $loglevel = get_option_log_level($options, 'smurf_log_level');
-
-    my $chain;
-
-    if ($ipversion == 4) {
-	# same as shorewall smurflog.
-	$chain = 'PVEFW-smurflog';
-	$std_chains->{$chain} = [];
-	
-	push @{$std_chains->{$chain}}, get_log_rule_base($chain, 0, "DROP: ", $loglevel) if $loglevel;
-	push @{$std_chains->{$chain}}, "-j DROP";
+    my $chain = 'PVEFW-smurflog';
+    if ( $std_chains->{$chain} ) {
+	foreach my $r (@{$std_chains->{$chain}}) {
+	  $r->{log} = $loglevel;
+	}
     }
 
     # same as shorewall logflags action.
     $loglevel = get_option_log_level($options, 'tcp_flags_log_level');
     $chain = 'PVEFW-logflags';
-    $std_chains->{$chain} = [];
-
-    # fixme: is this correctly logged by pvewf-logger? (ther is no --log-ip-options for NFLOG)
-    push @{$std_chains->{$chain}}, get_log_rule_base($chain, 0, "DROP: ", $loglevel) if $loglevel;
-    push @{$std_chains->{$chain}}, "-j DROP";
+    if ( $std_chains->{$chain} ) {
+	foreach my $r (@{$std_chains->{$chain}}) {
+	  $r->{log} = $loglevel;
+	}
+    }
 
     foreach my $chain (keys %$std_chains) {
 	ruleset_create_chain($ruleset, $chain);
@@ -3154,7 +3171,7 @@ sub generate_std_chains {
 	    if (ref($rule)) {
 		ruleset_generate_rule($ruleset, $chain, $ipversion, $rule);
 	    } else {
-		ruleset_addrule_old($ruleset, $chain, $rule);
+		die "rule $rule as string - should not happen";
 	    }
 	}
     }
