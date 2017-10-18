@@ -1799,6 +1799,51 @@ sub ipset_get_chains {
     return $res;
 }
 
+# generate a src or dst match
+# $dir(ection) is either d or s
+sub ipt_gen_src_or_dst_match {
+    my ($adr, $dir, $ipversion, $cluster_conf, $fw_conf) = @_;
+
+    my $srcdst;
+    if ($dir eq 's') {
+	$srcdst = "src";
+    } elsif ($dir eq 'd') {
+	$srcdst = "dst";
+    } else {
+	die "ipt_gen_src_or_dst_match: invalid direction $dir \n";
+    }
+
+    my $match;
+    if ($adr =~ m/^\+/) {
+	if ($adr =~ m/^\+(${ipset_name_pattern})$/) {
+	    my $name = $1;
+	    my $ipset_chain;
+	    if ($fw_conf && $fw_conf->{ipset}->{$name}) {
+		$ipset_chain = compute_ipset_chain_name($fw_conf->{vmid}, $name, $ipversion);
+	    } elsif ($cluster_conf && $cluster_conf->{ipset}->{$name}) {
+		$ipset_chain = compute_ipset_chain_name(0, $name, $ipversion);
+	    } else {
+		die "no such ipset '$name'\n";
+	    }
+	    $match = "-m set --match-set ${ipset_chain} ${srcdst}";
+	} else {
+	    die "invalid security group name '$adr'\n";
+	}
+    } elsif ($adr =~ m/^${ip_alias_pattern}$/){
+	my $alias = lc($adr);
+	my $e = $fw_conf ? $fw_conf->{aliases}->{$alias} : undef;
+	$e = $cluster_conf->{aliases}->{$alias} if !$e && $cluster_conf;
+	die "no such alias '$adr'\n" if !$e;
+	$match = "-${dir} $e->{cidr}";
+    } elsif ($adr =~ m/\-/){
+	$match = "-m iprange --${srcdst}-range $adr";
+    } else {
+	$match = "-${dir} $adr";
+    }
+
+    return $match;
+}
+
 sub ruleset_generate_match {
     my ($ruleset, $chain, $ipversion, $rule, $actions, $goto, $cluster_conf, $fw_conf) = @_;
 
@@ -1820,63 +1865,8 @@ sub ruleset_generate_match {
     my $source = $rule->{source};
     my $dest = $rule->{dest};
 
-    if ($source) {
-        if ($source =~ m/^\+/) {
-	    if ($source =~ m/^\+(${ipset_name_pattern})$/) {
-		my $name = $1;
-		if ($fw_conf && $fw_conf->{ipset}->{$name}) {
-		    my $ipset_chain = compute_ipset_chain_name($fw_conf->{vmid}, $name, $ipversion);
-		    push @cmd, "-m set --match-set ${ipset_chain} src";
-		} elsif ($cluster_conf && $cluster_conf->{ipset}->{$name}) {
-		    my $ipset_chain = compute_ipset_chain_name(0, $name, $ipversion);
-		    push @cmd, "-m set --match-set ${ipset_chain} src";
-		} else {
-		    die "no such ipset '$name'\n";
-		}
-	    } else {
-		die "invalid security group name '$source'\n";
-	    }
-	} elsif ($source =~ m/^${ip_alias_pattern}$/){
-	    my $alias = lc($source);
-	    my $e = $fw_conf ? $fw_conf->{aliases}->{$alias} : undef;
-	    $e = $cluster_conf->{aliases}->{$alias} if !$e && $cluster_conf;
-	    die "no such alias '$source'\n" if !$e;
-	    push @cmd, "-s $e->{cidr}";
-        } elsif ($source =~ m/\-/){
-	    push @cmd, "-m iprange --src-range $source";
-	} else {
-	    push @cmd, "-s $source";
-        }
-    }
-
-    if ($dest) {
-        if ($dest =~ m/^\+/) {
-	    if ($dest =~ m/^\+(${ipset_name_pattern})$/) {
-		my $name = $1;
-		if ($fw_conf && $fw_conf->{ipset}->{$name}) {
-		    my $ipset_chain = compute_ipset_chain_name($fw_conf->{vmid}, $name, $ipversion);
-		    push @cmd, "-m set --match-set ${ipset_chain} dst";
-		} elsif ($cluster_conf && $cluster_conf->{ipset}->{$name}) {
-		    my $ipset_chain = compute_ipset_chain_name(0, $name, $ipversion);
-		    push @cmd, "-m set --match-set ${ipset_chain} dst";
-		} else {
-		    die "no such ipset '$name'\n";
-		}
-	    } else {
-		die "invalid security group name '$dest'\n";
-	    }
-	} elsif ($dest =~ m/^${ip_alias_pattern}$/){
-	    my $alias = lc($dest);
-	    my $e = $fw_conf ? $fw_conf->{aliases}->{$alias} : undef;
-	    $e = $cluster_conf->{aliases}->{$alias} if !$e && $cluster_conf;
-	    die "no such alias '$dest'\n" if !$e;
-	    push @cmd, "-d $e->{cidr}";
-        } elsif ($dest =~ m/^(\d+)\.(\d+).(\d+).(\d+)\-(\d+)\.(\d+).(\d+).(\d+)$/){
-	    push @cmd, "-m iprange --dst-range $dest";
-	} else {
-	    push @cmd, "-d $dest";
-        }
-    }
+    push @cmd, ipt_gen_src_or_dst_match($source, 's', $ipversion, $cluster_conf, $fw_conf) if $source;
+    push @cmd, ipt_gen_src_or_dst_match($dest, 'd', $ipversion, $cluster_conf, $fw_conf) if $dest;
 
     if (my $proto = $rule->{proto}) {
 	push @cmd, "-p $proto";
