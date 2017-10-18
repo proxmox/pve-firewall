@@ -146,14 +146,15 @@ my $log_level_hash = {
 # %rule
 #
 # name => optional
+# enable => [0|1]
 # action =>
 # proto =>
-# sport =>
-# dport =>
+# sport => port[,port[,port]].. or port:port
+# dport => port[,port[,port]].. or port:port
 # log => optional, loglevel
 # logmsg => optional, logmsg - overwrites default
-# iface_in
-# iface_out
+# iface_in => incomin interface
+# iface_out => outgoing interface
 # match => optional, overwrites generation of match
 # target => optional, overwrites action
 
@@ -1844,6 +1845,104 @@ sub ipt_gen_src_or_dst_match {
     return $match;
 }
 
+# convert a %rule to an array of iptables commands
+sub ipt_rule_to_cmds {
+    my ($rule, $chain, $ipversion, $cluster_conf, $fw_conf, $vmid) = @_;
+
+    die "ipt_rule_to_cmds unable to handle macro" if $rule->{macro}; #should not happen
+
+    my @match = ();
+
+    if (defined $rule->{match}) {
+	push @match, $rule->{match};
+    } else {
+	push @match, "-i $rule->{iface_in}" if $rule->{iface_in};
+	push @match, "-o $rule->{iface_out}" if $rule->{iface_out};
+
+	if ($rule->{source}) {
+	    push @match, ipt_gen_src_or_dst_match($rule->{source}, 's', $ipversion, $cluster_conf, $fw_conf);
+	}
+	if ($rule->{dest}) {
+	    push @match, ipt_gen_src_or_dst_match($rule->{dest}, 'd', $ipversion, $cluster_conf, $fw_conf);
+	}
+
+	if (my $proto = $rule->{proto}) {
+	    push @match, "-p $proto";
+
+	    my $nbdport = defined($rule->{dport}) ? parse_port_name_number_or_range($rule->{dport}, 1) : 0;
+	    my $nbsport = defined($rule->{sport}) ? parse_port_name_number_or_range($rule->{sport}, 0) : 0;
+
+	    my $multiport = 0;
+	    $multiport++ if $nbdport > 1;
+	    $multiport++ if $nbsport > 1;
+
+	    push @match, "--match multiport" if $multiport;
+
+	    die "multiport: option '--sports' cannot be used together with '--dports'\n"
+		if ($multiport == 2) && ($rule->{dport} ne $rule->{sport});
+
+	    if ($rule->{dport}) {
+		if ($proto eq 'icmp') {
+		    # Note: we use dport to store --icmp-type
+		    die "unknown icmp-type '$rule->{dport}'\n"
+			if $rule->{dport} !~ /^\d+$/ && !defined($icmp_type_names->{$rule->{dport}});
+		    push @match, "-m icmp --icmp-type $rule->{dport}";
+		} elsif ($proto eq 'icmpv6') {
+		    # Note: we use dport to store --icmpv6-type
+		    die "unknown icmpv6-type '$rule->{dport}'\n"
+			if $rule->{dport} !~ /^\d+$/ && !defined($icmpv6_type_names->{$rule->{dport}});
+		    push @match, "-m icmpv6 --icmpv6-type $rule->{dport}";
+		} elsif (!$PROTOCOLS_WITH_PORTS->{$proto}) {
+		    die "protocol $proto does not have ports\n";
+		} else {
+		    if ($nbdport > 1) {
+			if ($multiport == 2) {
+			    push @match,  "--ports $rule->{dport}";
+			} else {
+			    push @match, "--dports $rule->{dport}";
+			}
+		    } else {
+			push @match, "--dport $rule->{dport}";
+		    }
+		}
+	    }
+
+	    if ($rule->{sport}) {
+		die "protocol $proto does not have ports\n"
+		    if !$PROTOCOLS_WITH_PORTS->{$proto};
+		if ($nbsport > 1) {
+		    push @match, "--sports $rule->{sport}" if $multiport != 2;
+		} else {
+		    push @match, "--sport $rule->{sport}";
+		}
+	    }
+	} elsif ($rule->{dport} || $rule->{sport}) {
+	    die "destination port '$rule->{dport}', but no protocol specified\n" if $rule->{dport};
+	    die "source port '$rule->{sport}', but no protocol specified\n" if $rule->{sport};
+	}
+
+	push @match, "-m addrtype --dst-type $rule->{dsttype}" if $rule->{dsttype};
+    }
+    my $matchstr = scalar(@match) ? join(' ', @match) : "";
+
+    my $targetstr;
+    if (defined $rule->{target}) {
+	$targetstr = $rule->{target};
+    } else {
+	my $action = (defined $rule->{action}) ? $rule->{action} : "";
+	my $goto = 1 if $action eq 'PVEFW-SET-ACCEPT-MARK';
+	$targetstr = ($goto) ? "-g $action" : "-j $action";
+    }
+
+    my @iptcmds;
+    if (defined $rule->{log} && $rule->{log}) {
+	my $logaction = get_log_rule_base($chain, $vmid, $rule->{logmsg}, $rule->{log});
+	push @iptcmds, "-A $chain $matchstr $logaction";
+    }
+    push @iptcmds, "-A $chain $matchstr $targetstr";
+    return @iptcmds;
+}
+
 sub ruleset_generate_match {
     my ($ruleset, $chain, $ipversion, $rule, $actions, $goto, $cluster_conf, $fw_conf) = @_;
 
@@ -1964,6 +2063,27 @@ sub ruleset_generate_rule {
     }
 
     # update all or nothing
+    my @ipt_rule_cmds;
+    foreach my $r (@$rules) {
+	push @ipt_rule_cmds, ipt_rule_to_cmds($r, $chain, $ipversion, $cluster_conf, $fw_conf);
+    }
+    foreach my $c (@ipt_rule_cmds) {
+	ruleset_add_ipt_cmd($ruleset, $chain, $c);
+    }
+}
+
+sub ruleset_generate_rule_old {
+    my ($ruleset, $chain, $ipversion, $rule, $actions, $goto, $cluster_conf, $fw_conf) = @_;
+
+    my $rules;
+
+    if ($rule->{macro}) {
+	$rules = &$apply_macro($rule->{macro}, $rule, 0, $ipversion);
+    } else {
+	$rules = [ $rule ];
+    }
+
+    # update all or nothing
 
     # fixme: lots of temporary ugliness
     my @mstrs = ();
@@ -2015,6 +2135,15 @@ sub ruleset_chain_exist {
     return $ruleset->{$chain} ? 1 : undef;
 }
 
+# add an iptables command (like generated by ipt_rule_to_cmds) to a chain
+sub ruleset_add_ipt_cmd {
+   my ($ruleset, $chain, $iptcmd) = @_;
+
+   die "no such chain '$chain'\n" if !$ruleset->{$chain};
+
+   push @{$ruleset->{$chain}}, $iptcmd;
+}
+
 sub ruleset_addrule {
    my ($ruleset, $chain, $match, $action, $log, $logmsg, $vmid) = @_;
 
@@ -2052,7 +2181,7 @@ sub ruleset_add_chain_policy {
 
     if ($policy eq 'ACCEPT') {
 
-	ruleset_generate_rule($ruleset, $chain, $ipversion, { action => 'ACCEPT' },
+	ruleset_generate_rule_old($ruleset, $chain, $ipversion, { action => 'ACCEPT' },
 			      { ACCEPT =>  $accept_action});
 
     } elsif ($policy eq 'DROP') {
@@ -2199,11 +2328,11 @@ sub ruleset_generate_vm_rules {
 	    next if $rule->{type} ne $lc_direction;
 	    eval {
 		if ($direction eq 'OUT') {
-		    ruleset_generate_rule($ruleset, $chain, $ipversion, $rule,
+		    ruleset_generate_rule_old($ruleset, $chain, $ipversion, $rule,
 					  { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" },
 					  undef, $cluster_conf, $vmfw_conf);
 		} else {
-		    ruleset_generate_rule($ruleset, $chain, $ipversion, $rule,
+		    ruleset_generate_rule_old($ruleset, $chain, $ipversion, $rule,
 					  { ACCEPT => $in_accept , REJECT => "PVEFW-reject" },
 					  undef, $cluster_conf, $vmfw_conf);
 		}
@@ -2333,7 +2462,7 @@ sub enable_host_firewall {
 	    if ($rule->{type} eq 'group') {
 		ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, 'IN', $accept_action, $ipversion);
 	    } elsif ($rule->{type} eq 'in') {
-		ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, 
+		ruleset_generate_rule_old($ruleset, $chain, $ipversion, $rule,
 				      { ACCEPT => $accept_action, REJECT => "PVEFW-reject" },
 				      undef, $cluster_conf, $hostfw_conf);
 	    }
@@ -2390,7 +2519,7 @@ sub enable_host_firewall {
 	    if ($rule->{type} eq 'group') {
 		ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, 'OUT', $accept_action, $ipversion);
 	    } elsif ($rule->{type} eq 'out') {
-		ruleset_generate_rule($ruleset, $chain, $ipversion, 
+		ruleset_generate_rule_old($ruleset, $chain, $ipversion,
 				      $rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" },
 				      undef, $cluster_conf, $hostfw_conf);
 	    }
@@ -2437,7 +2566,7 @@ sub generate_group_rules {
     foreach my $rule (@$rules) {
 	next if $rule->{type} ne 'in';
 	next if $rule->{ipversion} && $rule->{ipversion} ne $ipversion;
-	ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, 
+	ruleset_generate_rule_old($ruleset, $chain, $ipversion, $rule,
 			      { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" }, 
 			      undef, $cluster_conf);
     }
@@ -2452,7 +2581,7 @@ sub generate_group_rules {
 	next if $rule->{ipversion} && $rule->{ipversion} ne $ipversion;
 	# we use PVEFW-SET-ACCEPT-MARK (Instead of ACCEPT) because we need to
 	# check also other tap rules later
-	ruleset_generate_rule($ruleset, $chain, $ipversion, $rule,
+	ruleset_generate_rule_old($ruleset, $chain, $ipversion, $rule,
 			      { ACCEPT => 'PVEFW-SET-ACCEPT-MARK', REJECT => "PVEFW-reject" }, 
 			      undef, $cluster_conf);
     }
