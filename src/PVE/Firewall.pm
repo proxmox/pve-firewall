@@ -20,6 +20,7 @@ use IO::File;
 use Net::IP;
 use PVE::Tools qw(run_command lock_file dir_glob_foreach);
 use Encode;
+use Storable qw(dclone);
 
 my $hostfw_conf_filename = "/etc/pve/local/host.fw";
 my $pvefw_conf_dir = "/etc/pve/firewall";
@@ -548,7 +549,8 @@ my $FWACCEPTMARK_ON  = "0x80000000/0x80000000";
 my $FWACCEPTMARK_OFF = "0x00000000/0x80000000";
 
 my $pve_std_chains = {};
-$pve_std_chains->{4} = {
+my $pve_std_chains_conf = {};
+$pve_std_chains_conf->{4} = {
     'PVEFW-SET-ACCEPT-MARK' => [
 	{ target => "-j MARK --set-mark $FWACCEPTMARK_ON" },
     ],
@@ -641,7 +643,7 @@ $pve_std_chains->{4} = {
     ],
 };
 
-$pve_std_chains->{6} = {
+$pve_std_chains_conf->{6} = {
     'PVEFW-SET-ACCEPT-MARK' => [
 	{ target => "-j MARK --set-mark $FWACCEPTMARK_ON" },
     ],
@@ -3353,6 +3355,9 @@ sub compile {
     my ($cluster_conf, $hostfw_conf, $vmdata, $verbose) = @_;
 
     my $vmfw_configs;
+
+    # fixme: once we read standard chains from config this needs to be put in test/standard cases below
+    $pve_std_chains = dclone($pve_std_chains_conf);
 
     if ($vmdata) { # test mode
 	my $testdir = $vmdata->{testdir} || die "no test directory specified";
