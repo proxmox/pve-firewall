@@ -2040,17 +2040,6 @@ sub ruleset_generate_action {
     return scalar(@cmd) ? join(' ', @cmd) : undef;
 }
 
-sub ruleset_generate_cmdstr {
-    my ($ruleset, $chain, $ipversion, $rule, $actions, $goto, $cluster_conf, $fw_conf) = @_;
-    my $match = ruleset_generate_match($ruleset, $chain, $ipversion, $rule, $actions, $goto, $cluster_conf, $fw_conf);
-    my $action = ruleset_generate_action($ruleset, $chain, $ipversion, $rule, $actions, $goto, $cluster_conf, $fw_conf);
-
-    return undef if !(defined($match) or defined($action));
-    my $ret = defined($match) ? $match : "";
-    $ret = "$ret $action" if defined($action);
-    return $ret;
-}
-
 sub ruleset_generate_rule {
     my ($ruleset, $chain, $ipversion, $rule, $actions, $goto, $cluster_conf, $fw_conf) = @_;
 
