@@ -2070,18 +2070,6 @@ sub ruleset_generate_rule {
     }
 }
 
-sub ruleset_generate_rule_insert {
-    my ($ruleset, $chain, $ipversion, $rule, $actions, $goto) = @_;
-
-    die "implement me" if $rule->{macro}; # not implemented, because not needed so far
-
-    my $match = ruleset_generate_match($ruleset, $chain, $ipversion, $rule, $actions, $goto);
-    my $action = ruleset_generate_action($ruleset, $chain, $ipversion, $rule, $actions, $goto);
-    if (defined $match && defined $action) {
-	ruleset_insertrule($ruleset, $chain, $match, $action);
-    }
-}
-
 sub ruleset_create_chain {
     my ($ruleset, $chain) = @_;
 
