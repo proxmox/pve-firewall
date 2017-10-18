@@ -2050,7 +2050,7 @@ sub ruleset_generate_action {
 }
 
 sub ruleset_generate_rule {
-    my ($ruleset, $chain, $ipversion, $rule, $actions, $goto, $cluster_conf, $fw_conf) = @_;
+    my ($ruleset, $chain, $ipversion, $rule, $cluster_conf, $fw_conf) = @_;
 
     my $rules;
 
@@ -2294,12 +2294,10 @@ sub ruleset_generate_vm_rules {
 	    eval {
 		if ($direction eq 'OUT') {
 		    rule_substitude_action($rule, { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" });
-		    ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, undef,
-					  undef, $cluster_conf, $vmfw_conf);
+		    ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, $cluster_conf, $vmfw_conf);
 		} else {
 		    rule_substitude_action($rule, { ACCEPT => $in_accept , REJECT => "PVEFW-reject" });
-		    ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, undef,
-					  undef, $cluster_conf, $vmfw_conf);
+		    ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, $cluster_conf, $vmfw_conf);
 		}
 	    };
 	    warn $@ if $@;
@@ -2428,8 +2426,7 @@ sub enable_host_firewall {
 		ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, 'IN', $accept_action, $ipversion);
 	    } elsif ($rule->{type} eq 'in') {
 		rule_substitude_action($rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" });
-		ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, undef,
-				      undef, $cluster_conf, $hostfw_conf);
+		ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, $cluster_conf, $hostfw_conf);
 	    }
 	};
 	warn $@ if $@;
@@ -2485,8 +2482,7 @@ sub enable_host_firewall {
 		ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, 'OUT', $accept_action, $ipversion);
 	    } elsif ($rule->{type} eq 'out') {
 		rule_substitude_action($rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" });
-		ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, undef,
-				      undef, $cluster_conf, $hostfw_conf);
+		ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, $cluster_conf, $hostfw_conf);
 	    }
 	};
 	warn $@ if $@;
@@ -2532,7 +2528,7 @@ sub generate_group_rules {
 	next if $rule->{type} ne 'in';
 	next if $rule->{ipversion} && $rule->{ipversion} ne $ipversion;
 	rule_substitude_action($rule, { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" });
-	ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, undef, undef, $cluster_conf);
+	ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, $cluster_conf);
     }
 
     $chain = "GROUP-${group}-OUT";
@@ -2546,8 +2542,7 @@ sub generate_group_rules {
 	# we use PVEFW-SET-ACCEPT-MARK (Instead of ACCEPT) because we need to
 	# check also other tap rules later
 	rule_substitude_action($rule, { ACCEPT => 'PVEFW-SET-ACCEPT-MARK', REJECT => "PVEFW-reject" });
-	ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, undef,
-			      undef, $cluster_conf);
+	ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, $cluster_conf);
     }
 }
 
