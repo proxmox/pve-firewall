@@ -497,7 +497,7 @@ my $get_ipset_list = sub {
     my ($fw_conf) = @_;
 
     my $res = [];
-    foreach my $name (keys %{$fw_conf->{ipset}}) {
+    foreach my $name (sort keys %{$fw_conf->{ipset}}) {
 	my $data = { 
 	    name => $name,
 	};
