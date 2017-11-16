@@ -1,3 +1,11 @@
+pve-firewall (3.0-4) unstable; urgency=medium
+
+  * fix issues with ipsets reloading unnecessarily or too late
+
+  * fix some typos in the logs
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 16 Nov 2017 11:41:56 +0100
+
 pve-firewall (3.0-3) unstable; urgency=medium
 
   * Fix #1492: logger: use current timestamp if the packet doesn't have one
