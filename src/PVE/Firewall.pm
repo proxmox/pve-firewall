@@ -2417,6 +2417,7 @@ sub generate_group_rules {
 
     foreach my $rule (@$rules) {
 	next if $rule->{type} ne 'in';
+	next if !$rule->{enable} || $rule->{errors};
 	next if $rule->{ipversion} && $rule->{ipversion} ne $ipversion;
 	rule_substitude_action($rule, { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" });
 	ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, $cluster_conf);
@@ -2429,6 +2430,7 @@ sub generate_group_rules {
 
     foreach my $rule (@$rules) {
 	next if $rule->{type} ne 'out';
+	next if !$rule->{enable} || $rule->{errors};
 	next if $rule->{ipversion} && $rule->{ipversion} ne $ipversion;
 	# we use PVEFW-SET-ACCEPT-MARK (Instead of ACCEPT) because we need to
 	# check also other tap rules later
