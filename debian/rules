@@ -6,6 +6,12 @@
 %:
 	dh $@ --with systemd
 
+override_dh_systemd_enable:
+	dh_systemd_enable --name pvefw-logger pve-fwlogger.service
+	dh_systemd_enable --name pve-firewall pve-firewall.service
+
+override_dh_systemd_start:
+	dh_systemd_start --restart-after-upgrade pvefw-logger.service
+	# pve-firewall start/try-reload-restart manually in postinst
+
 override_dh_installinit:
-	dh_installinit -R --name pvefw-logger
-	dh_installinit -p pve-firewall --no-restart-on-upgrade
