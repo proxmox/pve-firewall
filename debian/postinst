@@ -6,9 +6,6 @@ set -e
 
 case "$1" in
     configure)
-	# Remove masks created by dh_systemd_enable on package removal.
-	deb-systemd-helper unmask pve-firewall.service >/dev/null || true
-
 	# modeled after dh_systemd_start output
 	systemctl --system daemon-reload >/dev/null || true
 	if [ -n "$2" ]; then
