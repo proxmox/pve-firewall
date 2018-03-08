@@ -1035,12 +1035,13 @@ sub parse_port_name_number_or_range {
     my @elements = split(/,/, $str);
     die "extraneous commas in list\n" if $str ne join(',', @elements);
     foreach my $item (@elements) {
-	$count++;
 	if ($item =~ m/^(\d+):(\d+)$/) {
+	    $count += 2;
 	    my ($port1, $port2) = ($1, $2);
 	    die "invalid port '$port1'\n" if $port1 > 65535;
 	    die "invalid port '$port2'\n" if $port2 > 65535;
 	} elsif ($item =~ m/^(\d+)$/) {
+	    $count += 1;
 	    my $port = $1;
 	    die "invalid port '$port'\n" if $port > 65535;
 	} else {
@@ -1054,7 +1055,13 @@ sub parse_port_name_number_or_range {
 	}
     }
 
-    die "ICPM ports not allowed in port range\n" if $icmp_port && $count > 1;
+    die "ICPM ports not allowed in port range\n" if $icmp_port && $count > 0;
+
+    # I really don't like to use the word number here, but it's the only thing
+    # that makes sense in a literal way. The range 1:100 counts as 2, not as
+    # one and not as 100...
+    die "too many entries in port list (> 15 numbers)\n"
+	if $count > 15;
 
     return $count;
 }
