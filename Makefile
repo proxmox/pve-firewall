@@ -12,7 +12,7 @@ MAN1DIR=${MANDIR}/man1/
 PERLDIR=${PREFIX}/share/perl5
 
 ARCH:=$(shell dpkg-architecture -qDEB_BUILD_ARCH)
-GITVERSION:=$(shell cat .git/refs/heads/master)
+GITVERSION:=$(shell git rev-parse HEAD)
 
 DEB=${PACKAGE}_${VERSION}-${PKGREL}_${ARCH}.deb
 
