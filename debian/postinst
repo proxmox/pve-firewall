@@ -2,11 +2,21 @@
 
 set -e
 
+#DEBHELPER#
+
 case "$1" in
     configure)
 	# Remove masks created by dh_systemd_enable on package removal.
 	deb-systemd-helper unmask pve-firewall.service >/dev/null || true
-	systemctl reload-or-restart pve-firewall
+
+	# modeled after dh_systemd_start output
+	systemctl --system daemon-reload >/dev/null || true
+	if [ -n "$2" ]; then
+		_dh_action=try-reload-or-restart
+	else
+		_dh_action=start
+	fi
+	deb-systemd-invoke $_dh_action pve-firewall.service >/dev/null || true
     ;;
 
     abort-upgrade|abort-remove|abort-deconfigure)
@@ -17,7 +27,5 @@ case "$1" in
         exit 1
     ;;
 esac
-
-#DEBHELPER#
 
 exit 0
