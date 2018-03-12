@@ -1890,6 +1890,7 @@ sub ipt_rule_to_cmds {
 
 	    my $add_dport = sub {
 		return if !$rule->{dport};
+
 		if ($proto eq 'icmp') {
 		    # Note: we use dport to store --icmp-type
 		    die "unknown icmp-type '$rule->{dport}'\n"
@@ -1911,6 +1912,7 @@ sub ipt_rule_to_cmds {
 
 	    my $add_sport = sub {
 		return if !$rule->{sport};
+
 		die "protocol $proto does not have ports\n"
 		    if !$PROTOCOLS_WITH_PORTS->{$proto};
 		if ($multisport) {
@@ -1920,6 +1922,7 @@ sub ipt_rule_to_cmds {
 		}
 	    };
 
+	    # order matters - single port before multiport!
 	    $add_dport->() if $multisport;
 	    $add_sport->();
 	    $add_dport->() if !$multisport;
