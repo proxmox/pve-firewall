@@ -1,3 +1,13 @@
+pve-firewall (3.0-7) unstable; urgency=medium
+
+  * support distinct source and destination multi-port matching
+
+  * multi-port matching: when specifying the same list of ports for source and
+    destination require them both to match, rather than one of them, as this
+    was rather unexpected behavior
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 12 Mar 2018 14:58:08 +0100
+
 pve-firewall (3.0-6) unstable; urgency=medium
 
   * fix #1319: don't fail postinst with masked service
