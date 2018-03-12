@@ -1063,7 +1063,7 @@ sub parse_port_name_number_or_range {
     die "too many entries in port list (> 15 numbers)\n"
 	if $count > 15;
 
-    return $count;
+    return (scalar(@elements) > 1);
 }
 
 PVE::JSONSchema::register_format('pve-fw-sport-spec', \&pve_fw_verify_sport_spec);
@@ -1885,19 +1885,11 @@ sub ipt_rule_to_cmds {
 	if (my $proto = $rule->{proto}) {
 	    push @match, "-p $proto";
 
-	    my $nbdport = defined($rule->{dport}) ? parse_port_name_number_or_range($rule->{dport}, 1) : 0;
-	    my $nbsport = defined($rule->{sport}) ? parse_port_name_number_or_range($rule->{sport}, 0) : 0;
+	    my $multidport = defined($rule->{dport}) && parse_port_name_number_or_range($rule->{dport}, 1);
+	    my $multisport = defined($rule->{sport}) && parse_port_name_number_or_range($rule->{sport}, 0);
 
-	    my $multiport = 0;
-	    $multiport++ if $nbdport > 1;
-	    $multiport++ if $nbsport > 1;
-
-	    push @match, "--match multiport" if $multiport;
-
-	    die "multiport: option '--sports' cannot be used together with '--dports'\n"
-		if ($multiport == 2) && ($rule->{dport} ne $rule->{sport});
-
-	    if ($rule->{dport}) {
+	    my $add_dport = sub {
+		return if !$rule->{dport};
 		if ($proto eq 'icmp') {
 		    # Note: we use dport to store --icmp-type
 		    die "unknown icmp-type '$rule->{dport}'\n"
@@ -1910,28 +1902,27 @@ sub ipt_rule_to_cmds {
 		    push @match, "-m icmpv6 --icmpv6-type $rule->{dport}";
 		} elsif (!$PROTOCOLS_WITH_PORTS->{$proto}) {
 		    die "protocol $proto does not have ports\n";
+		} elsif ($multidport) {
+		    push @match, "--match multiport", "--dports $rule->{dport}";
 		} else {
-		    if ($nbdport > 1) {
-			if ($multiport == 2) {
-			    push @match,  "--ports $rule->{dport}";
-			} else {
-			    push @match, "--dports $rule->{dport}";
-			}
-		    } else {
-			push @match, "--dport $rule->{dport}";
-		    }
+		    push @match, "--dport $rule->{dport}";
 		}
-	    }
+	    };
 
-	    if ($rule->{sport}) {
+	    my $add_sport = sub {
+		return if !$rule->{sport};
 		die "protocol $proto does not have ports\n"
 		    if !$PROTOCOLS_WITH_PORTS->{$proto};
-		if ($nbsport > 1) {
-		    push @match, "--sports $rule->{sport}" if $multiport != 2;
+		if ($multisport) {
+		    push @match, "--match multiport", "--sports $rule->{sport}";
 		} else {
 		    push @match, "--sport $rule->{sport}";
 		}
-	    }
+	    };
+
+	    $add_dport->() if $multisport;
+	    $add_sport->();
+	    $add_dport->() if !$multisport;
 	} elsif ($rule->{dport} || $rule->{sport}) {
 	    die "destination port '$rule->{dport}', but no protocol specified\n" if $rule->{dport};
 	    die "source port '$rule->{sport}', but no protocol specified\n" if $rule->{sport};
