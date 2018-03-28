@@ -2065,7 +2065,9 @@ sub ruleset_addrule {
 	my $logaction = get_log_rule_base($chain, $vmid, $logmsg, $log);
 	push @{$ruleset->{$chain}}, "-A $chain $match $logaction";
    }
-   push @{$ruleset->{$chain}}, "-A $chain $match $action";
+   # for stable ebtables digests avoid double-spaces to match ebtables-save output
+   $match .= ' ' if length($match);
+   push @{$ruleset->{$chain}}, "-A $chain ${match}$action";
 }
 
 sub ruleset_insertrule {
