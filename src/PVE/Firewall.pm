@@ -1711,6 +1711,12 @@ sub ipset_restore_cmdlist {
     run_command("/sbin/ipset restore", input => $cmdlist, errmsg => "ipset_restore_cmdlist");
 }
 
+sub ebtables_restore_cmdlist {
+    my ($cmdlist) = @_;
+
+    run_command("/sbin/ebtables-restore", input => $cmdlist, errmsg => "ebtables_restore_cmdlist");
+}
+
 sub iptables_get_chains {
     my ($iptablescmd) = @_;
 
@@ -1818,6 +1824,42 @@ sub ipset_get_chains {
 	$res->{$chain} = ipset_chain_digest($chains->{$chain});
     }
 
+    return $res;
+}
+
+sub ebtables_get_chains {
+
+    my $res = {};
+    my $chains = {};
+
+    my $parser = sub {
+	my $line = shift;
+	return if $line =~ m/^#/;
+	return if $line =~ m/^\s*$/;
+	if ($line =~ m/^(?:\S+)\s(PVEFW-\S+)\s(?:\S+).*/) {
+	    my $chain = $1;
+	    $line =~ s/\s+$//;
+	    push @{$chains->{$chain}}, $line;
+	} elsif ($line =~ m/^(?:\S+)\s(tap\d+i\d+-(:?IN|OUT))\s(?:\S+).*/) {
+	    my $chain = $1;
+	    $line =~ s/\s+$//;
+	    push @{$chains->{$chain}}, $line;
+	} elsif ($line =~ m/^(?:\S+)\s(veth\d+i\d+-(:?IN|OUT))\s(?:\S+).*/) {
+	    my $chain = $1;
+	    $line =~ s/\s+$//;
+	    push @{$chains->{$chain}}, $line;
+	} else {
+	    # simply ignore the rest
+	    return;
+	}
+    };
+
+    run_command("/sbin/ebtables-save", outfunc => $parser);
+
+    # compute digest for each chain
+    foreach my $chain (keys %$chains) {
+	$res->{$chain} = iptables_chain_digest($chains->{$chain});
+    }
     return $res;
 }
 
@@ -3802,6 +3844,39 @@ sub get_ruleset_cmdlist {
     return wantarray ? ($cmdlist, $changes) : $cmdlist;
 }
 
+sub get_ebtables_cmdlist {
+    my ($ruleset, $verbose) = @_;
+
+    my $changes = 0;
+    my $cmdlist = "*filter\n";
+
+    my ($active_chains, $hooks) = ebtables_get_chains();
+    my $statushash = get_ruleset_status($ruleset, $active_chains, \&iptables_chain_digest, $verbose);
+
+    # create chains first
+    foreach my $chain (sort keys %$ruleset) {
+	my $stat = $statushash->{$chain};
+	die "internal error" if !$stat;
+	$cmdlist .= ":$chain ACCEPT\n";
+    }
+
+    if ($ruleset->{FORWARD}) {
+	$cmdlist .= "-A FORWARD -j PVEFW-FORWARD\n";
+    }
+
+    foreach my $chain (sort keys %$ruleset) {
+	my $stat = $statushash->{$chain};
+	die "internal error" if !$stat;
+	$changes = 1 if ($stat->{action} ne 'exists');
+
+	foreach my $cmd (@{$ruleset->{$chain}}) {
+	    $cmdlist .= "$cmd\n";
+	}
+    }
+
+    return wantarray ? ($cmdlist, $changes) : $cmdlist;
+}
+
 sub get_ipset_cmdlist {
     my ($ruleset, $verbose) = @_;
 
@@ -3861,7 +3936,7 @@ sub get_ipset_cmdlist {
 }
 
 sub apply_ruleset {
-    my ($ruleset, $hostfw_conf, $ipset_ruleset, $rulesetv6, $verbose) = @_;
+    my ($ruleset, $hostfw_conf, $ipset_ruleset, $rulesetv6, $ebtables_ruleset, $verbose) = @_;
 
     enable_bridge_firewall();
 
@@ -3870,6 +3945,7 @@ sub apply_ruleset {
 
     my ($cmdlist, $changes) = get_ruleset_cmdlist($ruleset, $verbose);
     my ($cmdlistv6, $changesv6) = get_ruleset_cmdlist($rulesetv6, $verbose, "ip6tables");
+    my ($ebtables_cmdlist, $ebtables_changes) = get_ebtables_cmdlist($ebtables_ruleset, $verbose);
 
     if ($verbose) {
 	if ($ipset_changes) {
@@ -3886,6 +3962,11 @@ sub apply_ruleset {
 	if ($changesv6) {
 	    print "ip6tables changes:\n";
 	    print $cmdlistv6;
+	}
+
+	if ($ebtables_changes) {
+	    print "ebtables changes:\n";
+	    print $ebtables_cmdlist;
 	}
     }
 
@@ -3909,6 +3990,11 @@ sub apply_ruleset {
 
     ipset_restore_cmdlist($ipset_delete_cmdlist) if $ipset_delete_cmdlist;
 
+    ebtables_restore_cmdlist($ebtables_cmdlist);
+
+    $tmpfile = "$pve_fw_status_dir/ebtablescmdlist";
+    PVE::Tools::file_set_contents($tmpfile, $ebtables_cmdlist || '');
+
     # test: re-read status and check if everything is up to date
     my $active_chains = iptables_get_chains();
     my $statushash = get_ruleset_status($ruleset, $active_chains, \&iptables_chain_digest, 0);
@@ -3929,6 +4015,17 @@ sub apply_ruleset {
 	my $stat = $statushashv6->{$chain};
 	if ($stat->{action} ne 'exists') {
 	    warn "unable to update chain '$chain'\n";
+	    $errors = 1;
+	}
+    }
+
+    my $active_ebtables_chains = ebtables_get_chains();
+    my $ebtables_statushash = get_ruleset_status($ebtables_ruleset, $active_ebtables_chains, \&iptables_chain_digest, 0);
+
+    foreach my $chain (sort keys %$ebtables_ruleset) {
+	my $stat = $ebtables_statushash->{$chain};
+	if ($stat->{action} ne 'exists') {
+	    warn "ebtables : unable to update chain '$chain'\n";
 	    $errors = 1;
 	}
     }
@@ -4050,7 +4147,7 @@ sub update {
 
 	my ($ruleset, $ipset_ruleset, $rulesetv6, $ebtables_ruleset) = compile($cluster_conf, $hostfw_conf);
 
-	apply_ruleset($ruleset, $hostfw_conf, $ipset_ruleset, $rulesetv6);
+	apply_ruleset($ruleset, $hostfw_conf, $ipset_ruleset, $rulesetv6, $ebtables_ruleset);
     };
 
     run_locked($code);
