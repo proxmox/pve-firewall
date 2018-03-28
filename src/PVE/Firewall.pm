@@ -919,6 +919,14 @@ sub get_etc_protocols {
     return $etc_protocols;
 }
 
+my $etc_ethertypes;
+
+sub get_etc_ethertypes {
+    $etc_ethertypes = parse_protocol_file('/etc/ethertypes')
+	if !$etc_ethertypes;
+    return $etc_ethertypes;
+}
+
 my $__local_network;
 
 sub local_network {
