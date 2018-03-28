@@ -876,12 +876,8 @@ sub get_etc_services {
     return $etc_services;
 }
 
-my $etc_protocols;
-
-sub get_etc_protocols {
-    return $etc_protocols if $etc_protocols;
-
-    my $filename = "/etc/protocols";
+sub parse_protocol_file {
+    my ($filename) = @_;
 
     my $fh = IO::File->new($filename, O_RDONLY);
     if (!$fh) {
@@ -903,6 +899,16 @@ sub get_etc_protocols {
     }
 
     close($fh);
+
+    return $protocols;
+}
+
+my $etc_protocols;
+
+sub get_etc_protocols {
+    return $etc_protocols if $etc_protocols;
+
+    my $protocols = parse_protocol_file('/etc/protocols');
 
     # add special case for ICMP v6
     $protocols->{byid}->{icmpv6}->{name} = "icmpv6";
