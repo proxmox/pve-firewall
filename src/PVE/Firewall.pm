@@ -892,7 +892,7 @@ sub parse_protocol_file {
 	next if $line =~m/^#/;
 	next if ($line =~m/^\s*$/);
 
-	if ($line =~ m!^(\S+)\s+(\d+)\s+.*$!) {
+	if ($line =~ m!^(\S+)\s+(\d+)(?:\s+.*)?$!) {
 	    $protocols->{byid}->{$2}->{name} = $1;
 	    $protocols->{byname}->{$1} = $protocols->{byid}->{$2};
 	}
