@@ -860,7 +860,7 @@ sub get_etc_services {
 	next if $line =~m/^#/;
 	next if ($line =~m/^\s*$/);
 
-	if ($line =~ m!^(\S+)\s+(\S+)/(tcp|udp).*$!) {
+	if ($line =~ m!^(\S+)\s+(\S+)/(tcp|udp|sctp).*$!) {
 	    $services->{byid}->{$2}->{name} = $1;
 	    $services->{byid}->{$2}->{port} = $2;
 	    $services->{byid}->{$2}->{$3} = 1;
