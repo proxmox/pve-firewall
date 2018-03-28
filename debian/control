@@ -12,7 +12,8 @@ Standards-Version: 3.8.4
 Package: pve-firewall
 Architecture: any
 Conflicts: ulogd,
-Depends: ipset,
+Depends: ebtables,
+         ipset,
          iptables,
          libpve-access-control,
          libpve-common-perl,
