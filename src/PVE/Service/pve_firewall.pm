@@ -164,7 +164,7 @@ __PACKAGE__->register_method ({
 
 	    if ($status eq 'running') {
 		
-		my ($ruleset, $ipset_ruleset, $rulesetv6) = PVE::Firewall::compile($cluster_conf, undef, undef, $verbose);
+		my ($ruleset, $ipset_ruleset, $rulesetv6, $ebtables_ruleset) = PVE::Firewall::compile($cluster_conf, undef, undef, $verbose);
 
 		$verbose = 0; # do not show iptables details
 		my (undef, undef, $ipset_changes) = PVE::Firewall::get_ipset_cmdlist($ipset_ruleset, $verbose);
@@ -201,7 +201,7 @@ __PACKAGE__->register_method ({
 	    my $verbose = 1;
 
 	    my $cluster_conf = PVE::Firewall::load_clusterfw_conf(undef, $verbose); 
-	    my ($ruleset, $ipset_ruleset, $rulesetv6) = PVE::Firewall::compile($cluster_conf, undef, undef, $verbose);
+	    my ($ruleset, $ipset_ruleset, $rulesetv6, $ebtables_ruleset) = PVE::Firewall::compile($cluster_conf, undef, undef, $verbose);
 
 	    print "ipset cmdlist:\n";
 	    my (undef, undef, $ipset_changes) = PVE::Firewall::get_ipset_cmdlist($ipset_ruleset, $verbose);
@@ -329,7 +329,7 @@ __PACKAGE__->register_method ({
 
 	local $SIG{'__WARN__'} = 'DEFAULT'; # do not fill up syslog
 
-	my ($ruleset, $ipset_ruleset, $rulesetv6) = PVE::Firewall::compile(undef, undef, undef, $param->{verbose});
+	my ($ruleset, $ipset_ruleset, $rulesetv6, $ebtables_ruleset) = PVE::Firewall::compile(undef, undef, undef, $param->{verbose});
 
 	PVE::FirewallSimulator::debug($param->{verbose} || 0);
 	

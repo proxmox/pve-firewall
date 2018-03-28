@@ -9,6 +9,9 @@ enable: 1
 # disable/enable MAC address filter
 macfilter: 0
 
+# limit layer2 specific protocols
+layer2_protocols: ARP,802_1Q,IPX,NetBEUI,PPP
+
 # default policy
 policy_in: DROP
 policy_out: REJECT

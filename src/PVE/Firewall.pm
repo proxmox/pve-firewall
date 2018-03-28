@@ -2548,6 +2548,14 @@ sub parse_fw_rule {
     return $rule;
 }
 
+sub verify_ethertype {
+    my ($value) = @_;
+    my $types = get_etc_ethertypes();
+    die "unknown ethernet protocol type: $value\n"
+	if !defined($types->{byname}->{$value}) &&
+	   !defined($types->{byid}->{$value});
+}
+
 sub parse_vmfw_option {
     my ($line) = @_;
 
@@ -2567,6 +2575,10 @@ sub parse_vmfw_option {
     } elsif ($line =~ m/^(ips_queues):\s*((\d+)(:(\d+))?)\s*$/i) {
 	$opt = lc($1);
 	$value = $2;
+    } elsif ($line =~ m/^(layer2_protocols):\s*(((\S+)[,]?)+)\s*$/i) {
+	$opt = lc($1);
+	$value = $2;
+	verify_ethertype($_) foreach split(/\s*,\s*/, $value);
     } else {
 	die "can't parse option '$line'\n"
     }
@@ -3380,9 +3392,10 @@ sub compile {
 
     my $ruleset = compile_iptables_filter($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, 4, $verbose);
     my $rulesetv6 = compile_iptables_filter($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, 6, $verbose);
+    my $ebtables_ruleset = compile_ebtables_filter($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, $verbose);
     my $ipset_ruleset = compile_ipsets($cluster_conf, $vmfw_configs, $vmdata);
 
-    return ($ruleset, $ipset_ruleset, $rulesetv6);
+    return ($ruleset, $ipset_ruleset, $rulesetv6, $ebtables_ruleset);
 }
 
 sub compile_iptables_filter {
@@ -3592,6 +3605,94 @@ sub compile_ipsets {
     generate_ipset_chains($ipset_ruleset, undef, $cluster_conf, undef, $cluster_conf->{ipset});
 
     return $ipset_ruleset;
+}
+
+sub compile_ebtables_filter {
+    my ($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, $verbose) = @_;
+
+    return ({}, {}) if !$cluster_conf->{options}->{enable};
+
+    my $ruleset = {};
+
+    ruleset_create_chain($ruleset, "PVEFW-FORWARD");
+
+
+    ruleset_create_chain($ruleset, "PVEFW-FWBR-OUT");
+    #for ipv4 and ipv6, check macaddress in iptables, so we use conntrack 'ESTABLISHED', to speedup rules
+    ruleset_addrule($ruleset, 'PVEFW-FORWARD', '-p IPv4', '-j ACCEPT');
+    ruleset_addrule($ruleset, 'PVEFW-FORWARD', '-p IPv6', '-j ACCEPT');
+    ruleset_addrule($ruleset, 'PVEFW-FORWARD', '-o fwln+', '-j PVEFW-FWBR-OUT');
+
+    # generate firewall rules for QEMU VMs
+    foreach my $vmid (keys %{$vmdata->{qemu}}) {
+	eval {
+	    my $conf = $vmdata->{qemu}->{$vmid};
+	    my $vmfw_conf = $vmfw_configs->{$vmid};
+	    return if !$vmfw_conf;
+
+	    foreach my $netid (keys %$conf) {
+		next if $netid !~ m/^net(\d+)$/;
+		my $net = PVE::QemuServer::parse_net($conf->{$netid});
+		next if !$net->{firewall};
+		my $iface = "tap${vmid}i$1";
+		my $macaddr = $net->{macaddr};
+
+		generate_tap_layer2filter($ruleset, $iface, $macaddr, $vmfw_conf, $vmid);
+
+	    }
+	};
+	warn $@ if $@; # just to be sure - should not happen
+    }
+
+    # generate firewall rules for LXC containers
+    foreach my $vmid (keys %{$vmdata->{lxc}}) {
+	eval {
+	    my $conf = $vmdata->{lxc}->{$vmid};
+
+	    my $vmfw_conf = $vmfw_configs->{$vmid};
+	    return if !$vmfw_conf || !$vmfw_conf->{options}->{enable};
+
+	    foreach my $netid (keys %$conf) {
+		next if $netid !~ m/^net(\d+)$/;
+		my $net = PVE::LXC::Config->parse_lxc_network($conf->{$netid});
+		next if !$net->{firewall};
+		my $iface = "veth${vmid}i$1";
+		my $macaddr = $net->{hwaddr};
+		generate_tap_layer2filter($ruleset, $iface, $macaddr, $vmfw_conf, $vmid);
+	    }
+	};
+	warn $@ if $@; # just to be sure - should not happen
+    }
+
+    return $ruleset;
+}
+
+sub generate_tap_layer2filter {
+    my ($ruleset, $iface, $macaddr, $vmfw_conf, $vmid) = @_;
+    my $options = $vmfw_conf->{options};
+
+    my $tapchain = $iface."-OUT";
+
+    # ebtables remove zeros from mac pairs
+    $macaddr =~ s/0([0-9a-f])/$1/ig;
+    $macaddr = lc($macaddr);
+
+    ruleset_create_chain($ruleset, $tapchain);
+
+    if (defined($macaddr) && !(defined($options->{macfilter}) && $options->{macfilter} == 0)) {
+	    ruleset_addrule($ruleset, $tapchain, "-s ! $macaddr", '-j DROP');
+    }
+
+    if (defined($options->{layer2_protocols})){
+	foreach my $proto (split(/,/, $options->{layer2_protocols})) {
+	    ruleset_addrule($ruleset, $tapchain, "-p $proto", '-j ACCEPT');
+	}
+	ruleset_addrule($ruleset, $tapchain, '', "-j DROP");
+    } else {
+	ruleset_addrule($ruleset, $tapchain, '', '-j ACCEPT');
+    }
+
+    ruleset_addrule($ruleset, 'PVEFW-FWBR-OUT', "-i $iface", "-j $tapchain");
 }
 
 sub get_ruleset_status {
@@ -3947,7 +4048,7 @@ sub update {
 
 	my $hostfw_conf = load_hostfw_conf($cluster_conf);
 
-	my ($ruleset, $ipset_ruleset, $rulesetv6) = compile($cluster_conf, $hostfw_conf);
+	my ($ruleset, $ipset_ruleset, $rulesetv6, $ebtables_ruleset) = compile($cluster_conf, $hostfw_conf);
 
 	apply_ruleset($ruleset, $hostfw_conf, $ipset_ruleset, $rulesetv6);
     };
