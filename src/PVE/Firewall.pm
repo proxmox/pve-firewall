@@ -1836,7 +1836,10 @@ sub ebtables_get_chains {
 	my $line = shift;
 	return if $line =~ m/^#/;
 	return if $line =~ m/^\s*$/;
-	if ($line =~ m/^(?:\S+)\s(PVEFW-\S+)\s(?:\S+).*/) {
+	if ($line =~ m/^:(\S+)\s\S+$/) {
+	    # Make sure we know chains exist even if they're empty.
+	    $chains->{$1} //= [];
+	} elsif ($line =~ m/^(?:\S+)\s(PVEFW-\S+)\s(?:\S+).*/) {
 	    my $chain = $1;
 	    $line =~ s/\s+$//;
 	    push @{$chains->{$chain}}, $line;
