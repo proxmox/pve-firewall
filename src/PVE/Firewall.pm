@@ -3865,7 +3865,7 @@ sub get_ebtables_cmdlist {
 	$cmdlist .= ":$chain ACCEPT\n";
     }
 
-    if ($ruleset->{FORWARD}) {
+    if ($ruleset->{'PVEFW-FORWARD'}) {
 	$cmdlist .= "-A FORWARD -j PVEFW-FORWARD\n";
     }
 
