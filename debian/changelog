@@ -1,3 +1,9 @@
+pve-firewall (3.0-9) unstable; urgency=medium
+
+  * fix creation of ebltables FORWARD rule entry
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 17 May 2018 14:41:27 +0200
+
 pve-firewall (3.0-8) unstable; urgency=medium
 
   * add ebtables support for better MAC filtering
