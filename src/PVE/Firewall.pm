@@ -3860,7 +3860,7 @@ sub get_ruleset_cmdlist {
     return wantarray ? ($cmdlist, $changes) : $cmdlist;
 }
 
-my $pve_ebtables_chainname_regex = qr/PVEFW-\S+|(?:tab|veth)\d+i\d+-(?:IN|OUT)/;
+my $pve_ebtables_chainname_regex = qr/PVEFW-\S+|(?:tap|veth)\d+i\d+-(?:IN|OUT)/;
 
 sub get_ebtables_cmdlist {
     my ($ruleset, $verbose) = @_;
