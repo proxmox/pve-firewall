@@ -1,3 +1,12 @@
+pve-firewall (3.0-10) unstable; urgency=medium
+
+  * fix #1764: handle existing ebtables rules and allow disabling ebtables
+
+  * ebtables handling can be disabled via /etc/pve/firewall/cluster.fw's new
+    ebtables_enable option.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 29 May 2018 15:14:33 +0200
+
 pve-firewall (3.0-9) unstable; urgency=medium
 
   * fix creation of ebltables FORWARD rule entry
