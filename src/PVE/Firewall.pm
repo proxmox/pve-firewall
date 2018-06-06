@@ -1180,6 +1180,12 @@ our $cluster_option_properties = {
 	minimum => 0,
 	optional => 1,
     },
+    ebtables => {
+	description => "Enable ebtables rules cluster wide.",
+	type => 'boolean',
+	default => 1,
+	optional => 1,
+    },
     policy_in => {
 	description => "Input policy.",
 	type => 'string',
@@ -2658,7 +2664,7 @@ sub parse_clusterfw_option {
 	if (($value > 1) && ((time() - $value) > 60)) {
 	    $value = 0
 	}
-    } elsif ($line =~ m/^(ebtables_enable):\s*(0|1)\s*$/i) {
+    } elsif ($line =~ m/^(ebtables):\s*(0|1)\s*$/i) {
 	$opt = lc($1);
 	$value = int($2);
     } elsif ($line =~ m/^(policy_(in|out)):\s*(ACCEPT|DROP|REJECT)\s*$/i) {
@@ -3651,7 +3657,7 @@ sub compile_ipsets {
 sub compile_ebtables_filter {
     my ($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, $verbose) = @_;
 
-    if (!($cluster_conf->{options}->{ebtables_enable} // 1)) {
+    if (!($cluster_conf->{options}->{ebtables} // 1)) {
 	return {};
     }
 
