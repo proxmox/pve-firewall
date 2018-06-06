@@ -1,3 +1,9 @@
+pve-firewall (3.0-11) UNRELEASED; urgency=medium
+
+  * #1764: rename 'ebtales_enable' option to 'ebtables'
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 06 Jun 2018 16:13:13 +0200
+
 pve-firewall (3.0-10) unstable; urgency=medium
 
   * fix #1764: handle existing ebtables rules and allow disabling ebtables
