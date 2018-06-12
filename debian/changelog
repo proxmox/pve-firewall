@@ -1,3 +1,9 @@
+pve-firewall (3.0-12) unstable; urgency=medium
+
+  * fix deleted iptables chains not being properly detected as a change
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 12 Jun 2018 12:01:02 +0200
+
 pve-firewall (3.0-11) unstable; urgency=medium
 
   * #1764: rename 'ebtales_enable' option to 'ebtables'
