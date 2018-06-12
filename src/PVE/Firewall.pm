@@ -3784,11 +3784,12 @@ sub get_ruleset_status {
     foreach my $chain (sort keys %$active_chains) {
 	next if defined($ruleset->{$chain});
 	my $action = 'delete';
+	my $sig = $active_chains->{$chain};
 	if (defined($change_only_regex)) {
 	    $action = 'ignore' if ($chain !~ m/$change_only_regex/);
 	    $statushash->{$chain}->{rules} = $active_chains->{$chain}->{rules};
+	    $sig = $sig->{sig};
 	}
-	my $sig = $active_chains->{$chain}->{sig};
 	$statushash->{$chain}->{action} = $action;
 	$statushash->{$chain}->{sig} = $sig;
 	print "$action $chain ($sig)\n" if $verbose;
