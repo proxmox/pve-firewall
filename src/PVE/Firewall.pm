@@ -2318,7 +2318,7 @@ sub generate_tap_rules_direction {
 	if ($direction eq 'OUT') {
 	    $policy = $options->{policy_out} || 'ACCEPT'; # allow everything by default
 	} else {
-	$policy = $options->{policy_in} || 'DROP'; # allow nothing by default
+	    $policy = $options->{policy_in} || 'DROP'; # allow nothing by default
 	}
 
 	my $accept = generate_nfqueue($options);
