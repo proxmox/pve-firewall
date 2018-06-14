@@ -2,6 +2,8 @@ package PVE::API2::Firewall::Host;
 
 use strict;
 use warnings;
+
+use PVE::Exception qw(raise_param_exc);
 use PVE::JSONSchema qw(get_standard_option);
 use PVE::RPCEnvironment;
 
