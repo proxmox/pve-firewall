@@ -3672,7 +3672,7 @@ sub compile_ebtables_filter {
     ruleset_addrule($ruleset, 'PVEFW-FORWARD', '-o fwln+', '-j PVEFW-FWBR-OUT');
 
     # generate firewall rules for QEMU VMs
-    foreach my $vmid (keys %{$vmdata->{qemu}}) {
+    foreach my $vmid (sort keys %{$vmdata->{qemu}}) {
 	eval {
 	    my $conf = $vmdata->{qemu}->{$vmid};
 	    my $vmfw_conf = $vmfw_configs->{$vmid};
@@ -3693,7 +3693,7 @@ sub compile_ebtables_filter {
     }
 
     # generate firewall rules for LXC containers
-    foreach my $vmid (keys %{$vmdata->{lxc}}) {
+    foreach my $vmid (sort keys %{$vmdata->{lxc}}) {
 	eval {
 	    my $conf = $vmdata->{lxc}->{$vmid};
 
