@@ -3678,7 +3678,7 @@ sub compile_ebtables_filter {
 	    my $vmfw_conf = $vmfw_configs->{$vmid};
 	    return if !$vmfw_conf;
 
-	    foreach my $netid (keys %$conf) {
+	    foreach my $netid (sort keys %$conf) {
 		next if $netid !~ m/^net(\d+)$/;
 		my $net = PVE::QemuServer::parse_net($conf->{$netid});
 		next if !$net->{firewall};
@@ -3700,7 +3700,7 @@ sub compile_ebtables_filter {
 	    my $vmfw_conf = $vmfw_configs->{$vmid};
 	    return if !$vmfw_conf || !$vmfw_conf->{options}->{enable};
 
-	    foreach my $netid (keys %$conf) {
+	    foreach my $netid (sort keys %$conf) {
 		next if $netid !~ m/^net(\d+)$/;
 		my $net = PVE::LXC::Config->parse_lxc_network($conf->{$netid});
 		next if !$net->{firewall};
