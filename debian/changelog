@@ -1,3 +1,10 @@
+pve-firewall (3.0-14) unstable; urgency=medium
+
+  * fix #1841: avoid ebtable reloads when containers have multiple network
+    interfaces
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 24 Aug 2018 10:51:04 +0200
+
 pve-firewall (3.0-13) unstable; urgency=medium
 
   * avoid unnecessary reloads of ebtable ruleset
