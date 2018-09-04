@@ -7,7 +7,7 @@
 	dh $@ --with systemd
 
 override_dh_systemd_enable:
-	dh_systemd_enable --name pvefw-logger pve-fwlogger.service
+	dh_systemd_enable --name pvefw-logger pvefw-logger.service
 	dh_systemd_enable --name pve-firewall pve-firewall.service
 
 override_dh_systemd_start:
