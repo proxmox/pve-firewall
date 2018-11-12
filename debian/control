@@ -6,6 +6,8 @@ Build-Depends: debhelper (>= 7.0.50~),
                dh-systemd,
                libglib2.0-dev,
                libnetfilter-log-dev,
+               libpve-common-perl,
+               pve-cluster,
                pve-doc-generator,
 Standards-Version: 3.8.4
 
