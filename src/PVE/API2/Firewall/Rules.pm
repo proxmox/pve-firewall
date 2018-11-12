@@ -122,9 +122,55 @@ sub register_get_rule {
 	returns => {
 	    type => "object",
 	    properties => {
+		action => {
+		    type => 'string',
+		},
+		comment => {
+		    type => 'string',
+		    optional => 1,
+		},
+		dest => {
+		    type => 'string',
+		    optional => 1,
+		},
+		dport => {
+		    type => 'string',
+		    optional => 1,
+		},
+		enable => {
+		    type => 'integer',
+		    optional => 1,
+		},
+		iface => {
+		    type => 'string',
+		    optional => 1,
+		},
+		ipversion => {
+		    type => 'integer',
+		    optional => 1,
+		},
+		macro => {
+		    type => 'integer',
+		    optional => 1,
+		},
 		pos => {
 		    type => 'integer',
-		}
+		},
+		proto => {
+		    type => 'string',
+		    optional => 1,
+		},
+		source => {
+		    type => 'string',
+		    optional => 1,
+		},
+		sport => {
+		    type => 'string',
+		    optional => 1,
+		},
+		type => {
+		    type => 'string',
+		},
 	    },
 	},
 	code => sub {
