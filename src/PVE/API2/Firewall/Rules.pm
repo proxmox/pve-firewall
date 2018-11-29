@@ -150,7 +150,7 @@ sub register_get_rule {
 		    optional => 1,
 		},
 		macro => {
-		    type => 'integer',
+		    type => 'string',
 		    optional => 1,
 		},
 		pos => {
