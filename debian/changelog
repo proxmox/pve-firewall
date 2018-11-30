@@ -1,3 +1,9 @@
+pve-firewall (3.0-16) unstable; urgency=medium
+
+  * api/rules: fix macro return type
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 30 Nov 2018 16:02:59 +0100
+
 pve-firewall (3.0-15) unstable; urgency=medium
 
   * fix #1971: display firewall rule properties
