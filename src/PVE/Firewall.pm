@@ -1054,6 +1054,7 @@ sub parse_port_name_number_or_range {
 	    my ($port1, $port2) = ($1, $2);
 	    die "invalid port '$port1'\n" if $port1 > 65535;
 	    die "invalid port '$port2'\n" if $port2 > 65535;
+	    die "backwards range '$port1:$port2' not allowed, did you mean '$port2:$port1'?\n" if $port1 > $port2;
 	} elsif ($item =~ m/^([0-9]+)$/) {
 	    $count += 1;
 	    my $port = $1;
