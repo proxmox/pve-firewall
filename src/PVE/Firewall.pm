@@ -2638,7 +2638,7 @@ sub parse_hostfw_option {
 
     my $loglevels = "emerg|alert|crit|err|warning|notice|info|debug|nolog";
 
-    if ($line =~ m/^(enable|nosmurfs|tcpflags|ndp):\s*(0|1)\s*$/i) {
+    if ($line =~ m/^(enable|nosmurfs|tcpflags|ndp|log_nf_conntrack):\s*(0|1)\s*$/i) {
 	$opt = lc($1);
 	$value = int($2);
     } elsif ($line =~ m/^(log_level_in|log_level_out|tcp_flags_log_level|smurf_log_level):\s*(($loglevels)\s*)?$/i) {
@@ -4069,6 +4069,7 @@ sub apply_ruleset {
 
     update_nf_conntrack_tcp_timeout_established($hostfw_conf);
 
+    update_nf_conntrack_logging($hostfw_conf);
 }
 
 sub update_nf_conntrack_max {
@@ -4103,6 +4104,23 @@ sub update_nf_conntrack_tcp_timeout_established {
     my $value = defined($options->{nf_conntrack_tcp_timeout_established}) ? $options->{nf_conntrack_tcp_timeout_established} : 432000;
 
     PVE::ProcFSTools::write_proc_entry("/proc/sys/net/netfilter/nf_conntrack_tcp_timeout_established", $value);
+}
+
+my $log_nf_conntrack_enabled = undef;
+sub update_nf_conntrack_logging {
+    my ($hostfw_conf) = @_;
+
+    my $options = $hostfw_conf->{options} || {};
+    my $value = $options->{log_nf_conntrack} || 0;
+    if (!defined($log_nf_conntrack_enabled)
+	|| $value != $log_nf_conntrack_enabled)
+    {
+	my $tmpfile = "$pve_fw_status_dir/log_nf_conntrack";
+	PVE::Tools::file_set_contents($tmpfile, $value);
+
+	PVE::Tools::run_command([qw(systemctl try-reload-or-restart pvefw-logger.service)]);
+	$log_nf_conntrack_enabled = $value;
+    }
 }
 
 sub remove_pvefw_chains {
