@@ -40,6 +40,7 @@
 #include <linux/netlink.h>
 #include <libnfnetlink/libnfnetlink.h>
 #include <libnetfilter_log/libnetfilter_log.h>
+#include <libnetfilter_conntrack/libnetfilter_conntrack.h>
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
 #include <netinet/ip6.h>
@@ -53,10 +54,12 @@
 
 static struct nflog_handle *logh = NULL;
 static struct nlif_handle *nlifh = NULL;
+static struct nfct_handle *nfcth = NULL;
 GMainLoop *main_loop;
 
 gboolean foreground = FALSE;
 gboolean debug = FALSE;
+gboolean conntrack = FALSE;
 
 /*
 
@@ -76,6 +79,7 @@ Example:
 
 #define LOCKFILE "/var/lock/pvefw-logger.lck"
 #define PIDFILE "/var/run/pvefw-logger.pid"
+#define LOG_CONNTRACK_FILE "/var/lib/pve-firewall/log_nf_conntrack"
 
 #define LQ_LEN 512
 #define LE_MAX (512 - 4) // try to fit into 512 bytes
@@ -917,6 +921,42 @@ signal_read_cb(GIOChannel *source,
     return TRUE;
 }
 
+static int
+nfct_cb(const struct nlmsghdr *nlh,
+        enum nf_conntrack_msg_type type,
+        struct nf_conntrack *ct,
+        void *data)
+{
+    struct log_entry *le = g_new0(struct log_entry, 1);
+    int len = nfct_snprintf(&le->buf[le->len], LE_MAX - le->len,
+                            ct, type, NFCT_O_DEFAULT,
+                            NFCT_OF_SHOW_LAYER3|NFCT_OF_TIMESTAMP);
+    le->len += len;
+
+    if (le->len == LE_MAX) {
+        le->buf[le->len-1] = '\n';
+    } else { // le->len < LE_MAX
+        le->buf[le->len++] = '\n';
+    }
+
+    queue_log_entry(le);
+
+    return NFCT_CB_STOP;
+}
+
+static gboolean
+nfct_read_cb(GIOChannel *source,
+             GIOCondition condition,
+             gpointer data)
+{
+    int res;
+    if ((res = nfct_catch(nfcth)) < 0) {
+        log_status_message(3, "error catching nfct");
+        return FALSE;
+    }
+    return TRUE;
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -932,6 +972,7 @@ main(int argc, char *argv[])
     GOptionEntry entries[] = {
         { "debug", 'd', 0, G_OPTION_ARG_NONE, &debug, "Turn on debug messages", NULL },
         { "foreground", 'f', 0, G_OPTION_ARG_NONE, &foreground, "Do not daemonize server", NULL },
+        { "conntrack", 0, 0, G_OPTION_ARG_NONE, &conntrack, "Add conntrack logging", NULL },
         { NULL },
     };
 
@@ -953,6 +994,23 @@ main(int argc, char *argv[])
     }
 
     g_option_context_free(context);
+
+    if (!conntrack) {
+        int log_nf_conntrackfd = open(LOG_CONNTRACK_FILE, O_RDONLY);
+        if (log_nf_conntrackfd == -1) {
+            if (errno != ENOENT) {
+                fprintf(stderr, "error: failed to open "LOG_CONNTRACK_FILE": %s\n", strerror(errno));
+            }
+        } else {
+            char c = '0';
+            ssize_t bytes = read(log_nf_conntrackfd, &c, sizeof(c));
+            if (bytes < 0) {
+                fprintf(stderr, "error: failed to read value in log_nf_conntrack: %s\n", strerror(errno));
+            } else {
+                conntrack = (c == '1');
+            }
+        }
+    }
 
     if (debug) foreground = TRUE;
 
@@ -1017,6 +1075,13 @@ main(int argc, char *argv[])
         exit(-1);
     }
 
+    if (conntrack) {
+        if ((nfcth = nfct_open(CONNTRACK, NF_NETLINK_CONNTRACK_NEW|NF_NETLINK_CONNTRACK_DESTROY)) == NULL) {
+            fprintf(stderr, "unable to open netfilter conntrack\n");
+            exit(-1);
+        }
+    }
+
     sigset_t mask;
     sigemptyset(&mask);
     sigaddset(&mask, SIGINT);
@@ -1076,6 +1141,13 @@ main(int argc, char *argv[])
 
     g_io_add_watch(nflog_ch, G_IO_IN, nflog_read_cb, NULL);
 
+    if (conntrack) {
+        nfct_callback_register2(nfcth, NFCT_T_NEW|NFCT_T_DESTROY, &nfct_cb, NULL);
+        int nfctfd = nfct_fd(nfcth);
+        GIOChannel *nfct_ch = g_io_channel_unix_new(nfctfd);
+        g_io_add_watch(nfct_ch, G_IO_IN, nfct_read_cb, NULL);
+    }
+
     GIOChannel *sig_ch = g_io_channel_unix_new(sigfd);
     if (!g_io_add_watch(sig_ch, G_IO_IN, signal_read_cb, NULL)) {
         exit(-1);
@@ -1092,6 +1164,11 @@ main(int argc, char *argv[])
     g_thread_join(wthread);
 
     close(outfd);
+
+    if (conntrack) {
+        nfct_callback_unregister2(nfcth);
+        nfct_close(nfcth);
+    }
 
     nflog_close(logh);
 

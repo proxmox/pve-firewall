@@ -25,7 +25,7 @@ LDFLAGS:=$(shell dpkg-buildflags --get LDFLAGS)
 pvefw-logger: pvefw-logger.c
 	gcc -Wall -Werror pvefw-logger.c -o pvefw-logger -std=gnu99 \
 	$(CPPFLAGS) $(CFLAGS) $(LDFLAGS) \
-	$(shell pkg-config libnetfilter_log glib-2.0 --libs --cflags)
+	$(shell pkg-config libnetfilter_log libnetfilter_conntrack glib-2.0 --libs --cflags)
 
 .PHONY: install
 install: pve-firewall pve-firewall.8 pve-firewall.bash-completion pvefw-logger
