@@ -196,8 +196,7 @@ queue_log_entry(struct log_entry *le)
 static void
 log_status_message(guint loglevel, const char *fmt, ...)
 {
-    va_list ap;
-    va_start(ap, fmt);
+    va_list ap, ap2;
 
     if (loglevel > 7 ) loglevel = 7; // syslog defines level 0-7
 
@@ -207,7 +206,10 @@ log_status_message(guint loglevel, const char *fmt, ...)
 
     LEPRINTTIME(time(NULL));
 
+    va_start(ap, fmt);
+    va_copy(ap2, ap);
     le->len += vsnprintf(le->buf + le->len, LE_MAX - le->len, fmt, ap);
+    va_end(ap);
 
     LEPRINTF("\n");
 
@@ -215,7 +217,8 @@ log_status_message(guint loglevel, const char *fmt, ...)
 
     // also log to syslog
 
-    vsyslog(loglevel, fmt, ap);
+    vsyslog(loglevel, fmt, ap2);
+    va_end(ap2);
 }
 
 static int
