@@ -954,8 +954,12 @@ nfct_read_cb(GIOChannel *source,
 {
     int res;
     if ((res = nfct_catch(nfcth)) < 0) {
-        log_status_message(3, "error catching nfct");
-        return FALSE;
+        if (errno == ENOBUFS) {
+            log_status_message(3, "nfct_catch returned ENOBUFS: conntrack information may be incomplete");
+        } else {
+            log_status_message(3, "error catching nfct: %s", strerror(errno));
+            return FALSE;
+        }
     }
     return TRUE;
 }
