@@ -32,7 +32,7 @@ install: pve-firewall pve-firewall.8 pve-firewall.bash-completion pvefw-logger
 	make -C PVE install
 	install -d -m 0755 ${DESTDIR}/${SBINDIR}
 	install -m 0755 pve-firewall ${DESTDIR}/${SBINDIR}
-	install -m 0755 --strip pvefw-logger ${DESTDIR}/${SBINDIR}
+	install -m 0755 pvefw-logger ${DESTDIR}/${SBINDIR}
 	install -d ${DESTDIR}/${MAN8DIR}
 	install -m 0644 pve-firewall.8 ${DESTDIR}/${MAN8DIR}
 	install -m 0644 -D pve-firewall.bash-completion ${DESTDIR}/${BASHCOMPLDIR}/pve-firewall

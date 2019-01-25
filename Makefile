@@ -15,17 +15,20 @@ ARCH:=$(shell dpkg-architecture -qDEB_BUILD_ARCH)
 GITVERSION:=$(shell git rev-parse HEAD)
 
 DEB=${PACKAGE}_${VERSION}-${PKGREL}_${ARCH}.deb
+DEB2=${PACKAGE}-dbgsym_${VERSION}-${PKGREL}_${ARCH}.deb
+DEBS=$(DEB) $(DEB2)
 
-all: ${DEB}
+all: $(DEBS)
 
 .PHONY: dinstall
 dinstall: deb
-	dpkg -i ${DEB}
+	dpkg -i $(DEBS)
 
 
 .PHONY: deb
-deb: ${DEB}
-${DEB}: src test debian
+deb: $(DEBS)
+$(DEB2): $(DEB)
+$(DEB): src test debian
 	make check
 	rm -rf build
 	rsync -a src/ build
@@ -33,7 +36,7 @@ ${DEB}: src test debian
 	echo "git clone git://git.proxmox.com/git/pve-firewall.git\\ngit checkout ${GITVERSION}" > build/debian/SOURCE
 	# install
 	cd build; dpkg-buildpackage -b -us -uc
-	lintian ${DEB}
+	lintian ${DEBS}
 
 .PHONY: check
 check: 
@@ -50,5 +53,5 @@ distclean: clean
 
 
 .PHONY: upload
-upload: ${DEB}
-	tar cf - ${DEB} | ssh repoman@repo.proxmox.com -- upload --product pve --dist stretch --arch ${ARCH}
+upload: $(DEBS)
+	tar cf - $(DEBS) | ssh repoman@repo.proxmox.com -- upload --product pve --dist stretch --arch ${ARCH}

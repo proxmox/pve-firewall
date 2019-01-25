@@ -2,7 +2,7 @@ Source: pve-firewall
 Section: admin
 Priority: extra
 Maintainer: Proxmox Support Team <support@proxmox.com>
-Build-Depends: debhelper (>= 7.0.50~),
+Build-Depends: debhelper (>= 10),
                dh-systemd,
                libglib2.0-dev,
                libnetfilter-conntrack-dev,
