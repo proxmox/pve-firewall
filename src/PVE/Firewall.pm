@@ -1242,6 +1242,12 @@ our $host_option_properties = {
 	type => 'boolean',
 	optional => 1,
     },
+    nf_conntrack_allow_invalid => {
+	description => "Allow invalid packets on connection tracking.",
+	type => 'boolean',
+	default => 0,
+	optional => 1,
+    },
 };
 
 our $vm_option_properties = {
@@ -2128,9 +2134,11 @@ sub ruleset_chain_add_ndp {
 }
 
 sub ruleset_chain_add_conn_filters {
-    my ($ruleset, $chain, $accept) = @_;
+    my ($ruleset, $chain, $allow_invalid, $accept) = @_;
 
-    ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate INVALID", "-j DROP");
+    if (!$allow_invalid) {
+	ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate INVALID", "-j DROP");
+    }
     ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate RELATED,ESTABLISHED", "-j $accept");
 }
 
@@ -2356,7 +2364,7 @@ sub enable_host_firewall {
 
     ruleset_addrule($ruleset, $chain, "-i lo", "-j ACCEPT");
 
-    ruleset_chain_add_conn_filters($ruleset, $chain, 'ACCEPT');
+    ruleset_chain_add_conn_filters($ruleset, $chain, 0, 'ACCEPT');
     ruleset_chain_add_ndp($ruleset, $chain, $ipversion, $options, 'IN', '-j RETURN');
     ruleset_chain_add_input_filters($ruleset, $chain, $ipversion, $options, $cluster_conf, $loglevel);
 
@@ -2414,7 +2422,7 @@ sub enable_host_firewall {
 
     ruleset_addrule($ruleset, $chain, "-o lo", "-j ACCEPT");
 
-    ruleset_chain_add_conn_filters($ruleset, $chain, 'ACCEPT');
+    ruleset_chain_add_conn_filters($ruleset, $chain, 0, 'ACCEPT');
 
     # we use RETURN because we may want to check other thigs later
     $accept_action = 'RETURN';
@@ -2638,7 +2646,7 @@ sub parse_hostfw_option {
 
     my $loglevels = "emerg|alert|crit|err|warning|notice|info|debug|nolog";
 
-    if ($line =~ m/^(enable|nosmurfs|tcpflags|ndp|log_nf_conntrack):\s*(0|1)\s*$/i) {
+    if ($line =~ m/^(enable|nosmurfs|tcpflags|ndp|log_nf_conntrack|nf_conntrack_allow_invalid):\s*(0|1)\s*$/i) {
 	$opt = lc($1);
 	$value = int($2);
     } elsif ($line =~ m/^(log_level_in|log_level_out|tcp_flags_log_level|smurf_log_level):\s*(($loglevels)\s*)?$/i) {
@@ -3461,7 +3469,7 @@ sub compile_iptables_filter {
     # fixme: what log level should we use here?
     my $loglevel = get_option_log_level($hostfw_options, "log_level_out");
 
-    ruleset_chain_add_conn_filters($ruleset, "PVEFW-FORWARD", "ACCEPT");
+    ruleset_chain_add_conn_filters($ruleset, "PVEFW-FORWARD", $hostfw_options->{nf_conntrack_allow_invalid}, "ACCEPT");
 
     ruleset_create_chain($ruleset, "PVEFW-FWBR-IN");
     ruleset_chain_add_input_filters($ruleset, "PVEFW-FWBR-IN", $ipversion, $hostfw_options, $cluster_conf, $loglevel);
