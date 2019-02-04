@@ -3469,7 +3469,8 @@ sub compile_iptables_filter {
     # fixme: what log level should we use here?
     my $loglevel = get_option_log_level($hostfw_options, "log_level_out");
 
-    ruleset_chain_add_conn_filters($ruleset, "PVEFW-FORWARD", $hostfw_options->{nf_conntrack_allow_invalid}, "ACCEPT");
+    my $conn_allow_invalid = $hostfw_options->{nf_conntrack_allow_invalid} // 0;
+    ruleset_chain_add_conn_filters($ruleset, "PVEFW-FORWARD", $conn_allow_invalid, "ACCEPT");
 
     ruleset_create_chain($ruleset, "PVEFW-FWBR-IN");
     ruleset_chain_add_input_filters($ruleset, "PVEFW-FWBR-IN", $ipversion, $hostfw_options, $cluster_conf, $loglevel);
