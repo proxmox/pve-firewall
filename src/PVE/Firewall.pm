@@ -2114,7 +2114,7 @@ sub ruleset_add_chain_policy {
     } elsif ($policy eq 'REJECT') {
 	ruleset_addrule($ruleset, $chain, "", "-j PVEFW-Reject");
 
-	ruleset_addrule($ruleset, $chain, "", "-g PVEFW-reject", $loglevel, "policy $policy:", $vmid);
+	ruleset_addrule($ruleset, $chain, "", "-g PVEFW-reject", $loglevel, "policy $policy: ", $vmid);
     } else {
 	# should not happen
 	die "internal error: unknown policy '$policy'";
