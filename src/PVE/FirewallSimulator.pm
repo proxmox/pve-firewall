@@ -21,7 +21,7 @@ eval {
     $have_lxc = 1;
 };
 
-my $mark;
+my $mark = 0;
 my $trace;
 my $debug = 0;
 
@@ -227,7 +227,7 @@ sub rule_match {
 
 	if ($rule =~ s@^-m mark --mark ($NUMBER_RE)(?:/($NUMBER_RE))?\s*@@) {
 	    my ($value, $mask) = PVE::Firewall::get_mark_values($1, $2);
-	    return undef if !defined($mark) || ($mark & $mask) != $value;
+	    return undef if ($mark & $mask) != $value;
 	    next;
 	}
 
