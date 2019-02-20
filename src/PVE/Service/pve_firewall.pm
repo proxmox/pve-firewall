@@ -170,7 +170,7 @@ __PACKAGE__->register_method ({
 		my (undef, undef, $ipset_changes) = PVE::Firewall::get_ipset_cmdlist($ipset_ruleset, $verbose);
 		my ($test, $ruleset_changes) = PVE::Firewall::get_ruleset_cmdlist($ruleset, $verbose);
 		my (undef, $ruleset_changesv6) = PVE::Firewall::get_ruleset_cmdlist($rulesetv6, $verbose, "ip6tables");
-+		my (undef, $ebtables_changes) = PVE::Firewall::get_ebtables_cmdlist($ebtables_ruleset, $verbose);
+		my (undef, $ebtables_changes) = PVE::Firewall::get_ebtables_cmdlist($ebtables_ruleset, $verbose);
 
 		$res->{changes} = ($ipset_changes || $ruleset_changes || $ruleset_changesv6 || $ebtables_changes) ? 1 : 0;
 	    }
