@@ -8,6 +8,7 @@ export MAN1DIR=${MANDIR}/man1/
 export MAN8DIR=${MANDIR}/man8/
 export PERLDIR=${PREFIX}/share/perl5
 export BASHCOMPLDIR=${PREFIX}/share/bash-completion/completions
+export ZSHCOMPLDIR=${PREFIX}/share/zsh/vendor-completions
 
 export NOVIEW=1
 include /usr/share/pve-doc-generator/pve-doc-generator.mk
@@ -16,6 +17,10 @@ all: pve-firewall.8 pvefw-logger
 
 pve-firewall.bash-completion: PVE/Service/pve_firewall.pm
 	perl -I. -T -e "use PVE::Service::pve_firewall; PVE::Service::pve_firewall->generate_bash_completions();" >$@.tmp
+	mv $@.tmp $@
+
+pve-firewall.zsh-completion: PVE/Service/pve_firewall.pm
+	perl -I. -T -e "use PVE::Service::pve_firewall; PVE::Service::pve_firewall->generate_zsh_completions();" >$@.tmp
 	mv $@.tmp $@
 
 CPPFLAGS:=$(shell dpkg-buildflags --get CPPFLAGS)
@@ -28,7 +33,7 @@ pvefw-logger: pvefw-logger.c
 	$(shell pkg-config libnetfilter_log libnetfilter_conntrack glib-2.0 --libs --cflags)
 
 .PHONY: install
-install: pve-firewall pve-firewall.8 pve-firewall.bash-completion pvefw-logger
+install: pve-firewall pve-firewall.8 pve-firewall.bash-completion pve-firewall.zsh-completion pvefw-logger
 	make -C PVE install
 	install -d -m 0755 ${DESTDIR}/${SBINDIR}
 	install -m 0755 pve-firewall ${DESTDIR}/${SBINDIR}
@@ -36,6 +41,7 @@ install: pve-firewall pve-firewall.8 pve-firewall.bash-completion pvefw-logger
 	install -d ${DESTDIR}/${MAN8DIR}
 	install -m 0644 pve-firewall.8 ${DESTDIR}/${MAN8DIR}
 	install -m 0644 -D pve-firewall.bash-completion ${DESTDIR}/${BASHCOMPLDIR}/pve-firewall
+	install -m 0644 -D pve-firewall.zsh-completion ${DESTDIR}/${ZSHCOMPLDIR}/_pve-firewall
 	install -d -m 0755 ${DESTDIR}/usr/lib/sysctl.d/
 	install -m 0644 pve-firewall-sysctl.conf ${DESTDIR}/usr/lib/sysctl.d/pve-firewall.conf
 
