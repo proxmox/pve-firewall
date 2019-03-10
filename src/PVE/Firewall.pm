@@ -3770,13 +3770,17 @@ sub generate_tap_layer2filter {
     }
 
     if (defined($options->{layer2_protocols})){
+	my $protochain = $tapchain."-PROTO";
+	ruleset_addrule($ruleset, $tapchain, '', "-j $protochain");
+	ruleset_create_chain($ruleset, $protochain);
+
 	foreach my $proto (split(/,/, $options->{layer2_protocols})) {
-	    ruleset_addrule($ruleset, $tapchain, "-p $proto", '-j ACCEPT');
+	    ruleset_addrule($ruleset, $protochain, "-p $proto", '-j RETURN');
 	}
-	ruleset_addrule($ruleset, $tapchain, '', "-j DROP");
-    } else {
-	ruleset_addrule($ruleset, $tapchain, '', '-j ACCEPT');
+	ruleset_addrule($ruleset, $protochain, '', '-j DROP');
     }
+
+    ruleset_addrule($ruleset, $tapchain, '', '-j ACCEPT');
 
     ruleset_addrule($ruleset, 'PVEFW-FWBR-OUT', "-i $iface", "-j $tapchain");
 }
