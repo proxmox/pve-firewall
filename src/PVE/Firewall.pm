@@ -3687,6 +3687,7 @@ sub compile_ebtables_filter {
 	    my $conf = $vmdata->{qemu}->{$vmid};
 	    my $vmfw_conf = $vmfw_configs->{$vmid};
 	    return if !$vmfw_conf;
+	    my $ipsets = $vmfw_conf->{ipset};
 
 	    foreach my $netid (sort keys %$conf) {
 		next if $netid !~ m/^net(\d+)$/;
@@ -3694,9 +3695,15 @@ sub compile_ebtables_filter {
 		next if !$net->{firewall};
 		my $iface = "tap${vmid}i$1";
 		my $macaddr = $net->{macaddr};
-
-		generate_tap_layer2filter($ruleset, $iface, $macaddr, $vmfw_conf, $vmid);
-
+		my $arpfilter = [];
+		if (defined(my $ipset = $ipsets->{"ipfilter-$netid"})) {
+		    foreach my $ipaddr (@$ipset) {
+			my($ip, $version) = parse_ip_or_cidr($ipaddr->{cidr});
+			next if !$ip || ($version && $version != 4);
+			push(@$arpfilter, $ip);
+		    }
+		}
+		generate_tap_layer2filter($ruleset, $iface, $macaddr, $vmfw_conf, $vmid, $arpfilter);
 	    }
 	};
 	warn $@ if $@; # just to be sure - should not happen
@@ -3709,6 +3716,7 @@ sub compile_ebtables_filter {
 
 	    my $vmfw_conf = $vmfw_configs->{$vmid};
 	    return if !$vmfw_conf || !$vmfw_conf->{options}->{enable};
+	    my $ipsets = $vmfw_conf->{ipset};
 
 	    foreach my $netid (sort keys %$conf) {
 		next if $netid !~ m/^net(\d+)$/;
@@ -3716,7 +3724,16 @@ sub compile_ebtables_filter {
 		next if !$net->{firewall};
 		my $iface = "veth${vmid}i$1";
 		my $macaddr = $net->{hwaddr};
-		generate_tap_layer2filter($ruleset, $iface, $macaddr, $vmfw_conf, $vmid);
+		my $arpfilter = [];
+		if (defined(my $ipset = $ipsets->{"ipfilter-$netid"})) {
+		    foreach my $ipaddr (@$ipset) {
+			my($ip, $version) = parse_ip_or_cidr($ipaddr->{cidr});
+			next if !$ip || ($version && $version != 4);
+			push(@$arpfilter, $ip);
+		    }
+		}
+		push(@$arpfilter, $net->{ip}) if $net->{ip} && $vmfw_conf->{options}->{ipfilter};
+		generate_tap_layer2filter($ruleset, $iface, $macaddr, $vmfw_conf, $vmid, $arpfilter);
 	    }
 	};
 	warn $@ if $@; # just to be sure - should not happen
@@ -3726,7 +3743,7 @@ sub compile_ebtables_filter {
 }
 
 sub generate_tap_layer2filter {
-    my ($ruleset, $iface, $macaddr, $vmfw_conf, $vmid) = @_;
+    my ($ruleset, $iface, $macaddr, $vmfw_conf, $vmid, $arpfilter) = @_;
     my $options = $vmfw_conf->{options};
 
     my $tapchain = $iface."-OUT";
@@ -3739,6 +3756,17 @@ sub generate_tap_layer2filter {
 
     if (defined($macaddr) && !(defined($options->{macfilter}) && $options->{macfilter} == 0)) {
 	    ruleset_addrule($ruleset, $tapchain, "-s ! $macaddr", '-j DROP');
+    }
+
+    if (@$arpfilter){
+	my $arpchain = $tapchain."-ARP";
+	ruleset_addrule($ruleset, $tapchain, "-p ARP", "-j $arpchain");
+	ruleset_create_chain($ruleset, $arpchain);
+
+	foreach my $ip (@{$arpfilter}) {
+	    ruleset_addrule($ruleset, $arpchain, "-p ARP --arp-ip-src $ip", '-j RETURN');
+	}
+	ruleset_addrule($ruleset, $arpchain, '', '-j DROP');
     }
 
     if (defined($options->{layer2_protocols})){
