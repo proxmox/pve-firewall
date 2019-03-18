@@ -141,6 +141,9 @@ sub register_get_rule {
 		    type => 'integer',
 		    optional => 1,
 		},
+		log => PVE::Firewall::get_standard_option('pve-fw-loglevel', {
+		    description => 'Log level for firewall rule',
+		}),
 		iface => {
 		    type => 'string',
 		    optional => 1,

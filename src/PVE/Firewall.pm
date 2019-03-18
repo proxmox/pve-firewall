@@ -1363,6 +1363,9 @@ my $rule_properties = {
 	minimum => 0,
 	optional => 1,
     },
+    log => get_standard_option('pve-fw-loglevel', {
+	description => "Log level for firewall rule.",
+    }),
     sport => {
 	description => "Restrict TCP/UDP source port. $port_descr",
 	type => 'string', format => 'pve-fw-sport-spec',
@@ -2008,8 +2011,10 @@ sub ipt_rule_to_cmds {
     }
 
     my @iptcmds;
-    if (defined $rule->{log} && $rule->{log}) {
-	my $logaction = get_log_rule_base($chain, $vmid, $rule->{logmsg}, $rule->{log});
+    if ($rule->{log} && $rule->{log} ne 'nolog') {
+	my $log = $rule->{log};
+	my $loglevel = $log_level_hash->{$log};
+	my $logaction = get_log_rule_base($chain, $vmid, $rule->{logmsg}, $loglevel);
 	push @iptcmds, "-A $chain $matchstr $logaction";
     }
     push @iptcmds, "-A $chain $matchstr $targetstr";
@@ -2017,7 +2022,7 @@ sub ipt_rule_to_cmds {
 }
 
 sub ruleset_generate_rule {
-    my ($ruleset, $chain, $ipversion, $rule, $cluster_conf, $fw_conf) = @_;
+    my ($ruleset, $chain, $ipversion, $rule, $cluster_conf, $fw_conf, $vmid) = @_;
 
     my $rules;
 
@@ -2030,7 +2035,7 @@ sub ruleset_generate_rule {
     # update all or nothing
     my @ipt_rule_cmds;
     foreach my $r (@$rules) {
-	push @ipt_rule_cmds, ipt_rule_to_cmds($r, $chain, $ipversion, $cluster_conf, $fw_conf);
+	push @ipt_rule_cmds, ipt_rule_to_cmds($r, $chain, $ipversion, $cluster_conf, $fw_conf, $vmid);
     }
     foreach my $c (@ipt_rule_cmds) {
 	ruleset_add_ipt_cmd($ruleset, $chain, $c);
@@ -2064,17 +2069,18 @@ sub ruleset_add_ipt_cmd {
 }
 
 sub ruleset_addrule {
-   my ($ruleset, $chain, $match, $action, $log, $logmsg, $vmid) = @_;
+    my ($ruleset, $chain, $match, $action, $log, $logmsg, $vmid) = @_;
 
-   die "no such chain '$chain'\n" if !$ruleset->{$chain};
+    die "no such chain '$chain'\n" if !$ruleset->{$chain};
 
-   if (defined($log) && $log) {
-	my $logaction = get_log_rule_base($chain, $vmid, $logmsg, $log);
+    if ($log) {
+	my $loglevel = $log_level_hash->{$log};
+	my $logaction = get_log_rule_base($chain, $vmid, $logmsg, $loglevel);
 	push @{$ruleset->{$chain}}, "-A $chain $match $logaction";
-   }
-   # for stable ebtables digests avoid double-spaces to match ebtables-save output
-   $match .= ' ' if length($match);
-   push @{$ruleset->{$chain}}, "-A $chain ${match}$action";
+    }
+    # for stable ebtables digests avoid double-spaces to match ebtables-save output
+    $match .= ' ' if length($match);
+    push @{$ruleset->{$chain}}, "-A $chain ${match}$action";
 }
 
 sub ruleset_insertrule {
@@ -2094,7 +2100,7 @@ sub get_log_rule_base {
     # Note: we use special format for prefix to pass further
     # info to log daemon (VMID, LOGLEVEL and CHAIN)
 
-    return "-j NFLOG --nflog-prefix \":$vmid:$loglevel:$chain: $msg\"";
+    return "-m limit --limit 1/sec --limit-burst 1 -j NFLOG --nflog-prefix \":$vmid:$loglevel:$chain: $msg\"";
 }
 
 sub ruleset_add_chain_policy {
@@ -2148,7 +2154,7 @@ sub ruleset_chain_add_input_filters {
     if ($cluster_conf->{ipset}->{blacklist}){
 	if (!ruleset_chain_exist($ruleset, "PVEFW-blacklist")) {
 	    ruleset_create_chain($ruleset, "PVEFW-blacklist");
-	    ruleset_addrule($ruleset, "PVEFW-blacklist", "", "-j DROP", $loglevel, "DROP: ");
+	    ruleset_addrule($ruleset, "PVEFW-blacklist", "", "-j DROP", $loglevel, "DROP: ", 0);
 	}
 	my $ipset_chain = compute_ipset_chain_name(0, 'blacklist', $ipversion);
 	ruleset_addrule($ruleset, $chain, "-m set --match-set ${ipset_chain} src", "-j PVEFW-blacklist");
@@ -2234,7 +2240,7 @@ sub ruleset_add_group_rule {
 }
 
 sub ruleset_generate_vm_rules {
-    my ($ruleset, $rules, $cluster_conf, $vmfw_conf, $chain, $netid, $direction, $options, $ipversion) = @_;
+    my ($ruleset, $rules, $cluster_conf, $vmfw_conf, $chain, $netid, $direction, $options, $ipversion, $vmid) = @_;
 
     my $lc_direction = lc($direction);
 
@@ -2251,12 +2257,13 @@ sub ruleset_generate_vm_rules {
 	} else {
 	    next if $rule->{type} ne $lc_direction;
 	    eval {
+		$rule->{logmsg} = "$rule->{action}: ";
 		if ($direction eq 'OUT') {
 		    rule_substitude_action($rule, { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" });
-		    ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, $cluster_conf, $vmfw_conf);
+		    ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, $cluster_conf, $vmfw_conf, $vmid);
 		} else {
 		    rule_substitude_action($rule, { ACCEPT => $in_accept , REJECT => "PVEFW-reject" });
-		    ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, $cluster_conf, $vmfw_conf);
+		    ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, $cluster_conf, $vmfw_conf, $vmid);
 		}
 	    };
 	    warn $@ if $@;
@@ -2317,7 +2324,7 @@ sub generate_tap_rules_direction {
     ruleset_create_vm_chain($ruleset, $tapchain, $ipversion, $options, $macaddr, $ipfilter_ipset, $direction);
 
     if ($options->{enable}) {
-	ruleset_generate_vm_rules($ruleset, $rules, $cluster_conf, $vmfw_conf, $tapchain, $netid, $direction, $options, $ipversion);
+	ruleset_generate_vm_rules($ruleset, $rules, $cluster_conf, $vmfw_conf, $tapchain, $netid, $direction, $options, $ipversion, $vmid);
 
 	ruleset_generate_vm_ipsrules($ruleset, $options, $direction, $iface);
 
@@ -2341,10 +2348,10 @@ sub generate_tap_rules_direction {
     # plug the tap chain to bridge chain
     if ($direction eq 'IN') {
 	ruleset_addrule($ruleset, "PVEFW-FWBR-IN",
-			"-m physdev --physdev-is-bridged --physdev-out $iface", "-j $tapchain");
+			"-m physdev --physdev-is-bridged --physdev-out $iface", "-j $tapchain", $loglevel, 'FWBR-IN: ', $vmid);
     } else {
 	ruleset_addrule($ruleset, "PVEFW-FWBR-OUT",
-			"-m physdev --physdev-is-bridged --physdev-in $iface", "-j $tapchain");
+			"-m physdev --physdev-is-bridged --physdev-in $iface", "-j $tapchain", $loglevel, 'FWBR-OUT: ', $vmid);
     }
 }
 
@@ -2385,7 +2392,7 @@ sub enable_host_firewall {
 		ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, 'IN', $accept_action, $ipversion);
 	    } elsif ($rule->{type} eq 'in') {
 		rule_substitude_action($rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" });
-		ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, $cluster_conf, $hostfw_conf);
+		ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, $cluster_conf, $hostfw_conf, 0);
 	    }
 	};
 	warn $@ if $@;
@@ -2437,11 +2444,12 @@ sub enable_host_firewall {
 
 	$rule->{iface_out} = $rule->{iface} if $rule->{iface};
 	eval {
+	    $rule->{logmsg} = "$rule->{action}: ";
 	    if ($rule->{type} eq 'group') {
 		ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, 'OUT', $accept_action, $ipversion);
 	    } elsif ($rule->{type} eq 'out') {
 		rule_substitude_action($rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" });
-		ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, $cluster_conf, $hostfw_conf);
+		ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, $cluster_conf, $hostfw_conf, 0);
 	    }
 	};
 	warn $@ if $@;
@@ -2578,6 +2586,10 @@ sub parse_fw_rule {
 	}
 	if ($line =~ s/^-dest (\S+)\s*//) {
 	    $rule->{dest} = $1;
+	    next;
+	}
+	if ($line =~ s/^-log (emerg|alert|crit|err|warning|notice|info|debug|nolog)\s*//) {
+	    $rule->{log} = $1;
 	    next;
 	}
 
@@ -3032,6 +3044,7 @@ my $format_rules = sub {
 		$raw .= " -p $rule->{proto}" if $rule->{proto};
 		$raw .= " -dport $rule->{dport}" if $rule->{dport};
 		$raw .= " -sport $rule->{sport}" if $rule->{sport};
+		$raw .= " -log $rule->{log}" if $rule->{log};
 	    }
 
 	    $raw .= " # " . encode('utf8', $rule->{comment})
@@ -3190,9 +3203,7 @@ sub get_option_log_level {
 
     return undef if $v eq '' || $v eq 'nolog';
 
-    $v = $log_level_hash->{$v} if defined($log_level_hash->{$v});
-
-    return $v if ($v >= 0) && ($v <= 7);
+    return $v if defined($log_level_hash->{$v});
 
     warn "unknown log level ($k = '$v')\n";
 
@@ -3225,7 +3236,7 @@ sub generate_std_chains {
 	ruleset_create_chain($ruleset, $chain);
 	foreach my $rule (@{$std_chains->{$chain}}) {
 	    if (ref($rule)) {
-		ruleset_generate_rule($ruleset, $chain, $ipversion, $rule);
+		ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, 0);
 	    } else {
 		die "rule $rule as string - should not happen";
 	    }
