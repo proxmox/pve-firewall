@@ -1248,6 +1248,12 @@ our $host_option_properties = {
 	default => 0,
 	optional => 1,
     },
+    log_nf_conntrack => {
+	description => "Enable logging of conntrack information.",
+	type => 'boolean',
+	default => 0,
+	optional => 1
+    },
 };
 
 our $vm_option_properties = {
