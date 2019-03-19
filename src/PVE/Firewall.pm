@@ -2011,8 +2011,8 @@ sub ipt_rule_to_cmds {
     }
 
     my @iptcmds;
-    if ($rule->{log} && $rule->{log} ne 'nolog') {
-	my $log = $rule->{log};
+    my $log = $rule->{log};
+    if (defined($log) && $log ne 'nolog') {
 	my $loglevel = $log_level_hash->{$log};
 	my $logaction = get_log_rule_base($chain, $vmid, $rule->{logmsg}, $loglevel);
 	push @iptcmds, "-A $chain $matchstr $logaction";
