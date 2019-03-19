@@ -2100,7 +2100,7 @@ sub get_log_rule_base {
     # Note: we use special format for prefix to pass further
     # info to log daemon (VMID, LOGLEVEL and CHAIN)
 
-    return "-m limit --limit 1/sec --limit-burst 1 -j NFLOG --nflog-prefix \":$vmid:$loglevel:$chain: $msg\"";
+    return "-m limit --limit 1/sec -j NFLOG --nflog-prefix \":$vmid:$loglevel:$chain: $msg\"";
 }
 
 sub ruleset_add_chain_policy {
