@@ -132,6 +132,8 @@ my $pve_fw_lock_filename = "/var/lock/pvefw.lck";
 
 my $default_log_level = 'nolog'; # avoid logs by default
 
+my $global_log_ratelimit = '--limit 1/sec';
+
 my $log_level_hash = {
     debug => 7,
     info => 6,
@@ -1199,6 +1201,33 @@ our $cluster_option_properties = {
 	optional => 1,
 	enum => ['ACCEPT', 'REJECT', 'DROP'],
     },
+    log_ratelimit => {
+	description => "Log ratelimiting settings",
+	type => 'string', format => {
+	    enable => {
+		default_key => 1,
+		description => 'Enable or disable log rate limiting',
+		type => 'boolean',
+		default => '1',
+	    },
+	    rate => {
+		type => 'string',
+		description => 'Frequency with which the burst bucket gets refilled',
+		optional => 1,
+		pattern => '[1-9][0-9]*\/(second|minute|hour|day)',
+		format_description => 'rate',
+		default => '1/second',
+	    },
+	    burst => {
+		type => 'integer',
+		minimum => 0,
+		optional => 1,
+		description => 'Inital burst of packages which will get logged',
+		default => 5,
+	    },
+	},
+	optional => 1,
+    },
 };
 
 our $host_option_properties = {
@@ -2103,10 +2132,14 @@ sub get_log_rule_base {
     $vmid = 0 if !defined($vmid);
     $msg = "" if !defined($msg);
 
+    my $rlimit = '';
+    if (defined($global_log_ratelimit)) {
+	$rlimit = "-m limit $global_log_ratelimit ";
+    }
+
     # Note: we use special format for prefix to pass further
     # info to log daemon (VMID, LOGLEVEL and CHAIN)
-
-    return "-m limit --limit 1/sec -j NFLOG --nflog-prefix \":$vmid:$loglevel:$chain: $msg\"";
+    return "${rlimit}-j NFLOG --nflog-prefix \":$vmid:$loglevel:$chain: $msg\"";
 }
 
 sub ruleset_add_chain_policy {
@@ -2697,6 +2730,9 @@ sub parse_clusterfw_option {
     } elsif ($line =~ m/^(policy_(in|out)):\s*(ACCEPT|DROP|REJECT)\s*$/i) {
 	$opt = lc($1);
 	$value = uc($3);
+    } elsif ($line =~ m/^(log_ratelimit):\s*(\S+)\s*$/) {
+	$opt = lc($1);
+	$value = $2;
     } else {
 	die "can't parse option '$line'\n"
     }
@@ -3332,6 +3368,27 @@ sub round_powerof2 {
     return ++$int;
 }
 
+my $set_global_log_ratelimit = sub {
+    my $cluster_opts = shift;
+
+    $global_log_ratelimit = '--limit 1/sec';
+    if (defined(my $log_rlimit = $cluster_opts->{log_ratelimit})) {
+	my $ll_format = $cluster_option_properties->{log_ratelimit}->{format};
+	my $limit = PVE::JSONSchema::parse_property_string($ll_format, $log_rlimit);
+
+	if ($limit->{enable}) {
+	    if (my $rate = $limit->{rate}) {
+		$global_log_ratelimit = "--limit $rate";
+	    }
+	    if (my $burst = $limit->{burst}) {
+		$global_log_ratelimit .= " --limit-burst $burst";
+	    }
+	} else {
+	    $global_log_ratelimit = undef;
+	}
+    }
+};
+
 sub load_clusterfw_conf {
     my ($filename, $verbose) = @_;
 
@@ -3340,6 +3397,8 @@ sub load_clusterfw_conf {
     my $cluster_conf = {};
     if (my $fh = IO::File->new($filename, O_RDONLY)) {
 	$cluster_conf = parse_clusterfw_config($filename, $fh, $verbose);
+
+	$set_global_log_ratelimit->($cluster_conf->{options});
     }
 
     return $cluster_conf;
