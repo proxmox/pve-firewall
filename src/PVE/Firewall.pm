@@ -423,7 +423,7 @@ my $pve_fw_macros = {
     ],
     'Razor' => [
 	"Razor Antispam System",
-	{ action => 'ACCEPT', proto => 'tcp', dport => '2703' },
+	{ action => 'PARAM', proto => 'tcp', dport => '2703' },
     ],
     'Rdate' => [
 	"Remote time retrieval (rdate)",
