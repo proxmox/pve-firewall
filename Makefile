@@ -9,6 +9,7 @@ ARCH:=$(shell dpkg-architecture -qDEB_BUILD_ARCH)
 GITVERSION:=$(shell git rev-parse HEAD)
 
 DEB=${PACKAGE}_${VERSION}-${PKGREL}_${ARCH}.deb
+DSC=${PACKAGE}_${VERSION}-${PKGREL}.dsc
 DEB2=${PACKAGE}-dbgsym_${VERSION}-${PKGREL}_${ARCH}.deb
 DEBS=$(DEB) $(DEB2)
 
@@ -30,6 +31,12 @@ $(DEB): ${BUILDDIR} check
 	cd ${BUILDDIR}; dpkg-buildpackage -b -us -uc
 	lintian ${DEBS}
 
+.PHONY: dsc
+dsc: ${DSC}
+${DSC}: ${BUILDDIR}
+	cd ${BUILDDIR}; dpkg-buildpackage -S -us -uc -d -nc
+	lintian ${DSC}
+
 .PHONY: check
 check:
 	make -C test check
@@ -39,7 +46,7 @@ distclean: clean
 clean:
 	make -C src clean
 	make -C test clean
-	rm -rf *~ debian/*~ example/*~ *.deb *.changes *.buildinfo ${BUILDDIR} ${PACKAGE}-*.tar.gz
+	rm -rf *~ debian/*~ example/*~ *.deb *.changes *.buildinfo ${BUILDDIR} ${PACKAGE}-*.tar.gz *.dsc
 
 .PHONY: upload
 upload: $(DEBS)

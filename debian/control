@@ -10,7 +10,7 @@ Build-Depends: debhelper (>= 10),
                libpve-common-perl,
                pve-cluster,
                pve-doc-generator (>= 5.3-3),
-Standards-Version: 3.8.4
+Standards-Version: 3.9.8
 
 Package: pve-firewall
 Architecture: any
