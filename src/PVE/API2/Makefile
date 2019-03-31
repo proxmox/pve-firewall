@@ -1,9 +1,12 @@
+DESTDIR=
+PREFIX=/usr
+PERLDIR=${DESTDIR}/${PREFIX}/share/perl5
 
 all:
 
 .PHONY: install
 install:
-	install -d -m 0755 ${DESTDIR}${PERLDIR}/PVE/API2
+	install -d -m 0755 ${PERLDIR}/PVE/API2
 	make -C Firewall install
 
 .PHONY: clean

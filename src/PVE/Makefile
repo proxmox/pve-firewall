@@ -1,3 +1,6 @@
+DESTDIR=
+PREFIX= /usr
+PERLDIR=${DESTDIR}/${PREFIX}/share/perl5
 
 LIB_SOURCES=			\
 	FirewallSimulator.pm	\
@@ -7,8 +10,8 @@ all:
 
 .PHONY: install
 install:
-	install -d -m 0755 ${DESTDIR}${PERLDIR}/PVE
-	for i in ${LIB_SOURCES}; do install -D -m 0644 $$i ${DESTDIR}${PERLDIR}/PVE/$$i; done	
+	install -d -m 0755 ${PERLDIR}/PVE
+	for i in ${LIB_SOURCES}; do install -D -m 0644 $$i ${PERLDIR}/PVE/$$i; done
 	make -C API2 install
 	make -C Service install
 

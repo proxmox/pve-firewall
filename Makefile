@@ -3,13 +3,7 @@ PKGREL=18
 
 PACKAGE=pve-firewall
 
-PREFIX=/usr
-BINDIR=${PREFIX}/bin
-SBINDIR=${PREFIX}/sbin
-MANDIR=${PREFIX}/share/man
-DOCDIR=${PREFIX}/share/doc
-MAN1DIR=${MANDIR}/man1/
-PERLDIR=${PREFIX}/share/perl5
+BUILDDIR ?= ${PACKAGE}-${VERSION}
 
 ARCH:=$(shell dpkg-architecture -qDEB_BUILD_ARCH)
 GITVERSION:=$(shell git rev-parse HEAD)
@@ -24,33 +18,28 @@ all: $(DEBS)
 dinstall: deb
 	dpkg -i $(DEBS)
 
+${BUILDDIR}:
+	rm -rf ${BUILDDIR}
+	rsync -a  src/ debian ${BUILDDIR}
+	echo "git clone git://git.proxmox.com/git/pve-firewall.git\\ngit checkout ${GITVERSION}" > ${BUILDDIR}/debian/SOURCE
 
 .PHONY: deb
 deb: $(DEBS)
 $(DEB2): $(DEB)
-$(DEB): src test debian
-	make check
-	rm -rf build
-	rsync -a src/ build
-	rsync -a debian/ build/debian
-	echo "git clone git://git.proxmox.com/git/pve-firewall.git\\ngit checkout ${GITVERSION}" > build/debian/SOURCE
-	# install
-	cd build; dpkg-buildpackage -b -us -uc
+$(DEB): ${BUILDDIR} check
+	cd ${BUILDDIR}; dpkg-buildpackage -b -us -uc
 	lintian ${DEBS}
 
 .PHONY: check
-check: 
+check:
 	make -C test check
 
-.PHONY: clean
-clean: 	
+.PHONY: clean distclean
+distclean: clean
+clean:
 	make -C src clean
 	make -C test clean
-	rm -rf *~ debian/*~ example/*~ *.deb *.changes *.buildinfo build ${PACKAGE}-*.tar.gz
-
-.PHONY: distclean
-distclean: clean
-
+	rm -rf *~ debian/*~ example/*~ *.deb *.changes *.buildinfo ${BUILDDIR} ${PACKAGE}-*.tar.gz
 
 .PHONY: upload
 upload: $(DEBS)

@@ -1,3 +1,7 @@
+DESTDIR=
+PREFIX=/usr
+PERLDIR=${DESTDIR}/${PREFIX}/share/perl5
+
 LIB_SOURCES=			\
 	Aliases.pm		\
 	IPSet.pm		\
@@ -11,8 +15,8 @@ all:
 
 .PHONY: install
 install:
-	install -d -m 0755 ${DESTDIR}${PERLDIR}/PVE/API2/Firewall
-	for i in ${LIB_SOURCES}; do install -D -m 0644 $$i ${DESTDIR}${PERLDIR}/PVE/API2/Firewall/$$i; done	
+	install -d -m 0755 ${PERLDIR}/PVE/API2/Firewall
+	for i in ${LIB_SOURCES}; do install -D -m 0644 $$i ${PERLDIR}/PVE/API2/Firewall/$$i; done	
 
 
 .PHONY: clean
