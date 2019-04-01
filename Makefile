@@ -46,7 +46,7 @@ distclean: clean
 clean:
 	make -C src clean
 	make -C test clean
-	rm -rf *~ debian/*~ example/*~ *.deb *.changes *.buildinfo ${BUILDDIR} ${PACKAGE}-*.tar.gz *.dsc
+	rm -rf *~ debian/*~ example/*~ *.deb *.changes *.buildinfo ${BUILDDIR} ${PACKAGE}*.tar.gz *.dsc
 
 .PHONY: upload
 upload: $(DEBS)
