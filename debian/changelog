@@ -1,3 +1,15 @@
+pve-firewall (3.0-19) unstable; urgency=medium
+
+  * ebtables: add arp filtering
+
+  * fix: #2123 Logging of user defined firewall rules
+
+  * fix Razor macro
+
+  * allow to enable/disable and modify cluster wide log ratelimits
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 02 Apr 2019 11:15:16 +0200
+
 pve-firewall (3.0-18) unstable; urgency=medium
 
   * fix #1606: Add nf_conntrack_allow_invalid option
