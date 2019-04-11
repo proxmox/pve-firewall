@@ -131,7 +131,6 @@ my $nodename = PVE::INotify::nodename();
 my $pve_fw_lock_filename = "/var/lock/pvefw.lck";
 
 my $default_log_level = 'nolog'; # avoid logs by default
-
 my $global_log_ratelimit = '--limit 1/sec';
 
 my $log_level_hash = {
@@ -144,6 +143,11 @@ my $log_level_hash = {
     alert => 1,
     emerg => 0,
 };
+
+my $verbose = 0;
+sub set_verbose {
+    $verbose = shift;
+}
 
 # %rule
 #
@@ -2569,7 +2573,7 @@ sub get_mark_values {
 }
 
 sub parse_fw_rule {
-    my ($prefix, $line, $cluster_conf, $fw_conf, $rule_env, $verbose) = @_;
+    my ($prefix, $line, $cluster_conf, $fw_conf, $rule_env) = @_;
 
     my $orig_line = $line;
 
@@ -2795,7 +2799,7 @@ sub parse_alias {
 }
 
 sub generic_fw_config_parser {
-    my ($filename, $fh, $verbose, $cluster_conf, $empty_conf, $rule_env) = @_;
+    my ($filename, $fh, $cluster_conf, $empty_conf, $rule_env) = @_;
 
     my $section;
     my $group;
@@ -2892,7 +2896,7 @@ sub generic_fw_config_parser {
 	    warn "$prefix: $@" if $@;
 	} elsif ($section eq 'rules') {
 	    my $rule;
-	    eval { $rule = parse_fw_rule($prefix, $line, $cluster_conf, $res, $rule_env, $verbose); };
+	    eval { $rule = parse_fw_rule($prefix, $line, $cluster_conf, $res, $rule_env); };
 	    if (my $err = $@) {
 		warn "$prefix: $err";
 		next;
@@ -2900,7 +2904,7 @@ sub generic_fw_config_parser {
 	    push @{$res->{$section}}, $rule;
 	} elsif ($section eq 'groups') {
 	    my $rule;
-	    eval { $rule = parse_fw_rule($prefix, $line, $cluster_conf, undef, 'group', $verbose); };
+	    eval { $rule = parse_fw_rule($prefix, $line, $cluster_conf, undef, 'group'); };
 	    if (my $err = $@) {
 		warn "$prefix: $err";
 		next;
@@ -2958,15 +2962,15 @@ sub generic_fw_config_parser {
 }
 
 sub parse_hostfw_config {
-    my ($filename, $fh, $cluster_conf, $verbose) = @_;
+    my ($filename, $fh, $cluster_conf) = @_;
 
     my $empty_conf = { rules => [], options => {}};
 
-    return generic_fw_config_parser($filename, $fh, $verbose, $cluster_conf, $empty_conf, 'host');
+    return generic_fw_config_parser($filename, $fh, $cluster_conf, $empty_conf, 'host');
 }
 
 sub parse_vmfw_config {
-    my ($filename, $fh, $cluster_conf, $rule_env, $verbose) = @_;
+    my ($filename, $fh, $cluster_conf, $rule_env) = @_;
 
     my $empty_conf = {
 	rules => [],
@@ -2976,11 +2980,11 @@ sub parse_vmfw_config {
 	ipset_comments => {},
     };
 
-    return generic_fw_config_parser($filename, $fh, $verbose, $cluster_conf, $empty_conf, $rule_env);
+    return generic_fw_config_parser($filename, $fh, $cluster_conf, $empty_conf, $rule_env);
 }
 
 sub parse_clusterfw_config {
-    my ($filename, $fh, $verbose) = @_;
+    my ($filename, $fh) = @_;
 
     my $section;
     my $group;
@@ -2995,7 +2999,7 @@ sub parse_clusterfw_config {
 	ipset_comments => {},
     };
 
-    return generic_fw_config_parser($filename, $fh, $verbose, $empty_conf, $empty_conf, 'cluster');
+    return generic_fw_config_parser($filename, $fh, $empty_conf, $empty_conf, 'cluster');
 }
 
 sub run_locked {
@@ -3047,7 +3051,7 @@ sub read_local_vm_config {
 };
 
 sub load_vmfw_conf {
-    my ($cluster_conf, $rule_env, $vmid, $dir, $verbose) = @_;
+    my ($cluster_conf, $rule_env, $vmid, $dir) = @_;
 
     my $vmfw_conf = {};
 
@@ -3055,7 +3059,7 @@ sub load_vmfw_conf {
 
     my $filename = "$dir/$vmid.fw";
     if (my $fh = IO::File->new($filename, O_RDONLY)) {
-	$vmfw_conf = parse_vmfw_config($filename, $fh, $cluster_conf, $rule_env, $verbose);
+	$vmfw_conf = parse_vmfw_config($filename, $fh, $cluster_conf, $rule_env);
 	$vmfw_conf->{vmid} = $vmid;
     }
 
@@ -3219,17 +3223,17 @@ sub clone_vmfw_conf {
 }
 
 sub read_vm_firewall_configs {
-    my ($cluster_conf, $vmdata, $dir, $verbose) = @_;
+    my ($cluster_conf, $vmdata, $dir) = @_;
 
     my $vmfw_configs = {};
 
     foreach my $vmid (keys %{$vmdata->{qemu}}) {
-	my $vmfw_conf = load_vmfw_conf($cluster_conf, 'vm', $vmid, $dir, $verbose);
+	my $vmfw_conf = load_vmfw_conf($cluster_conf, 'vm', $vmid, $dir);
 	next if !$vmfw_conf->{options}; # skip if file does not exists
 	$vmfw_configs->{$vmid} = $vmfw_conf;
     }
     foreach my $vmid (keys %{$vmdata->{lxc}}) {
-        my $vmfw_conf = load_vmfw_conf($cluster_conf, 'ct', $vmid, $dir, $verbose);
+        my $vmfw_conf = load_vmfw_conf($cluster_conf, 'ct', $vmid, $dir);
         next if !$vmfw_conf->{options}; # skip if file does not exists
         $vmfw_configs->{$vmid} = $vmfw_conf;
     }
@@ -3390,13 +3394,13 @@ my $set_global_log_ratelimit = sub {
 };
 
 sub load_clusterfw_conf {
-    my ($filename, $verbose) = @_;
+    my ($filename) = @_;
 
     $filename = $clusterfw_conf_filename if !defined($filename);
 
     my $cluster_conf = {};
     if (my $fh = IO::File->new($filename, O_RDONLY)) {
-	$cluster_conf = parse_clusterfw_config($filename, $fh, $verbose);
+	$cluster_conf = parse_clusterfw_config($filename, $fh);
 
 	$set_global_log_ratelimit->($cluster_conf->{options});
     }
@@ -3448,13 +3452,13 @@ sub save_clusterfw_conf {
 }
 
 sub load_hostfw_conf {
-    my ($cluster_conf, $filename, $verbose) = @_;
+    my ($cluster_conf, $filename) = @_;
 
     $filename = $hostfw_conf_filename if !defined($filename);
 
     my $hostfw_conf = {};
     if (my $fh = IO::File->new($filename, O_RDONLY)) {
-	$hostfw_conf = parse_hostfw_config($filename, $fh, $cluster_conf, $verbose);
+	$hostfw_conf = parse_hostfw_config($filename, $fh, $cluster_conf);
     }
     return $hostfw_conf;
 }
@@ -3482,7 +3486,7 @@ sub save_hostfw_conf {
 }
 
 sub compile {
-    my ($cluster_conf, $hostfw_conf, $vmdata, $verbose) = @_;
+    my ($cluster_conf, $hostfw_conf, $vmdata) = @_;
 
     my $vmfw_configs;
 
@@ -3492,19 +3496,19 @@ sub compile {
     if ($vmdata) { # test mode
 	my $testdir = $vmdata->{testdir} || die "no test directory specified";
 	my $filename = "$testdir/cluster.fw";
-	$cluster_conf = load_clusterfw_conf($filename, $verbose);
+	$cluster_conf = load_clusterfw_conf($filename);
 
 	$filename = "$testdir/host.fw";
-	$hostfw_conf = load_hostfw_conf($cluster_conf, $filename, $verbose);
+	$hostfw_conf = load_hostfw_conf($cluster_conf, $filename);
 
-	$vmfw_configs = read_vm_firewall_configs($cluster_conf, $vmdata, $testdir, $verbose);
+	$vmfw_configs = read_vm_firewall_configs($cluster_conf, $vmdata, $testdir);
     } else { # normal operation
-	$cluster_conf = load_clusterfw_conf(undef, $verbose) if !$cluster_conf;
+	$cluster_conf = load_clusterfw_conf(undef) if !$cluster_conf;
 
-	$hostfw_conf = load_hostfw_conf($cluster_conf, undef, $verbose) if !$hostfw_conf;
+	$hostfw_conf = load_hostfw_conf($cluster_conf, undef) if !$hostfw_conf;
 
 	$vmdata = read_local_vm_config();
-	$vmfw_configs = read_vm_firewall_configs($cluster_conf, $vmdata, undef, $verbose);
+	$vmfw_configs = read_vm_firewall_configs($cluster_conf, $vmdata, undef);
     }
 
     return ({},{},{},{}) if !$cluster_conf->{options}->{enable};
@@ -3522,16 +3526,16 @@ sub compile {
 
     push @{$cluster_conf->{ipset}->{management}}, { cidr => $localnet };
 
-    my $ruleset = compile_iptables_filter($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, 4, $verbose);
-    my $rulesetv6 = compile_iptables_filter($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, 6, $verbose);
-    my $ebtables_ruleset = compile_ebtables_filter($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, $verbose);
+    my $ruleset = compile_iptables_filter($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, 4);
+    my $rulesetv6 = compile_iptables_filter($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, 6);
+    my $ebtables_ruleset = compile_ebtables_filter($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata);
     my $ipset_ruleset = compile_ipsets($cluster_conf, $vmfw_configs, $vmdata);
 
     return ($ruleset, $ipset_ruleset, $rulesetv6, $ebtables_ruleset);
 }
 
 sub compile_iptables_filter {
-    my ($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, $ipversion, $verbose) = @_;
+    my ($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, $ipversion) = @_;
 
     my $ruleset = {};
 
@@ -3741,7 +3745,7 @@ sub compile_ipsets {
 }
 
 sub compile_ebtables_filter {
-    my ($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, $verbose) = @_;
+    my ($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata) = @_;
 
     if (!($cluster_conf->{options}->{ebtables} // 1)) {
 	return {};
@@ -3866,7 +3870,7 @@ sub generate_tap_layer2filter {
 # * both the $active_chains hash and the returned status_hash have different
 #   structure (they contain a key named 'rules').
 sub get_ruleset_status {
-    my ($ruleset, $active_chains, $digest_fn, $verbose, $change_only_regex) = @_;
+    my ($ruleset, $active_chains, $digest_fn, $change_only_regex) = @_;
 
     my $statushash = {};
 
@@ -3924,12 +3928,12 @@ sub print_sig_rule {
 }
 
 sub get_ruleset_cmdlist {
-    my ($ruleset, $verbose, $iptablescmd) = @_;
+    my ($ruleset, $iptablescmd) = @_;
 
     my $cmdlist = "*filter\n"; # we pass this to iptables-restore;
 
     my ($active_chains, $hooks) = iptables_get_chains($iptablescmd);
-    my $statushash = get_ruleset_status($ruleset, $active_chains, \&iptables_chain_digest, $verbose);
+    my $statushash = get_ruleset_status($ruleset, $active_chains, \&iptables_chain_digest);
 
     # create missing chains first
     foreach my $chain (sort keys %$ruleset) {
@@ -3988,14 +3992,14 @@ sub get_ruleset_cmdlist {
 my $pve_ebtables_chainname_regex = qr/PVEFW-\S+|(?:tap|veth)\d+i\d+-(?:IN|OUT)/;
 
 sub get_ebtables_cmdlist {
-    my ($ruleset, $verbose) = @_;
+    my ($ruleset) = @_;
 
     my $changes = 0;
     my $cmdlist = "*filter\n";
 
     my $active_chains = ebtables_get_chains();
     my $statushash = get_ruleset_status($ruleset, $active_chains,
-					\&iptables_chain_digest, $verbose,
+					\&iptables_chain_digest,
 					$pve_ebtables_chainname_regex);
 
     # create chains first and make sure PVE rules are evaluated if active
@@ -4026,14 +4030,14 @@ sub get_ebtables_cmdlist {
 }
 
 sub get_ipset_cmdlist {
-    my ($ruleset, $verbose) = @_;
+    my ($ruleset) = @_;
 
     my $cmdlist = "";
 
     my $delete_cmdlist = "";
 
     my $active_chains = ipset_get_chains();
-    my $statushash = get_ruleset_status($ruleset, $active_chains, \&ipset_chain_digest, $verbose);
+    my $statushash = get_ruleset_status($ruleset, $active_chains, \&ipset_chain_digest);
 
     # remove stale _swap chains
     foreach my $chain (keys %$active_chains) {
@@ -4084,16 +4088,16 @@ sub get_ipset_cmdlist {
 }
 
 sub apply_ruleset {
-    my ($ruleset, $hostfw_conf, $ipset_ruleset, $rulesetv6, $ebtables_ruleset, $verbose) = @_;
+    my ($ruleset, $hostfw_conf, $ipset_ruleset, $rulesetv6, $ebtables_ruleset) = @_;
 
     enable_bridge_firewall();
 
     my ($ipset_create_cmdlist, $ipset_delete_cmdlist, $ipset_changes) =
-	get_ipset_cmdlist($ipset_ruleset, $verbose);
+	get_ipset_cmdlist($ipset_ruleset);
 
-    my ($cmdlist, $changes) = get_ruleset_cmdlist($ruleset, $verbose);
-    my ($cmdlistv6, $changesv6) = get_ruleset_cmdlist($rulesetv6, $verbose, "ip6tables");
-    my ($ebtables_cmdlist, $ebtables_changes) = get_ebtables_cmdlist($ebtables_ruleset, $verbose);
+    my ($cmdlist, $changes) = get_ruleset_cmdlist($ruleset);
+    my ($cmdlistv6, $changesv6) = get_ruleset_cmdlist($rulesetv6, "ip6tables");
+    my ($ebtables_cmdlist, $ebtables_changes) = get_ebtables_cmdlist($ebtables_ruleset);
 
     if ($verbose) {
 	if ($ipset_changes) {
@@ -4145,7 +4149,7 @@ sub apply_ruleset {
 
     # test: re-read status and check if everything is up to date
     my $active_chains = iptables_get_chains();
-    my $statushash = get_ruleset_status($ruleset, $active_chains, \&iptables_chain_digest, 0);
+    my $statushash = get_ruleset_status($ruleset, $active_chains, \&iptables_chain_digest);
 
     my $errors;
     foreach my $chain (sort keys %$ruleset) {
@@ -4157,7 +4161,7 @@ sub apply_ruleset {
     }
 
     my $active_chainsv6 = iptables_get_chains("ip6tables");
-    my $statushashv6 = get_ruleset_status($rulesetv6, $active_chainsv6, \&iptables_chain_digest, 0);
+    my $statushashv6 = get_ruleset_status($rulesetv6, $active_chainsv6, \&iptables_chain_digest);
 
     foreach my $chain (sort keys %$rulesetv6) {
 	my $stat = $statushashv6->{$chain};
@@ -4170,7 +4174,7 @@ sub apply_ruleset {
     my $active_ebtables_chains = ebtables_get_chains();
     my $ebtables_statushash = get_ruleset_status($ebtables_ruleset,
 				$active_ebtables_chains, \&iptables_chain_digest,
-				0, $pve_ebtables_chainname_regex);
+				$pve_ebtables_chainname_regex);
 
     foreach my $chain (sort keys %$ebtables_ruleset) {
 	my $stat = $ebtables_statushash->{$chain};

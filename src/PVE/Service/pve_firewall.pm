@@ -158,19 +158,20 @@ __PACKAGE__->register_method ({
 
 	    my $res = { status => $status };
 
-	    my $verbose = 1; # show syntax errors 
-	    my $cluster_conf = PVE::Firewall::load_clusterfw_conf(undef, $verbose); 
+	    PVE::Firewall::set_verbose(1); # show syntax errors
+
+	    my $cluster_conf = PVE::Firewall::load_clusterfw_conf(undef);
 	    $res->{enable} = $cluster_conf->{options}->{enable} ? 1 : 0;
 
 	    if ($status eq 'running') {
 		
-		my ($ruleset, $ipset_ruleset, $rulesetv6, $ebtables_ruleset) = PVE::Firewall::compile($cluster_conf, undef, undef, $verbose);
+		my ($ruleset, $ipset_ruleset, $rulesetv6, $ebtables_ruleset) = PVE::Firewall::compile($cluster_conf, undef, undef);
 
-		$verbose = 0; # do not show iptables details
-		my (undef, undef, $ipset_changes) = PVE::Firewall::get_ipset_cmdlist($ipset_ruleset, $verbose);
-		my ($test, $ruleset_changes) = PVE::Firewall::get_ruleset_cmdlist($ruleset, $verbose);
-		my (undef, $ruleset_changesv6) = PVE::Firewall::get_ruleset_cmdlist($rulesetv6, $verbose, "ip6tables");
-		my (undef, $ebtables_changes) = PVE::Firewall::get_ebtables_cmdlist($ebtables_ruleset, $verbose);
+		PVE::Firewall::set_verbose(0); # do not show iptables details
+		my (undef, undef, $ipset_changes) = PVE::Firewall::get_ipset_cmdlist($ipset_ruleset);
+		my ($test, $ruleset_changes) = PVE::Firewall::get_ruleset_cmdlist($ruleset);
+		my (undef, $ruleset_changesv6) = PVE::Firewall::get_ruleset_cmdlist($rulesetv6, "ip6tables");
+		my (undef, $ebtables_changes) = PVE::Firewall::get_ebtables_cmdlist($ebtables_ruleset);
 
 		$res->{changes} = ($ipset_changes || $ruleset_changes || $ruleset_changesv6 || $ebtables_changes) ? 1 : 0;
 	    }
@@ -199,22 +200,22 @@ __PACKAGE__->register_method ({
 
 	my $code = sub {
 
-	    my $verbose = 1;
+	    PVE::Firewall::set_verbose(1);
 
-	    my $cluster_conf = PVE::Firewall::load_clusterfw_conf(undef, $verbose); 
-	    my ($ruleset, $ipset_ruleset, $rulesetv6, $ebtables_ruleset) = PVE::Firewall::compile($cluster_conf, undef, undef, $verbose);
+	    my $cluster_conf = PVE::Firewall::load_clusterfw_conf(undef);
+	    my ($ruleset, $ipset_ruleset, $rulesetv6, $ebtables_ruleset) = PVE::Firewall::compile($cluster_conf, undef, undef);
 
 	    print "ipset cmdlist:\n";
-	    my (undef, undef, $ipset_changes) = PVE::Firewall::get_ipset_cmdlist($ipset_ruleset, $verbose);
+	    my (undef, undef, $ipset_changes) = PVE::Firewall::get_ipset_cmdlist($ipset_ruleset);
 
 	    print "\niptables cmdlist:\n";
-	    my (undef, $ruleset_changes) = PVE::Firewall::get_ruleset_cmdlist($ruleset, $verbose);
+	    my (undef, $ruleset_changes) = PVE::Firewall::get_ruleset_cmdlist($ruleset);
 
 	    print "\nip6tables cmdlist:\n";
-	    my (undef, $ruleset_changesv6) = PVE::Firewall::get_ruleset_cmdlist($rulesetv6, $verbose, "ip6tables");
+	    my (undef, $ruleset_changesv6) = PVE::Firewall::get_ruleset_cmdlist($rulesetv6, "ip6tables");
 
 	    print "\nebtables cmdlist:\n";
-	    my (undef, $ebtables_changes) = PVE::Firewall::get_ebtables_cmdlist($ebtables_ruleset, $verbose);
+	    my (undef, $ebtables_changes) = PVE::Firewall::get_ebtables_cmdlist($ebtables_ruleset);
 
 	    if ($ipset_changes || $ruleset_changes || $ruleset_changesv6 || $ebtables_changes) {
 		print "detected changes\n";
@@ -333,9 +334,11 @@ __PACKAGE__->register_method ({
 
 	local $SIG{'__WARN__'} = 'DEFAULT'; # do not fill up syslog
 
-	my ($ruleset, $ipset_ruleset, $rulesetv6, $ebtables_ruleset) = PVE::Firewall::compile(undef, undef, undef, $param->{verbose});
+	PVE::Firewall::set_verbose($param->{verbose});
 
-	PVE::FirewallSimulator::debug($param->{verbose} || 0);
+	my ($ruleset, $ipset_ruleset, $rulesetv6, $ebtables_ruleset) = PVE::Firewall::compile();
+
+	PVE::FirewallSimulator::debug();
 	
 	my $host_ip = PVE::Cluster::remote_node_ip($nodename);
 
