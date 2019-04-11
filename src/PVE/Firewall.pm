@@ -2801,21 +2801,27 @@ sub parse_alias {
 sub generic_fw_config_parser {
     my ($filename, $cluster_conf, $empty_conf, $rule_env) = @_;
 
-    my $fh = IO::File->new($filename, O_RDONLY);
-    return {} if !$fh;
-
     my $section;
     my $group;
 
     my $res = $empty_conf;
 
-    while (defined(my $line = <$fh>)) {
+    my $raw;
+    if ($filename =~ m!^/etc/pve/(.*)$!) {
+	$raw = PVE::Cluster::get_config($1);
+    } else {
+	$raw = eval { PVE::Tools::file_get_contents($filename) }; # ignore errors
+    }
+    return {} if !$raw;
+
+    my $linenr = 0;
+    while ($raw =~ /^\h*(.*?)\h*$/gm) {
+	my $line = $1;
+	$linenr++;
 	next if $line =~ m/^#/;
 	next if $line =~ m/^\s*$/;
-
 	chomp $line;
 
-	my $linenr = $fh->input_line_number();
 	my $prefix = "$filename (line $linenr)";
 
 	if ($empty_conf->{options} && ($line =~ m/^\[options\]$/i)) {
