@@ -2,6 +2,7 @@ package PVE::Firewall;
 
 use warnings;
 use strict;
+
 use POSIX;
 use Data::Dumper;
 use Digest::SHA;
@@ -40,7 +41,6 @@ eval {
     require PVE::LXC;
     $have_lxc = 1;
 };
-
 
 my $pve_fw_status_dir = "/var/lib/pve-firewall";
 
@@ -2799,7 +2799,10 @@ sub parse_alias {
 }
 
 sub generic_fw_config_parser {
-    my ($filename, $fh, $cluster_conf, $empty_conf, $rule_env) = @_;
+    my ($filename, $cluster_conf, $empty_conf, $rule_env) = @_;
+
+    my $fh = IO::File->new($filename, O_RDONLY);
+    return {} if !$fh;
 
     my $section;
     my $group;
@@ -2961,47 +2964,6 @@ sub generic_fw_config_parser {
     return $res;
 }
 
-sub parse_hostfw_config {
-    my ($filename, $fh, $cluster_conf) = @_;
-
-    my $empty_conf = { rules => [], options => {}};
-
-    return generic_fw_config_parser($filename, $fh, $cluster_conf, $empty_conf, 'host');
-}
-
-sub parse_vmfw_config {
-    my ($filename, $fh, $cluster_conf, $rule_env) = @_;
-
-    my $empty_conf = {
-	rules => [],
-	options => {},
-	aliases => {},
-	ipset => {} ,
-	ipset_comments => {},
-    };
-
-    return generic_fw_config_parser($filename, $fh, $cluster_conf, $empty_conf, $rule_env);
-}
-
-sub parse_clusterfw_config {
-    my ($filename, $fh) = @_;
-
-    my $section;
-    my $group;
-
-    my $empty_conf = {
-	rules => [],
-	options => {},
-	aliases => {},
-	groups => {},
-	group_comments => {},
-	ipset => {} ,
-	ipset_comments => {},
-    };
-
-    return generic_fw_config_parser($filename, $fh, $empty_conf, $empty_conf, 'cluster');
-}
-
 sub run_locked {
     my ($code, @param) = @_;
 
@@ -3053,15 +3015,19 @@ sub read_local_vm_config {
 sub load_vmfw_conf {
     my ($cluster_conf, $rule_env, $vmid, $dir) = @_;
 
-    my $vmfw_conf = {};
-
     $dir = $pvefw_conf_dir if !defined($dir);
-
     my $filename = "$dir/$vmid.fw";
-    if (my $fh = IO::File->new($filename, O_RDONLY)) {
-	$vmfw_conf = parse_vmfw_config($filename, $fh, $cluster_conf, $rule_env);
-	$vmfw_conf->{vmid} = $vmid;
-    }
+
+    my $empty_conf = {
+	rules => [],
+	options => {},
+	aliases => {},
+	ipset => {} ,
+	ipset_comments => {},
+    };
+
+    my $vmfw_conf = generic_fw_config_parser($filename, $cluster_conf, $empty_conf, $rule_env);
+    $vmfw_conf->{vmid} = $vmid;
 
     return $vmfw_conf;
 }
@@ -3397,13 +3363,18 @@ sub load_clusterfw_conf {
     my ($filename) = @_;
 
     $filename = $clusterfw_conf_filename if !defined($filename);
+    my $empty_conf = {
+	rules => [],
+	options => {},
+	aliases => {},
+	groups => {},
+	group_comments => {},
+	ipset => {} ,
+	ipset_comments => {},
+    };
 
-    my $cluster_conf = {};
-    if (my $fh = IO::File->new($filename, O_RDONLY)) {
-	$cluster_conf = parse_clusterfw_config($filename, $fh);
-
-	$set_global_log_ratelimit->($cluster_conf->{options});
-    }
+    my $cluster_conf = generic_fw_config_parser($filename, $empty_conf, $empty_conf, 'cluster');
+    $set_global_log_ratelimit->($cluster_conf->{options});
 
     return $cluster_conf;
 }
@@ -3456,11 +3427,8 @@ sub load_hostfw_conf {
 
     $filename = $hostfw_conf_filename if !defined($filename);
 
-    my $hostfw_conf = {};
-    if (my $fh = IO::File->new($filename, O_RDONLY)) {
-	$hostfw_conf = parse_hostfw_config($filename, $fh, $cluster_conf);
-    }
-    return $hostfw_conf;
+    my $empty_conf = { rules => [], options => {}};
+    return generic_fw_config_parser($filename, $cluster_conf, $empty_conf, 'host');
 }
 
 sub save_hostfw_conf {
