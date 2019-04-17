@@ -10,7 +10,6 @@ use PVE::Firewall;
 use PVE::API2::Firewall::Rules;
 use PVE::API2::Firewall::Aliases;
 
-use Data::Dumper; # fixme: remove
 
 use base qw(PVE::RESTHandler);
 

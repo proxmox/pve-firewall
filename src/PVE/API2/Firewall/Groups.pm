@@ -8,7 +8,6 @@ use PVE::Exception qw(raise raise_param_exc);
 use PVE::Firewall;
 use PVE::API2::Firewall::Rules;
 
-use Data::Dumper; # fixme: remove
 
 use base qw(PVE::RESTHandler);
 

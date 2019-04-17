@@ -13,7 +13,6 @@ use PVE::API2::Firewall::IPSet;
 
 #fixme: locking?
 
-use Data::Dumper; # fixme: remove
 
 use base qw(PVE::RESTHandler);
 

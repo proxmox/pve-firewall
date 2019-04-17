@@ -3,7 +3,6 @@ package PVE::Firewall;
 use warnings;
 use strict;
 
-use Data::Dumper;
 use Digest::SHA;
 use Encode;
 use File::Basename;
