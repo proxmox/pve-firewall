@@ -575,6 +575,7 @@ print_nexthdr(struct log_entry *le, char *hdr, int payload_len, u_int8_t proto)
             return 0;
 
         struct ip6_ext *exthdr = (struct ip6_ext*)hdr;
+        int ext_len = 0;
 
         switch (proto) {
         /* protocols (these return) */
@@ -601,6 +602,7 @@ print_nexthdr(struct log_entry *le, char *hdr, int payload_len, u_int8_t proto)
                 return -1;
             if (print_fragment(le, (struct ip6_frag*)hdr, payload_len) < 0)
                 return -1;
+            ext_len = sizeof(struct ip6_frag);
             break;
         case IPPROTO_HOPOPTS:
             LEPRINTF("NEXTHDR=HOPOPTS ");
@@ -628,8 +630,12 @@ print_nexthdr(struct log_entry *le, char *hdr, int payload_len, u_int8_t proto)
         /* next header: */
         if (check_ip6ext(le, exthdr, payload_len) < 0)
             return -1;
-        hdr += exthdr->ip6e_len;
-        payload_len -= exthdr->ip6e_len;
+        if(ext_len == 0) {
+            ext_len = (exthdr->ip6e_len+1) * 8;
+        }
+        hdr += ext_len;
+        payload_len -= ext_len;
+        proto = exthdr->ip6e_nxt;
     }
 }
 
