@@ -23,7 +23,6 @@ use PVE::SafeSyslog;
 use PVE::Tools qw($IPV4RE $IPV6RE);
 use PVE::Tools qw(run_command lock_file dir_glob_foreach);
 
-my $hostfw_conf_filename = "/etc/pve/local/host.fw";
 my $pvefw_conf_dir = "/etc/pve/firewall";
 my $clusterfw_conf_filename = "$pvefw_conf_dir/cluster.fw";
 
@@ -127,6 +126,7 @@ eval  {
 };
 
 my $nodename = PVE::INotify::nodename();
+my $hostfw_conf_filename = "/etc/pve/nodes/$nodename/host.fw";
 
 my $pve_fw_lock_filename = "/var/lock/pvefw.lck";
 
