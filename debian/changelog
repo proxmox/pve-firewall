@@ -1,3 +1,12 @@
+pve-firewall (3.0-20) unstable; urgency=medium
+
+  * use IPCC to read config and rule files, if the are backed by pmxcfs which
+    has better handling for pmxcfs restarts
+
+  * fix #2178: endless loop on ipv6 extension headers
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 19 Apr 2019 05:10:13 +0000
+
 pve-firewall (3.0-19) unstable; urgency=medium
 
   * ebtables: add arp filtering
