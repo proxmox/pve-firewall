@@ -666,14 +666,10 @@ $pve_std_chains_conf->{6} = {
 	#{ action => 'DROP', dest => '224.0.0.0/4' },
     ],
     'PVEFW-reject' => [
-	# same as shorewall 'reject'
-	#{ action => 'DROP', dsttype => 'BROADCAST' },
-	#{ action => 'DROP', source => '224.0.0.0/4' },
 	{ action => 'DROP', proto => 'icmpv6' },
 	{ match => '-p tcp', target => '-j REJECT --reject-with tcp-reset' },
-	#"-p udp -j REJECT --reject-with icmp-port-unreachable",
-	#"-p icmp -j REJECT --reject-with icmp-host-unreachable",
-	#"-j REJECT --reject-with icmp-host-prohibited",
+	{ match => '-p udp', target => '-j REJECT --reject-with icmp6-port-unreachable' },
+	{ target => '-j REJECT --reject-with icmp6-adm-prohibited' },
     ],
     'PVEFW-Drop' => [
 	# same as shorewall 'Drop', which is equal to DROP,
