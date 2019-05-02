@@ -3782,7 +3782,10 @@ sub compile_ebtables_filter {
 			push(@$arpfilter, $ip);
 		    }
 		}
-		push(@$arpfilter, $net->{ip}) if $net->{ip} && $vmfw_conf->{options}->{ipfilter};
+		if($net->{ip} && $vmfw_conf->{options}->{ipfilter}) {
+		    $net->{ip} =~ s|/(\d+)$||;
+		    push(@$arpfilter, $net->{ip});
+		}
 		generate_tap_layer2filter($ruleset, $iface, $macaddr, $vmfw_conf, $vmid, $arpfilter);
 	    }
 	};
