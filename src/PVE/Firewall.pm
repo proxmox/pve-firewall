@@ -3782,9 +3782,11 @@ sub compile_ebtables_filter {
 			push(@$arpfilter, $ip);
 		    }
 		}
-		if($net->{ip} && $vmfw_conf->{options}->{ipfilter}) {
+		if ($net->{ip} && $vmfw_conf->{options}->{ipfilter}) {
+		    # ebtables changes this to a .0/MASK network but we just
+		    # want the address here, no network - see #2193
 		    $net->{ip} =~ s|/(\d+)$||;
-		    push(@$arpfilter, $net->{ip});
+		    push @$arpfilter, $net->{ip};
 		}
 		generate_tap_layer2filter($ruleset, $iface, $macaddr, $vmfw_conf, $vmid, $arpfilter);
 	    }
