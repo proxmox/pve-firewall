@@ -1,3 +1,12 @@
+pve-firewall (3.0-21) unstable; urgency=medium
+
+  * fix ipv6 PVEFW-reject
+
+  * fix #2193: arpfilter: CT: remove mask from net IP/CIDR to avoid
+    ebtables doing the wrong thing here
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 08 May 2019 10:09:31 +0000
+
 pve-firewall (3.0-20) unstable; urgency=medium
 
   * use IPCC to read config and rule files, if the are backed by pmxcfs which
