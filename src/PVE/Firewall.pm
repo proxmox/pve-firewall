@@ -2387,10 +2387,10 @@ sub generate_tap_rules_direction {
     # plug the tap chain to bridge chain
     if ($direction eq 'IN') {
 	ruleset_addrule($ruleset, "PVEFW-FWBR-IN",
-			"-m physdev --physdev-is-bridged --physdev-out $iface", "-j $tapchain", $loglevel, 'FWBR-IN: ', $vmid);
+			"-m physdev --physdev-is-bridged --physdev-out $iface", "-j $tapchain");
     } else {
 	ruleset_addrule($ruleset, "PVEFW-FWBR-OUT",
-			"-m physdev --physdev-is-bridged --physdev-in $iface", "-j $tapchain", $loglevel, 'FWBR-OUT: ', $vmid);
+			"-m physdev --physdev-is-bridged --physdev-in $iface", "-j $tapchain");
     }
 }
 
