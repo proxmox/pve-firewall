@@ -1,6 +1,6 @@
 Source: pve-firewall
 Section: admin
-Priority: extra
+Priority: optional
 Maintainer: Proxmox Support Team <support@proxmox.com>
 Build-Depends: debhelper (>= 10),
                dh-systemd,
