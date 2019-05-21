@@ -1,16 +1,14 @@
-VERSION=3.0
-PKGREL=21
+include /usr/share/dpkg/pkg-info.mk
+include /usr/share/dpkg/architecture.mk
 
 PACKAGE=pve-firewall
 
-BUILDDIR ?= ${PACKAGE}-${VERSION}
-
-ARCH:=$(shell dpkg-architecture -qDEB_BUILD_ARCH)
+BUILDDIR ?= ${PACKAGE}-${DEB_VERSION_UPSTREAM}
 GITVERSION:=$(shell git rev-parse HEAD)
 
-DEB=${PACKAGE}_${VERSION}-${PKGREL}_${ARCH}.deb
-DSC=${PACKAGE}_${VERSION}-${PKGREL}.dsc
-DEB2=${PACKAGE}-dbgsym_${VERSION}-${PKGREL}_${ARCH}.deb
+DEB=${PACKAGE}_${DEB_VERSION_UPSTREAM_REVISION}_${DEB_BUILD_ARCH}.deb
+DSC=${PACKAGE}_${DEB_VERSION_UPSTREAM_REVISION}.dsc
+DEB2=${PACKAGE}-dbgsym_${DEB_VERSION_UPSTREAM_REVISION}_${DEB_BUILD_ARCH}.deb
 DEBS=$(DEB) $(DEB2)
 
 all: $(DEBS)
@@ -50,4 +48,4 @@ clean:
 
 .PHONY: upload
 upload: $(DEBS)
-	tar cf - $(DEBS) | ssh repoman@repo.proxmox.com -- upload --product pve --dist stretch --arch ${ARCH}
+	tar cf - $(DEBS) | ssh repoman@repo.proxmox.com -- upload --product pve --dist stretch --arch ${DEB_BUILD_ARCH}
