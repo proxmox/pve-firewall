@@ -8,7 +8,7 @@ Conflicts=shutdown.target
 
 [Service]
 ExecStart=/usr/sbin/pvefw-logger
-PIDFile=/var/run/pvefw-logger.pid
+PIDFile=/run/pvefw-logger.pid
 TimeoutStopSec=5
 Type=forking
 
