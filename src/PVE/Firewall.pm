@@ -3782,7 +3782,7 @@ sub compile_ebtables_filter {
 			push(@$arpfilter, $ip);
 		    }
 		}
-		if (my $ip = $net->{ip} && $vmfw_conf->{options}->{ipfilter}) {
+		if (defined(my $ip = $net->{ip}) && $vmfw_conf->{options}->{ipfilter}) {
 		    # ebtables changes this to a .0/MASK network but we just
 		    # want the address here, no network - see #2193
 		    $ip =~ s|/(\d+)$||;
