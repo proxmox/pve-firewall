@@ -1,3 +1,14 @@
+pve-firewall (4.0-2) pve; urgency=medium
+
+  * fix systemd warning about PIDFile directory
+
+  * fix CT rule generation with ipfilter set
+
+  * pve-firewall service: update-alternative iptables and ebtables to working
+    legacy versions
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 24 Jun 2019 20:43:21 +0200
+
 pve-firewall (4.0-1) pve; urgency=medium
 
   * re-build for Debian Buster / PVE 6
