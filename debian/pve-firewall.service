@@ -8,6 +8,9 @@ Before=shutdown.target
 Conflicts=shutdown.target
 
 [Service]
+ExecStartPre=-/usr/bin/update-alternatives --set ebtables /usr/sbin/ebtables-legacy
+ExecStartPre=-/usr/bin/update-alternatives --set iptables /usr/sbin/iptables-legacy
+ExecStartPre=-/usr/bin/update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
 ExecStart=/usr/sbin/pve-firewall start
 ExecStop=/usr/sbin/pve-firewall stop
 ExecReload=/usr/sbin/pve-firewall restart
