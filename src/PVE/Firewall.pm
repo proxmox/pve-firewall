@@ -2406,6 +2406,7 @@ sub enable_host_firewall {
     # corosync preparation
     my $corosync_rule = "-p udp --dport 5404:5405";
     my $corosync_local_addresses = {};
+    my $multicast_enabled;
     my $local_hostname = PVE::INotify::nodename();
     if (defined($corosync_conf)) {
 	PVE::Corosync::for_all_corosync_addresses($corosync_conf, $ipversion, sub {
@@ -2415,6 +2416,9 @@ sub enable_host_firewall {
 		$corosync_local_addresses->{$key} = $node_ip;
 	    }
 	});
+
+	# allow multicast only if enabled in config
+	$multicast_enabled = $corosync_conf->{main}->{totem}->{transport} // 0;
     }
 
     # host inbound firewall
@@ -2463,8 +2467,8 @@ sub enable_host_firewall {
 
     # corosync inbound rules
     if (defined($corosync_conf)) {
-	# always allow multicast
-	ruleset_addrule($ruleset, $chain, "-m addrtype --dst-type MULTICAST $corosync_rule", "-j $accept_action");
+	ruleset_addrule($ruleset, $chain, "-m addrtype --dst-type MULTICAST $corosync_rule", "-j $accept_action")
+	    if $multicast_enabled;
 
 	PVE::Corosync::for_all_corosync_addresses($corosync_conf, $ipversion, sub {
 	    my ($node_name, $node_ip, $node_ipversion, $key) = @_;
@@ -2532,8 +2536,8 @@ sub enable_host_firewall {
 
     # corosync outbound rules
     if (defined($corosync_conf)) {
-	# always allow multicast
-	ruleset_addrule($ruleset, $chain, "-m addrtype --dst-type MULTICAST $corosync_rule", "-j $accept_action");
+	ruleset_addrule($ruleset, $chain, "-m addrtype --dst-type MULTICAST $corosync_rule", "-j $accept_action")
+	    if $multicast_enabled;
 
 	PVE::Corosync::for_all_corosync_addresses($corosync_conf, $ipversion, sub {
 	    my ($node_name, $node_ip, $node_ipversion, $key) = @_;
