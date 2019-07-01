@@ -10,10 +10,11 @@ use File::Path;
 use IO::File;
 use Net::IP;
 use POSIX;
-use Socket qw(AF_INET6 inet_ntop inet_pton);
+use Socket qw(AF_INET AF_INET6 inet_ntop inet_pton);
 use Storable qw(dclone);
 
 use PVE::Cluster;
+use PVE::Corosync;
 use PVE::Exception qw(raise raise_param_exc);
 use PVE::INotify;
 use PVE::JSONSchema qw(register_standard_option get_standard_option);
@@ -2395,12 +2396,26 @@ sub generate_tap_rules_direction {
 }
 
 sub enable_host_firewall {
-    my ($ruleset, $hostfw_conf, $cluster_conf, $ipversion) = @_;
+    my ($ruleset, $hostfw_conf, $cluster_conf, $ipversion, $corosync_conf) = @_;
 
     my $options = $hostfw_conf->{options};
     my $cluster_options = $cluster_conf->{options};
     my $rules = $hostfw_conf->{rules};
     my $cluster_rules = $cluster_conf->{rules};
+
+    # corosync preparation
+    my $corosync_rule = "-p udp --dport 5404:5405";
+    my $corosync_local_addresses = {};
+    my $local_hostname = PVE::INotify::nodename();
+    if (defined($corosync_conf)) {
+	PVE::Corosync::for_all_corosync_addresses($corosync_conf, $ipversion, sub {
+	    my ($node_name, $node_ip, $node_ipversion, $key) = @_;
+
+	    if ($node_name eq $local_hostname) {
+		$corosync_local_addresses->{$key} = $node_ip;
+	    }
+	});
+    }
 
     # host inbound firewall
     my $chain = "PVEFW-HOST-IN";
@@ -2446,14 +2461,23 @@ sub enable_host_firewall {
     ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 3128", "-j $accept_action");  # SPICE Proxy
     ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 22", "-j $accept_action");  # SSH
 
-    my $localnet = $cluster_conf->{aliases}->{local_network}->{cidr};
-    my $localnet_ver = $cluster_conf->{aliases}->{local_network}->{ipversion};
+    # corosync inbound rules
+    if (defined($corosync_conf)) {
+	# always allow multicast
+	ruleset_addrule($ruleset, $chain, "-m addrtype --dst-type MULTICAST $corosync_rule", "-j $accept_action");
 
-    # corosync
-    if ($localnet && ($ipversion == $localnet_ver)) {
-	my $corosync_rule = "-p udp --dport 5404:5405";
-	ruleset_addrule($ruleset, $chain, "-s $localnet -d $localnet $corosync_rule", "-j $accept_action");
-	ruleset_addrule($ruleset, $chain, "-s $localnet -m addrtype --dst-type MULTICAST $corosync_rule", "-j $accept_action");
+	PVE::Corosync::for_all_corosync_addresses($corosync_conf, $ipversion, sub {
+	    my ($node_name, $node_ip, $node_ipversion, $key) = @_;
+
+	    if ($node_name ne $local_hostname) {
+		my $destination = $corosync_local_addresses->{$key};
+
+		# accept only traffic on same ring
+		if (defined($destination)) {
+		    ruleset_addrule($ruleset, $chain, "-d $destination -s $node_ip $corosync_rule", "-j $accept_action");
+		}
+	    }
+	});
     }
 
     # implement input policy
@@ -2496,15 +2520,33 @@ sub enable_host_firewall {
     }
 
     # allow standard traffic on cluster network
+    my $localnet = $cluster_conf->{aliases}->{local_network}->{cidr};
+    my $localnet_ver = $cluster_conf->{aliases}->{local_network}->{ipversion};
+
     if ($localnet && ($ipversion == $localnet_ver)) {
 	ruleset_addrule($ruleset, $chain, "-d $localnet -p tcp --dport 8006", "-j $accept_action");  # PVE API
 	ruleset_addrule($ruleset, $chain, "-d $localnet -p tcp --dport 22", "-j $accept_action");  # SSH
 	ruleset_addrule($ruleset, $chain, "-d $localnet -p tcp --dport 5900:5999", "-j $accept_action");  # PVE VNC Console
 	ruleset_addrule($ruleset, $chain, "-d $localnet -p tcp --dport 3128", "-j $accept_action");  # SPICE Proxy
+    }
 
-	my $corosync_rule = "-p udp --dport 5404:5405";
-	ruleset_addrule($ruleset, $chain, "-d $localnet $corosync_rule", "-j $accept_action");
+    # corosync outbound rules
+    if (defined($corosync_conf)) {
+	# always allow multicast
 	ruleset_addrule($ruleset, $chain, "-m addrtype --dst-type MULTICAST $corosync_rule", "-j $accept_action");
+
+	PVE::Corosync::for_all_corosync_addresses($corosync_conf, $ipversion, sub {
+	    my ($node_name, $node_ip, $node_ipversion, $key) = @_;
+
+	    if ($node_name ne $local_hostname) {
+		my $source = $corosync_local_addresses->{$key};
+
+		# accept only traffic on same ring
+		if (defined($source)) {
+		    ruleset_addrule($ruleset, $chain, "-s $source -d $node_ip $corosync_rule", "-j $accept_action");
+		}
+	    }
+	});
     }
 
     # implement output policy
@@ -3456,7 +3498,7 @@ sub save_hostfw_conf {
 }
 
 sub compile {
-    my ($cluster_conf, $hostfw_conf, $vmdata) = @_;
+    my ($cluster_conf, $hostfw_conf, $vmdata, $corosync_conf) = @_;
 
     my $vmfw_configs;
 
@@ -3477,6 +3519,9 @@ sub compile {
 
 	$hostfw_conf = load_hostfw_conf($cluster_conf, undef) if !$hostfw_conf;
 
+	# cfs_update is handled by daemon or API
+	$corosync_conf = PVE::Cluster::cfs_read_file("corosync.conf") if !$corosync_conf;
+
 	$vmdata = read_local_vm_config();
 	$vmfw_configs = read_vm_firewall_configs($cluster_conf, $vmdata, undef);
     }
@@ -3496,8 +3541,8 @@ sub compile {
 
     push @{$cluster_conf->{ipset}->{management}}, { cidr => $localnet };
 
-    my $ruleset = compile_iptables_filter($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, 4);
-    my $rulesetv6 = compile_iptables_filter($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, 6);
+    my $ruleset = compile_iptables_filter($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, $corosync_conf, 4);
+    my $rulesetv6 = compile_iptables_filter($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, $corosync_conf, 6);
     my $ebtables_ruleset = compile_ebtables_filter($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata);
     my $ipset_ruleset = compile_ipsets($cluster_conf, $vmfw_configs, $vmdata);
 
@@ -3505,7 +3550,7 @@ sub compile {
 }
 
 sub compile_iptables_filter {
-    my ($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, $ipversion) = @_;
+    my ($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, $corosync_conf, $ipversion) = @_;
 
     my $ruleset = {};
 
@@ -3535,7 +3580,7 @@ sub compile_iptables_filter {
     my $hostfw_enable = !(defined($hostfw_options->{enable}) && ($hostfw_options->{enable} == 0));
 
     if ($hostfw_enable) {
-	eval { enable_host_firewall($ruleset, $hostfw_conf, $cluster_conf, $ipversion); };
+	eval { enable_host_firewall($ruleset, $hostfw_conf, $cluster_conf, $ipversion, $corosync_conf); };
 	warn $@ if $@; # just to be sure - should not happen
     }
 
