@@ -7,6 +7,7 @@ Build-Depends: debhelper (>= 10),
                libnetfilter-conntrack-dev,
                libnetfilter-log-dev,
                libpve-common-perl,
+               libpve-access-control,
                pve-cluster (>= 6.0-4),
                pve-doc-generator (>= 5.3-3),
 Standards-Version: 3.9.8
