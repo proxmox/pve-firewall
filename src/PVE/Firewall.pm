@@ -2418,7 +2418,8 @@ sub enable_host_firewall {
 	});
 
 	# allow multicast only if enabled in config
-	$multicast_enabled = $corosync_conf->{main}->{totem}->{transport} // 0;
+	my $corosync_transport = $corosync_conf->{main}->{totem}->{transport};
+	$multicast_enabled = defined($corosync_transport) && $corosync_transport eq 'udp';
     }
 
     # host inbound firewall
