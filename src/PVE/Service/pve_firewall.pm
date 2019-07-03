@@ -272,14 +272,14 @@ __PACKAGE__->register_method ({
 	    print "\naccepting corosync traffic from/to:\n";
 
 	    PVE::Corosync::for_all_corosync_addresses($corosync_conf, undef, sub {
-		my ($node_name, $node_ip, $node_ipversion, $key) = @_;
+		my ($curr_node_name, $curr_node_ip, undef, $key) = @_;
 
 		if (!$corosync_node_found) {
 		    $corosync_node_found = 1;
 		}
 
 		$key =~ m/(?:ring|link)(\d+)_addr/;
-		print " - $node_name: $node_ip (link: $1)\n";
+		print " - $curr_node_name: $curr_node_ip (link: $1)\n";
 	    });
 
 	    if (!$corosync_node_found) {
