@@ -10,6 +10,7 @@ use PVE::Tools qw(dir_glob_foreach file_read_firstline);
 use PVE::ProcFSTools;
 use PVE::INotify;
 use PVE::Cluster qw(cfs_read_file);
+use PVE::Corosync;
 use PVE::RPCEnvironment;
 use PVE::CLIHandler;
 use PVE::Firewall;
@@ -262,6 +263,28 @@ __PACKAGE__->register_method ({
 	    print "using user defined local_network: $cluster_conf->{aliases}->{local_network}->{cidr}\n";
 	} else {
 	    print "using detected local_network: $localnet\n";
+	}
+
+	if (PVE::Corosync::check_conf_exists(1)) {
+	    my $corosync_conf = PVE::Cluster::cfs_read_file("corosync.conf");
+	    my $corosync_node_found = 0;
+
+	    print "\naccepting corosync traffic from/to:\n";
+
+	    PVE::Corosync::for_all_corosync_addresses($corosync_conf, undef, sub {
+		my ($node_name, $node_ip, $node_ipversion, $key) = @_;
+
+		if (!$corosync_node_found) {
+		    $corosync_node_found = 1;
+		}
+
+		$key =~ m/(?:ring|link)(\d+)_addr/;
+		print " - $node_name: $node_ip (link: $1)\n";
+	    });
+
+	    if (!$corosync_node_found) {
+		print " - no nodes found\n";
+	    }
 	}
 
 	return undef;
