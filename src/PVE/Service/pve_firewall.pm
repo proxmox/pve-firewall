@@ -30,14 +30,14 @@ my $nodename = PVE::INotify::nodename();
 sub init {
 
     PVE::Cluster::cfs_update();
-    
+
     PVE::Firewall::init();
 }
 
 my $restart_request = 0;
 my $next_update = 0;
 
-my $cycle = 0; 
+my $cycle = 0;
 my $updatetime = 10;
 
 my $initial_memory_usage;
@@ -49,7 +49,7 @@ sub shutdown {
 
     # wait for children
     1 while (waitpid(-1, POSIX::WNOHANG()) > 0);
-	
+
     syslog('info' , "clear firewall rules");
 
     eval { PVE::Firewall::remove_pvefw_chains(); };
@@ -79,7 +79,7 @@ sub run {
 	    PVE::Firewall::update();
 	};
 	my $err = $@;
-	
+
 	if ($err) {
 	    syslog('err', "status update error: $err");
 	}
@@ -93,7 +93,7 @@ sub run {
 	$cycle++;
 
 	my $mem = PVE::ProcFSTools::read_memory_usage();
-	
+
 	if (!defined($initial_memory_usage) || ($cycle < 10)) {
 	    $initial_memory_usage = $mem->{resident};
 	} else {
@@ -106,10 +106,10 @@ sub run {
 	}
 
 	my $wcount = 0;
-	while ((time() < $next_update) && 
+	while ((time() < $next_update) &&
 	       ($wcount < $updatetime) && # protect against time wrap
 	       !$restart_request) { $wcount++; sleep (1); };
-	
+
 	$self->restart_daemon() if $restart_request;
     }
 }
@@ -126,10 +126,10 @@ __PACKAGE__->register_method ({
     method => 'GET',
     description => "Get firewall status.",
     parameters => {
-    	additionalProperties => 0,
+	additionalProperties => 0,
 	properties => {},
     },
-    returns => { 
+    returns => {
 	type => 'object',
 	additionalProperties => 0,
 	properties => {
@@ -165,7 +165,7 @@ __PACKAGE__->register_method ({
 	    $res->{enable} = $cluster_conf->{options}->{enable} ? 1 : 0;
 
 	    if ($status eq 'running') {
-		
+
 		my ($ruleset, $ipset_ruleset, $rulesetv6, $ebtables_ruleset) = PVE::Firewall::compile($cluster_conf, undef, undef);
 
 		PVE::Firewall::set_verbose(0); # do not show iptables details
@@ -189,7 +189,7 @@ __PACKAGE__->register_method ({
     method => 'GET',
     description => "Compile and print firewall rules. This is useful for testing.",
     parameters => {
-    	additionalProperties => 0,
+	additionalProperties => 0,
 	properties => {},
     },
     returns => { type => 'null' },
@@ -240,7 +240,7 @@ __PACKAGE__->register_method ({
     method => 'GET',
     description => "Print information about local network.",
     parameters => {
-    	additionalProperties => 0,
+	additionalProperties => 0,
 	properties => {},
     },
     returns => { type => 'null' },
@@ -256,7 +256,7 @@ __PACKAGE__->register_method ({
 	print "local IP address: $ip\n";
 
 	my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
-	
+
 	my $localnet = PVE::Firewall::local_network() || '127.0.0.0/8';
 	print "network auto detect: $localnet\n";
 	if ($cluster_conf->{aliases}->{local_network}) {
@@ -296,7 +296,7 @@ __PACKAGE__->register_method ({
     method => 'GET',
     description => "Simulate firewall rules. This does not simulate kernel 'routing' table. Instead, this simply assumes that routing from source zone to destination zone is possible.",
     parameters => {
-    	additionalProperties => 0,
+	additionalProperties => 0,
 	properties => {
 	    verbose => {
 		description => "Verbose output.",
@@ -362,7 +362,7 @@ __PACKAGE__->register_method ({
 	my ($ruleset, $ipset_ruleset, $rulesetv6, $ebtables_ruleset) = PVE::Firewall::compile();
 
 	PVE::FirewallSimulator::debug();
-	
+
 	my $host_ip = PVE::Cluster::remote_node_ip($nodename);
 
 	PVE::FirewallSimulator::reset_trace();
@@ -380,11 +380,11 @@ __PACKAGE__->register_method ({
 
 	if (!defined($test->{to})) {
 	    $test->{to} = 'host';
-	    PVE::FirewallSimulator::add_trace("Set Zone: to => '$test->{to}'\n"); 
-	} 
+	    PVE::FirewallSimulator::add_trace("Set Zone: to => '$test->{to}'\n");
+	}
 	if (!defined($test->{from})) {
 	    $test->{from} = 'outside',
-	    PVE::FirewallSimulator::add_trace("Set Zone: from => '$test->{from}'\n"); 
+	    PVE::FirewallSimulator::add_trace("Set Zone: from => '$test->{from}'\n");
 	}
 
 	my $vmdata = PVE::Firewall::read_local_vm_config();
@@ -397,9 +397,9 @@ __PACKAGE__->register_method ({
 
 	$test->{action} = 'QUERY';
 
-	my $res = PVE::FirewallSimulator::simulate_firewall($ruleset, $ipset_ruleset, 
+	my $res = PVE::FirewallSimulator::simulate_firewall($ruleset, $ipset_ruleset,
 							    $host_ip, $vmdata, $test);
-	
+
 	print "ACTION: $res\n";
 
 	return undef;
@@ -415,7 +415,7 @@ our $cmddef = {
     status => [ __PACKAGE__, 'status', [], undef, sub {
 	my $res = shift;
 	my $status = ($res->{enable} ? "enabled" : "disabled") . '/' . $res->{status};
-	
+
 	if ($res->{changes}) {
 	    print "Status: $status (pending changes)\n";
 	} else {
