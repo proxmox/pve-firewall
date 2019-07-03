@@ -274,6 +274,8 @@ __PACKAGE__->register_method ({
 	    PVE::Corosync::for_all_corosync_addresses($corosync_conf, undef, sub {
 		my ($curr_node_name, $curr_node_ip, undef, $key) = @_;
 
+		return if $curr_node_name eq $nodename;
+
 		$corosync_node_found = 1;
 
 		$key =~ m/(?:ring|link)(\d+)_addr/;
