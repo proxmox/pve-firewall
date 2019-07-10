@@ -1748,25 +1748,25 @@ sub enable_bridge_firewall {
 sub iptables_restore_cmdlist {
     my ($cmdlist) = @_;
 
-    run_command("/sbin/iptables-restore -n", input => $cmdlist, errmsg => "iptables_restore_cmdlist");
+    run_command("/usr/sbin/iptables-restore -n", input => $cmdlist, errmsg => "iptables_restore_cmdlist");
 }
 
 sub ip6tables_restore_cmdlist {
     my ($cmdlist) = @_;
 
-    run_command("/sbin/ip6tables-restore -n", input => $cmdlist, errmsg => "iptables_restore_cmdlist");
+    run_command("/usr/sbin/ip6tables-restore -n", input => $cmdlist, errmsg => "iptables_restore_cmdlist");
 }
 
 sub ipset_restore_cmdlist {
     my ($cmdlist) = @_;
 
-    run_command("/sbin/ipset restore", input => $cmdlist, errmsg => "ipset_restore_cmdlist");
+    run_command("/usr/sbin/ipset restore", input => $cmdlist, errmsg => "ipset_restore_cmdlist");
 }
 
 sub ebtables_restore_cmdlist {
     my ($cmdlist) = @_;
 
-    run_command("/sbin/ebtables-restore", input => $cmdlist, errmsg => "ebtables_restore_cmdlist");
+    run_command("/usr/sbin/ebtables-restore", input => $cmdlist, errmsg => "ebtables_restore_cmdlist");
 }
 
 sub iptables_get_chains {
@@ -1825,7 +1825,7 @@ sub iptables_get_chains {
 	}
     };
 
-    run_command("/sbin/$iptablescmd-save", outfunc => $parser);
+    run_command("/usr/sbin/$iptablescmd-save", outfunc => $parser);
 
     return wantarray ? ($res, $hooks) : $res;
 }
@@ -1869,7 +1869,7 @@ sub ipset_get_chains {
 	}
     };
 
-    run_command("/sbin/ipset save", outfunc => $parser);
+    run_command("/usr/sbin/ipset save", outfunc => $parser);
 
     # compute digest for each chain
     foreach my $chain (keys %$chains) {
@@ -1900,7 +1900,7 @@ sub ebtables_get_chains {
 	}
     };
 
-    run_command("/sbin/ebtables-save", outfunc => $parser);
+    run_command("/usr/sbin/ebtables-save", outfunc => $parser);
     # compute digest for each chain and store rules as well
     foreach my $chain (keys %$chains) {
 	$res->{$chain}->{rules} = $chains->{$chain};
