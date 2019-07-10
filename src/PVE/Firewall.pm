@@ -4269,6 +4269,7 @@ sub remove_pvefw_chains {
     PVE::Firewall::remove_pvefw_chains_iptables("iptables");
     PVE::Firewall::remove_pvefw_chains_iptables("ip6tables");
     PVE::Firewall::remove_pvefw_chains_ipset();
+    PVE::Firewall::remove_pvefw_chains_ebtables();
 
 }
 
@@ -4312,6 +4313,11 @@ sub remove_pvefw_chains_ipset {
     }
 
     ipset_restore_cmdlist($cmdlist) if $cmdlist;
+}
+
+sub remove_pvefw_chains_ebtables {
+    # apply empty ruleset = remove all our chains
+    ebtables_restore_cmdlist(get_ebtables_cmdlist({}));
 }
 
 sub init {
