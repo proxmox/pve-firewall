@@ -4033,8 +4033,8 @@ sub get_ebtables_cmdlist {
 
     foreach my $chain (sort keys %$statushash) {
 	my $stat = $statushash->{$chain};
-	next if ($stat->{action} eq 'delete');
 	$changes = 1 if ($stat->{action} !~ 'ignore|exists');
+	next if ($stat->{action} eq 'delete');
 
 	foreach my $cmd (@{$statushash->{$chain}->{'rules'}}) {
 	    if ($chain eq 'FORWARD' && $cmd eq $append_pve_to_forward) {
