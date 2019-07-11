@@ -1,3 +1,13 @@
+pve-firewall (4.0-4) pve; urgency=medium
+
+  * ebtables: remove PVE chains properly
+
+  * ebtables: treat chain deletion as change
+
+  * use /usr/sbin as base path
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 11 Jul 2019 19:40:01 +0200
+
 pve-firewall (4.0-3) pve; urgency=medium
 
   * Create corosync firewall rules independently of localnet~
