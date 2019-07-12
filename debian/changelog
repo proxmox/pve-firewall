@@ -1,3 +1,10 @@
+pve-firewall (4.0-5) pve; urgency=medium
+
+  * don't use any base path at all for calls to external binaries to make use
+    compativle with bot, /usr merged and unmerged setups
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 12 Jul 2019 11:47:53 +0200
+
 pve-firewall (4.0-4) pve; urgency=medium
 
   * ebtables: remove PVE chains properly
