@@ -214,7 +214,10 @@ my $pve_fw_macros = {
     ],
     'Ceph' => [
         "Ceph Storage Cluster traffic (Ceph Monitors, OSD & MDS Deamons)",
+	# Legacy port for protocol v1
         { action => 'PARAM', proto => 'tcp', dport => '6789' },
+	# New port for protocol v2
+        { action => 'PARAM', proto => 'tcp', dport => '3300' },
         { action => 'PARAM', proto => 'tcp', dport => '6800:7300' },
     ],
     'CVS' => [
