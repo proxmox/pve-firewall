@@ -1760,7 +1760,7 @@ sub ip6tables_restore_cmdlist {
 sub ipset_restore_cmdlist {
     my ($cmdlist) = @_;
 
-    run_command(['ipset restore'], input => $cmdlist, errmsg => "ipset_restore_cmdlist");
+    run_command(['ipset', 'restore'], input => $cmdlist, errmsg => "ipset_restore_cmdlist");
 }
 
 sub ebtables_restore_cmdlist {
