@@ -3519,7 +3519,8 @@ sub compile {
 	$hostfw_conf = load_hostfw_conf($cluster_conf, undef) if !$hostfw_conf;
 
 	# cfs_update is handled by daemon or API
-	$corosync_conf = PVE::Cluster::cfs_read_file("corosync.conf") if !$corosync_conf;
+	$corosync_conf = PVE::Cluster::cfs_read_file("corosync.conf")
+	    if !defined($corosync_conf) && PVE::Corosync::check_conf_exists(1);
 
 	$vmdata = read_local_vm_config();
 	$vmfw_configs = read_vm_firewall_configs($cluster_conf, $vmdata, undef);
