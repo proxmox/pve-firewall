@@ -2406,6 +2406,7 @@ sub enable_host_firewall {
     # corosync preparation
     my $corosync_rule = "-p udp --dport 5404:5405";
     my $corosync_local_addresses = {};
+    my $unicast_only;
     my $local_hostname = PVE::INotify::nodename();
     if (defined($corosync_conf)) {
 	PVE::Corosync::for_all_corosync_addresses($corosync_conf, $ipversion, sub {
@@ -2415,6 +2416,10 @@ sub enable_host_firewall {
 		$corosync_local_addresses->{$key} = $node_ip;
 	    }
 	});
+
+	# multicast is default in corosync 2
+	my $corosync_transport = $corosync_conf->{main}->{totem}->{transport};
+	$unicast_only = defined($corosync_transport) && $corosync_transport eq 'udpu';
     }
 
     # host inbound firewall
@@ -2463,9 +2468,6 @@ sub enable_host_firewall {
 
     # corosync inbound rules
     if (defined($corosync_conf)) {
-	# always allow multicast
-	ruleset_addrule($ruleset, $chain, "-m addrtype --dst-type MULTICAST $corosync_rule", "-j $accept_action");
-
 	PVE::Corosync::for_all_corosync_addresses($corosync_conf, $ipversion, sub {
 	    my ($node_name, $node_ip, $node_ipversion, $key) = @_;
 	    my $destination = $corosync_local_addresses->{$key};
@@ -2474,6 +2476,9 @@ sub enable_host_firewall {
 		# accept only traffic on same ring
 		ruleset_addrule($ruleset, $chain, "-d $destination -s $node_ip $corosync_rule", "-j $accept_action");
 	    }
+
+	    ruleset_addrule($ruleset, $chain, "-m addrtype --dst-type MULTICAST -s $node_ip $corosync_rule", "-j $accept_action")
+		if !$unicast_only;
 	});
     }
 
@@ -2529,8 +2534,8 @@ sub enable_host_firewall {
 
     # corosync outbound rules
     if (defined($corosync_conf)) {
-	# always allow multicast
-	ruleset_addrule($ruleset, $chain, "-m addrtype --dst-type MULTICAST $corosync_rule", "-j $accept_action");
+	ruleset_addrule($ruleset, $chain, "-m addrtype --dst-type MULTICAST $corosync_rule", "-j $accept_action")
+	    if !$unicast_only;
 
 	PVE::Corosync::for_all_corosync_addresses($corosync_conf, $ipversion, sub {
 	    my ($node_name, $node_ip, $node_ipversion, $key) = @_;
