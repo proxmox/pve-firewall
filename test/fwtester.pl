@@ -5,6 +5,8 @@ use strict;
 use warnings;
 use Data::Dumper;
 use PVE::FirewallSimulator;
+use PVE::INotify;
+use PVE::Corosync;
 use Getopt::Long;
 use File::Basename;
 use Net::IP;
@@ -18,6 +20,13 @@ sub print_usage_and_exit {
 if (!GetOptions ('debug' => \$debug)) {
     print_usage_and_exit();
 }
+
+# load dummy corosync config to have fw create according rules
+my $corosync_conf_fn = "corosync.conf";
+my $raw = PVE::Tools::file_get_contents($corosync_conf_fn);
+my $local_hostname = PVE::INotify::nodename();
+(my $raw_replaced = $raw) =~ s/proxself$/$local_hostname\n/gm;
+my $corosync_conf = PVE::Corosync::parse_conf($corosync_conf_fn, $raw_replaced);
 
 PVE::FirewallSimulator::debug($debug);
  
@@ -37,7 +46,7 @@ sub run_tests {
     PVE::Firewall::local_network('172.16.1.0/24');
 
     my ($ruleset, $ipset_ruleset) = 
-	PVE::Firewall::compile(undef, undef, $vmdata, 1);
+	PVE::Firewall::compile(undef, undef, $vmdata, $corosync_conf);
 
     my $filename = "$testdir/$testfile";
     my $fh = IO::File->new($filename) ||
