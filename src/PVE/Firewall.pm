@@ -2468,14 +2468,11 @@ sub enable_host_firewall {
 
 	PVE::Corosync::for_all_corosync_addresses($corosync_conf, $ipversion, sub {
 	    my ($node_name, $node_ip, $node_ipversion, $key) = @_;
+	    my $destination = $corosync_local_addresses->{$key};
 
-	    if ($node_name ne $local_hostname) {
-		my $destination = $corosync_local_addresses->{$key};
-
+	    if ($node_name ne $local_hostname && defined($destination)) {
 		# accept only traffic on same ring
-		if (defined($destination)) {
-		    ruleset_addrule($ruleset, $chain, "-d $destination -s $node_ip $corosync_rule", "-j $accept_action");
-		}
+		ruleset_addrule($ruleset, $chain, "-d $destination -s $node_ip $corosync_rule", "-j $accept_action");
 	    }
 	});
     }
@@ -2537,14 +2534,11 @@ sub enable_host_firewall {
 
 	PVE::Corosync::for_all_corosync_addresses($corosync_conf, $ipversion, sub {
 	    my ($node_name, $node_ip, $node_ipversion, $key) = @_;
+	    my $source = $corosync_local_addresses->{$key};
 
-	    if ($node_name ne $local_hostname) {
-		my $source = $corosync_local_addresses->{$key};
-
+	    if ($node_name ne $local_hostname && defined($source)) {
 		# accept only traffic on same ring
-		if (defined($source)) {
-		    ruleset_addrule($ruleset, $chain, "-s $source -d $node_ip $corosync_rule", "-j $accept_action");
-		}
+		ruleset_addrule($ruleset, $chain, "-s $source -d $node_ip $corosync_rule", "-j $accept_action");
 	    }
 	});
     }
