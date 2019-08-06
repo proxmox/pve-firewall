@@ -2363,10 +2363,10 @@ sub generate_tap_rules_direction {
     my $ipfilter_ipset = compute_ipset_chain_name($vmid, $ipfilter_name, $ipversion)
 	if $options->{ipfilter} || $vmfw_conf->{ipset}->{$ipfilter_name};
 
-    # create chain with mac and ip filter
-    ruleset_create_vm_chain($ruleset, $tapchain, $ipversion, $options, $macaddr, $ipfilter_ipset, $direction);
-
     if ($options->{enable}) {
+	# create chain with mac and ip filter
+	ruleset_create_vm_chain($ruleset, $tapchain, $ipversion, $options, $macaddr, $ipfilter_ipset, $direction);
+
 	ruleset_generate_vm_rules($ruleset, $rules, $cluster_conf, $vmfw_conf, $tapchain, $netid, $direction, $options, $ipversion, $vmid);
 
 	ruleset_generate_vm_ipsrules($ruleset, $options, $direction, $iface);
