@@ -1,3 +1,9 @@
+pve-firewall (4.0-7) pve; urgency=medium
+
+  * only add VM chains and rules if VM firewall is enabled
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 7 Aug 2019 10:55:06 +0200
+
 pve-firewall (4.0-6) pve; urgency=medium
 
   * firewall macros: add new Ceph protocol v2 port while keeping v1 port
