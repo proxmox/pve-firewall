@@ -3598,13 +3598,13 @@ sub compile_iptables_filter {
 		next if $netid !~ m/^net(\d+)$/;
 		my $net = PVE::QemuServer::parse_net($conf->{$netid});
 		next if !$net->{firewall};
-		my $iface = "tap${vmid}i$1";
 
+		my $iface = "tap${vmid}i$1";
 		my $macaddr = $net->{macaddr};
 		generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
-					     $vmfw_conf, $vmid, 'IN', $ipversion);
+		                             $vmfw_conf, $vmid, 'IN', $ipversion);
 		generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
-					     $vmfw_conf, $vmid, 'OUT', $ipversion);
+		                             $vmfw_conf, $vmid, 'OUT', $ipversion);
 	    }
 	};
 	warn $@ if $@; # just to be sure - should not happen
@@ -3612,26 +3612,28 @@ sub compile_iptables_filter {
 
     # generate firewall rules for LXC containers
     foreach my $vmid (sort keys %{$vmdata->{lxc}}) {
-        eval {
-            my $conf = $vmdata->{lxc}->{$vmid};
-            my $vmfw_conf = $vmfw_configs->{$vmid};
-	     return if !$vmfw_conf || !$vmfw_conf->{options}->{enable};
-		foreach my $netid (sort keys %$conf) {
-                    next if $netid !~ m/^net(\d+)$/;
-                    my $net = PVE::LXC::Config->parse_lxc_network($conf->{$netid});
-                    next if !$net->{firewall};
-                    my $iface = "veth${vmid}i$1";
-		    my $macaddr = $net->{hwaddr};
-                    generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
-                                                 $vmfw_conf, $vmid, 'IN', $ipversion);
-                    generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
-                                                 $vmfw_conf, $vmid, 'OUT', $ipversion);
-            }
-        };
-        warn $@ if $@; # just to be sure - should not happen
+	eval {
+	    my $conf = $vmdata->{lxc}->{$vmid};
+	    my $vmfw_conf = $vmfw_configs->{$vmid};
+	    return if !$vmfw_conf || !$vmfw_conf->{options}->{enable};
+
+	    foreach my $netid (sort keys %$conf) {
+		next if $netid !~ m/^net(\d+)$/;
+		my $net = PVE::LXC::Config->parse_lxc_network($conf->{$netid});
+		next if !$net->{firewall};
+
+		my $iface = "veth${vmid}i$1";
+		my $macaddr = $net->{hwaddr};
+		generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
+		                             $vmfw_conf, $vmid, 'IN', $ipversion);
+		generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
+		                             $vmfw_conf, $vmid, 'OUT', $ipversion);
+	    }
+	};
+	warn $@ if $@; # just to be sure - should not happen
     }
 
-    if(ruleset_chain_exist($ruleset, "PVEFW-IPS")){
+    if (ruleset_chain_exist($ruleset, "PVEFW-IPS")){
 	ruleset_insertrule($ruleset, "PVEFW-FORWARD", "-m conntrack --ctstate RELATED,ESTABLISHED", "-j PVEFW-IPS");
     }
 
