@@ -3544,7 +3544,7 @@ sub compile_iptables_filter {
 	eval {
 	    my $conf = $vmdata->{qemu}->{$vmid};
 	    my $vmfw_conf = $vmfw_configs->{$vmid};
-	    return if !$vmfw_conf;
+	    return if !$vmfw_conf || !$vmfw_conf->{options}->{enable};
 
 	    foreach my $netid (sort keys %$conf) {
 		next if $netid !~ m/^net(\d+)$/;
@@ -3567,9 +3567,7 @@ sub compile_iptables_filter {
         eval {
             my $conf = $vmdata->{lxc}->{$vmid};
             my $vmfw_conf = $vmfw_configs->{$vmid};
-            return if !$vmfw_conf;
-
-            if ($vmfw_conf->{options}->{enable}) {
+	     return if !$vmfw_conf || !$vmfw_conf->{options}->{enable};
 		foreach my $netid (sort keys %$conf) {
                     next if $netid !~ m/^net(\d+)$/;
                     my $net = PVE::LXC::Config->parse_lxc_network($conf->{$netid});
@@ -3580,7 +3578,6 @@ sub compile_iptables_filter {
                                                  $vmfw_conf, $vmid, 'IN', $ipversion);
                     generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
                                                  $vmfw_conf, $vmid, 'OUT', $ipversion);
-		}
             }
         };
         warn $@ if $@; # just to be sure - should not happen
