@@ -279,7 +279,7 @@ __PACKAGE__->register_method ({
 		}
 
 		$key =~ m/(?:ring|link)(\d+)_addr/;
-		print " - $node_name: $node_ip (link: $1)\n";
+		print " - $node_name: $node_ip (ring$1)\n";
 	    });
 
 	    if (!$corosync_node_found) {
