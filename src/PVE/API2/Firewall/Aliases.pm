@@ -230,7 +230,8 @@ sub register_update_alias {
 
 	    $aliases->{$name} = $data;
 
-	    my $rename = lc($param->{rename});
+	    my $rename = $param->{rename};
+	    $rename = lc($rename) if $rename;
 
 	    if ($rename && ($name ne $rename)) {
 		raise_param_exc({ name => "alias '$param->{rename}' already exists" }) 
