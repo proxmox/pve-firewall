@@ -1262,6 +1262,7 @@ our $host_option_properties = {
 	description => "Maximum number of tracked connections.",
 	type => 'integer',
 	optional => 1,
+	default => 262144,
 	minimum => 32768,
     },
     nf_conntrack_tcp_timeout_established => {
@@ -4218,7 +4219,7 @@ sub apply_ruleset {
 sub update_nf_conntrack_max {
     my ($hostfw_conf) = @_;
 
-    my $max = 65536; # reasonable default
+    my $max = 262144; # reasonable default (2^16 * 4), see nf_conntrack-sysctl docs
 
     my $options = $hostfw_conf->{options} || {};
 
