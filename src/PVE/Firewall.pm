@@ -1256,6 +1256,7 @@ our $host_option_properties = {
     tcpflags => {
 	description => "Filter illegal combinations of TCP flags.",
 	type => 'boolean',
+	default => 0,
 	optional => 1,
     },
     nf_conntrack_max => {
@@ -1269,11 +1270,13 @@ our $host_option_properties = {
 	description => "Conntrack established timeout.",
 	type => 'integer',
 	optional => 1,
+	default => 432000,
 	minimum => 7875,
     },
     ndp => {
-	description => "Enable NDP.",
+	description => "Enable NDP (Neighbor Discovery Protocol).",
 	type => 'boolean',
+	default => 0,
 	optional => 1,
     },
     nf_conntrack_allow_invalid => {
@@ -1294,21 +1297,25 @@ our $vm_option_properties = {
     enable => {
 	description => "Enable/disable firewall rules.",
 	type => 'boolean',
+	default => 0,
 	optional => 1,
     },
     macfilter => {
 	description => "Enable/disable MAC address filter.",
 	type => 'boolean',
+	default => 0,
 	optional => 1,
     },
     dhcp => {
 	description => "Enable DHCP.",
 	type => 'boolean',
+	default => 0,
 	optional => 1,
     },
     ndp => {
-	description => "Enable NDP.",
+	description => "Enable NDP (Neighbor Discovery Protocol).",
 	type => 'boolean',
+	default => 0,
 	optional => 1,
     },
     radv => {
