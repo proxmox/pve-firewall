@@ -1273,6 +1273,14 @@ our $host_option_properties = {
 	default => 432000,
 	minimum => 7875,
     },
+    nf_conntrack_tcp_timeout_syn_recv => {
+	description => "Conntrack syn recv timeout.",
+	type => 'integer',
+	optional => 1,
+	default => 60,
+	minimum => 30,
+	maximum => 60,
+    },
     ndp => {
 	description => "Enable NDP (Neighbor Discovery Protocol).",
 	type => 'boolean',
@@ -1284,6 +1292,24 @@ our $host_option_properties = {
 	type => 'boolean',
 	default => 0,
 	optional => 1,
+    },
+    protection_synflood => {
+	description => "Enable synflood protection",
+	type => 'boolean',
+	default => 0,
+	optional => 1,
+    },
+    protection_synflood_rate => {
+	description => "Synflood protection rate syn/sec by ip src.",
+	type => 'integer',
+	optional => 1,
+	default => 200,
+    },
+    protection_synflood_burst => {
+	description => "Synflood protection rate burst by ip src.",
+	type => 'integer',
+	optional => 1,
+	default => 1000,
     },
     log_nf_conntrack => {
 	description => "Enable logging of conntrack information.",
@@ -2752,13 +2778,13 @@ sub parse_hostfw_option {
 
     my $loglevels = "emerg|alert|crit|err|warning|notice|info|debug|nolog";
 
-    if ($line =~ m/^(enable|nosmurfs|tcpflags|ndp|log_nf_conntrack|nf_conntrack_allow_invalid):\s*(0|1)\s*$/i) {
+    if ($line =~ m/^(enable|nosmurfs|tcpflags|ndp|log_nf_conntrack|nf_conntrack_allow_invalid|protection_synflood):\s*(0|1)\s*$/i) {
 	$opt = lc($1);
 	$value = int($2);
     } elsif ($line =~ m/^(log_level_in|log_level_out|tcp_flags_log_level|smurf_log_level):\s*(($loglevels)\s*)?$/i) {
 	$opt = lc($1);
 	$value = $2 ? lc($3) : '';
-    } elsif ($line =~ m/^(nf_conntrack_max|nf_conntrack_tcp_timeout_established):\s*(\d+)\s*$/i) {
+    } elsif ($line =~ m/^(nf_conntrack_max|nf_conntrack_tcp_timeout_established|nf_conntrack_tcp_timeout_syn_recv|protection_synflood_rate|protection_synflood_burst|protection_limit):\s*(\d+)\s*$/i) {
 	$opt = lc($1);
 	$value = int($2);
     } else {
@@ -3572,6 +3598,22 @@ sub compile_iptables_raw {
 
     my $ruleset = {};
 
+    my $hostfw_options = $hostfw_conf->{options} || {};
+    my $protection_synflood = $hostfw_options->{protection_synflood} || 0;
+
+    if($protection_synflood) {
+
+	my $protection_synflood_rate = $hostfw_options->{protection_synflood_rate} ? $hostfw_options->{protection_synflood_rate} : 200;
+	my $protection_synflood_burst = $hostfw_options->{protection_synflood_burst} ? $hostfw_options->{protection_synflood_burst} : 1000;
+	my $protection_synflood_limit = $hostfw_options->{protection_synflood_limit} ? $hostfw_options->{protection_synflood_limit} : 3000;
+ 	my $protection_synflood_expire = $hostfw_options->{nf_conntrack_tcp_timeout_syn_recv} ? $hostfw_options->{nf_conntrack_tcp_timeout_syn_recv} : 60;
+	$protection_synflood_expire = $protection_synflood_expire * 1000;
+	my $protection_synflood_mask = $ipversion == 4 ? 32 : 64;
+
+	ruleset_create_chain($ruleset, "PVEFW-PREROUTING");
+	ruleset_addrule($ruleset, "PVEFW-PREROUTING", "-p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m hashlimit --hashlimit-above $protection_synflood_rate/sec --hashlimit-burst $protection_synflood_burst --hashlimit-mode srcip --hashlimit-name syn --hashlimit-htable-size 2097152 --hashlimit-srcmask $protection_synflood_mask --hashlimit-htable-expire $protection_synflood_expire", "-j DROP");
+    }
+
     return $ruleset;
 }
 
@@ -4286,6 +4328,8 @@ sub apply_ruleset {
 
     update_nf_conntrack_tcp_timeout_established($hostfw_conf);
 
+    update_nf_conntrack_tcp_timeout_syn_recv($hostfw_conf);
+
     update_nf_conntrack_logging($hostfw_conf);
 }
 
@@ -4321,6 +4365,16 @@ sub update_nf_conntrack_tcp_timeout_established {
     my $value = defined($options->{nf_conntrack_tcp_timeout_established}) ? $options->{nf_conntrack_tcp_timeout_established} : 432000;
 
     PVE::ProcFSTools::write_proc_entry("/proc/sys/net/netfilter/nf_conntrack_tcp_timeout_established", $value);
+}
+
+sub update_nf_conntrack_tcp_timeout_syn_recv {
+    my ($hostfw_conf) = @_;
+
+    my $options = $hostfw_conf->{options} || {};
+
+    my $value = defined($options->{nf_conntrack_tcp_timeout_syn_recv}) ? $options->{nf_conntrack_tcp_timeout_syn_recev} : 60;
+
+    PVE::ProcFSTools::write_proc_entry("/proc/sys/net/netfilter/nf_conntrack_tcp_timeout_syn_recv", $value);
 }
 
 my $log_nf_conntrack_enabled = undef;
