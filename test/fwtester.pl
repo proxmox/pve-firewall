@@ -61,7 +61,7 @@ sub run_tests {
 	    die $@ if $@;
 	    next if defined($testid) && (!defined($test->{id}) || ($testid ne $test->{id}));
 	    PVE::FirewallSimulator::reset_trace();
-	    print Dumper($ruleset) if $debug;
+	    print Dumper($ruleset->{filter}) if $debug;
 	    $testcount++;
 	    eval {
 		my @test_zones = qw(host outside nfvm vm100 ct200);
@@ -72,7 +72,7 @@ sub run_tests {
 			next if $zone eq $test->{from};
 			$test->{to} = $zone;
 			PVE::FirewallSimulator::add_trace("Set Zone: to => '$zone'\n"); 
-			PVE::FirewallSimulator::simulate_firewall($ruleset, $ipset_ruleset, 
+			PVE::FirewallSimulator::simulate_firewall($ruleset->{filter}, $ipset_ruleset, 
 								  $host_ip, $vmdata, $test);
 		    }
 		} elsif (!defined($test->{from})) {
@@ -80,17 +80,17 @@ sub run_tests {
 			next if $zone eq $test->{to};
 			$test->{from} = $zone;
 			PVE::FirewallSimulator::add_trace("Set Zone: from => '$zone'\n"); 
-			PVE::FirewallSimulator::simulate_firewall($ruleset, $ipset_ruleset, 
+			PVE::FirewallSimulator::simulate_firewall($ruleset->{filter}, $ipset_ruleset, 
 								  $host_ip, $vmdata, $test);
 		    }
 		} else {
-		    PVE::FirewallSimulator::simulate_firewall($ruleset, $ipset_ruleset, 
+		    PVE::FirewallSimulator::simulate_firewall($ruleset->{filter}, $ipset_ruleset, 
 							      $host_ip, $vmdata, $test);
 		}
 	    };
 	    if (my $err = $@) {
 
-		print Dumper($ruleset) if !$debug;
+		print Dumper($ruleset->{filter}) if !$debug;
 
 		print PVE::FirewallSimulator::get_trace() . "\n" if !$debug;
 

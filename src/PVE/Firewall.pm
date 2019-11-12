@@ -1757,15 +1757,17 @@ sub enable_bridge_firewall {
 }
 
 sub iptables_restore_cmdlist {
-    my ($cmdlist) = @_;
+    my ($cmdlist, $table) = @_;
 
-    run_command(['iptables-restore', '-n'], input => $cmdlist, errmsg => "iptables_restore_cmdlist");
+    $table = 'filter' if !$table;
+    run_command(['iptables-restore', '-T', $table, '-n'], input => $cmdlist, errmsg => "iptables_restore_cmdlist");
 }
 
 sub ip6tables_restore_cmdlist {
-    my ($cmdlist) = @_;
+    my ($cmdlist, $table) = @_;
 
-    run_command(['ip6tables-restore', '-n'], input => $cmdlist, errmsg => "iptables_restore_cmdlist");
+    $table = 'filter' if !$table;
+    run_command(['ip6tables-restore', '-T', $table, '-n'], input => $cmdlist, errmsg => "iptables_restore_cmdlist");
 }
 
 sub ipset_restore_cmdlist {
@@ -1781,9 +1783,10 @@ sub ebtables_restore_cmdlist {
 }
 
 sub iptables_get_chains {
-    my ($iptablescmd) = @_;
+    my ($iptablescmd, $t) = @_;
 
     $iptablescmd = "iptables" if !$iptablescmd;
+    $t = 'filter' if !$t;
 
     my $res = {};
 
@@ -1818,7 +1821,7 @@ sub iptables_get_chains {
 	    return;
 	}
 
-	return if $table ne 'filter';
+	return if $table ne $t;
 
 	if ($line =~ m/^:(\S+)\s/) {
 	    my $chain = $1;
@@ -1828,7 +1831,7 @@ sub iptables_get_chains {
 	    my ($chain, $sig) = ($1, $2);
 	    return if !&$is_pvefw_chain($chain);
 	    $res->{$chain} = $sig;
-	} elsif ($line =~ m/^-A\s+(INPUT|OUTPUT|FORWARD)\s+-j\s+PVEFW-\1$/) {
+	} elsif ($line =~ m/^-A\s+(INPUT|OUTPUT|FORWARD|PREROUTING)\s+-j\s+PVEFW-\1$/) {
 	    $hooks->{$1} = 1;
 	} else {
 	    # simply ignore the rest
@@ -3552,12 +3555,24 @@ sub compile {
 
     push @{$cluster_conf->{ipset}->{management}}, { cidr => $localnet };
 
-    my $ruleset = compile_iptables_filter($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, $corosync_conf, 4);
-    my $rulesetv6 = compile_iptables_filter($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, $corosync_conf, 6);
+    my $ruleset = {};
+    my $rulesetv6 = {};
+    $ruleset->{filter} = compile_iptables_filter($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, $corosync_conf, 4);
+    $ruleset->{raw} = compile_iptables_raw($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, $corosync_conf, 4);
+    $rulesetv6->{filter} = compile_iptables_filter($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, $corosync_conf, 6);
+    $rulesetv6->{raw} = compile_iptables_raw($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, $corosync_conf, 6);
     my $ebtables_ruleset = compile_ebtables_filter($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata);
     my $ipset_ruleset = compile_ipsets($cluster_conf, $vmfw_configs, $vmdata);
 
     return ($ruleset, $ipset_ruleset, $rulesetv6, $ebtables_ruleset);
+}
+
+sub compile_iptables_raw {
+    my ($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, $corosync_conf, $ipversion) = @_;
+
+    my $ruleset = {};
+
+    return $ruleset;
 }
 
 sub compile_iptables_filter {
@@ -3958,11 +3973,13 @@ sub print_sig_rule {
 }
 
 sub get_ruleset_cmdlist {
-    my ($ruleset, $iptablescmd) = @_;
+    my ($ruleset, $iptablescmd, $table) = @_;
 
-    my $cmdlist = "*filter\n"; # we pass this to iptables-restore;
+    $table = 'filter' if !$table;
 
-    my ($active_chains, $hooks) = iptables_get_chains($iptablescmd);
+    my $cmdlist = "*$table\n"; # we pass this to iptables-restore;
+
+    my ($active_chains, $hooks) = iptables_get_chains($iptablescmd, $table);
     my $statushash = get_ruleset_status($ruleset, $active_chains, \&iptables_chain_digest);
 
     # create missing chains first
@@ -3974,7 +3991,7 @@ sub get_ruleset_cmdlist {
 	$cmdlist .= ":$chain - [0:0]\n";
     }
 
-    foreach my $h (qw(INPUT OUTPUT FORWARD)) {
+    foreach my $h (qw(INPUT OUTPUT FORWARD PREROUTING)) {
 	my $chain = "PVEFW-$h";
 	if ($ruleset->{$chain} && !$hooks->{$h}) {
 	    $cmdlist .= "-A $h -j $chain\n";
@@ -4009,10 +4026,11 @@ sub get_ruleset_cmdlist {
 	next if $chain eq 'PVEFW-INPUT';
 	next if $chain eq 'PVEFW-OUTPUT';
 	next if $chain eq 'PVEFW-FORWARD';
+	next if $chain eq 'PVEFW-PREROUTING';
 	$cmdlist .= "-X $chain\n";
     }
 
-    my $changes = $cmdlist ne "*filter\n" ? 1 : 0;
+    my $changes = $cmdlist ne "*$table\n" ? 1 : 0;
 
     $cmdlist .= "COMMIT\n";
 
@@ -4125,9 +4143,11 @@ sub apply_ruleset {
     my ($ipset_create_cmdlist, $ipset_delete_cmdlist, $ipset_changes) =
 	get_ipset_cmdlist($ipset_ruleset);
 
-    my ($cmdlist, $changes) = get_ruleset_cmdlist($ruleset);
-    my ($cmdlistv6, $changesv6) = get_ruleset_cmdlist($rulesetv6, "ip6tables");
+    my ($cmdlist, $changes) = get_ruleset_cmdlist($ruleset->{filter});
+    my ($cmdlistv6, $changesv6) = get_ruleset_cmdlist($rulesetv6->{filter}, "ip6tables");
     my ($ebtables_cmdlist, $ebtables_changes) = get_ebtables_cmdlist($ebtables_ruleset);
+    my ($cmdlist_raw, $changes_raw) = get_ruleset_cmdlist($ruleset->{raw}, undef, 'raw');
+    my ($cmdlistv6_raw, $changesv6_raw) = get_ruleset_cmdlist($rulesetv6->{raw}, "ip6tables", 'raw');
 
     if ($verbose) {
 	if ($ipset_changes) {
@@ -4146,6 +4166,16 @@ sub apply_ruleset {
 	    print $cmdlistv6;
 	}
 
+	if ($changes_raw) {
+	    print "iptables table raw changes:\n";
+	    print $cmdlist_raw;
+	}
+
+	if ($changesv6_raw) {
+	    print "ip6tables table raw changes:\n";
+	    print $cmdlistv6_raw;
+	}
+
 	if ($ebtables_changes) {
 	    print "ebtables changes:\n";
 	    print $ebtables_cmdlist;
@@ -4162,10 +4192,20 @@ sub apply_ruleset {
 
     iptables_restore_cmdlist($cmdlist);
 
+    $tmpfile = "$pve_fw_status_dir/ip4cmdlistraw";
+    PVE::Tools::file_set_contents($tmpfile, $cmdlist_raw || '');
+
+    iptables_restore_cmdlist($cmdlist_raw, 'raw');
+
     $tmpfile = "$pve_fw_status_dir/ip6cmdlist";
     PVE::Tools::file_set_contents($tmpfile, $cmdlistv6 || '');
 
     ip6tables_restore_cmdlist($cmdlistv6);
+
+    $tmpfile = "$pve_fw_status_dir/ip6cmdlistraw";
+    PVE::Tools::file_set_contents($tmpfile, $cmdlistv6_raw || '');
+
+    ip6tables_restore_cmdlist($cmdlistv6_raw, 'raw');
 
     $tmpfile = "$pve_fw_status_dir/ipsetcmdlist2";
     PVE::Tools::file_set_contents($tmpfile, $ipset_delete_cmdlist || '');
@@ -4178,11 +4218,12 @@ sub apply_ruleset {
     PVE::Tools::file_set_contents($tmpfile, $ebtables_cmdlist || '');
 
     # test: re-read status and check if everything is up to date
+    my $ruleset_filter = $ruleset->{filter};
     my $active_chains = iptables_get_chains();
-    my $statushash = get_ruleset_status($ruleset, $active_chains, \&iptables_chain_digest);
+    my $statushash = get_ruleset_status($ruleset_filter, $active_chains, \&iptables_chain_digest);
 
     my $errors;
-    foreach my $chain (sort keys %$ruleset) {
+    foreach my $chain (sort keys %$ruleset_filter) {
 	my $stat = $statushash->{$chain};
 	if ($stat->{action} ne 'exists') {
 	    warn "unable to update chain '$chain'\n";
@@ -4190,11 +4231,36 @@ sub apply_ruleset {
 	}
     }
 
+    my $rulesetv6_filter = $rulesetv6->{filter};
     my $active_chainsv6 = iptables_get_chains("ip6tables");
-    my $statushashv6 = get_ruleset_status($rulesetv6, $active_chainsv6, \&iptables_chain_digest);
+    my $statushashv6 = get_ruleset_status($rulesetv6_filter, $active_chainsv6, \&iptables_chain_digest);
 
-    foreach my $chain (sort keys %$rulesetv6) {
+    foreach my $chain (sort keys %$rulesetv6_filter) {
 	my $stat = $statushashv6->{$chain};
+	if ($stat->{action} ne 'exists') {
+	    warn "unable to update chain '$chain'\n";
+	    $errors = 1;
+	}
+    }
+
+    my $ruleset_raw = $ruleset->{raw};
+    my $active_chains_raw = iptables_get_chains(undef, 'raw');
+    my $statushash_raw = get_ruleset_status($ruleset_raw, $active_chains_raw, \&iptables_chain_digest);
+
+    foreach my $chain (sort keys %$ruleset_raw) {
+	my $stat = $statushash_raw->{$chain};
+	if ($stat->{action} ne 'exists') {
+	    warn "unable to update chain '$chain'\n";
+	    $errors = 1;
+	}
+    }
+
+    my $rulesetv6_raw = $rulesetv6->{raw};
+    my $active_chainsv6_raw = iptables_get_chains("ip6tables", 'raw');
+    my $statushashv6_raw = get_ruleset_status($rulesetv6_raw, $active_chainsv6_raw, \&iptables_chain_digest);
+
+    foreach my $chain (sort keys %$rulesetv6_raw) {
+	my $stat = $statushashv6_raw->{$chain};
 	if ($stat->{action} ne 'exists') {
 	    warn "unable to update chain '$chain'\n";
 	    $errors = 1;
@@ -4278,18 +4344,22 @@ sub remove_pvefw_chains {
 
     PVE::Firewall::remove_pvefw_chains_iptables("iptables");
     PVE::Firewall::remove_pvefw_chains_iptables("ip6tables");
+    PVE::Firewall::remove_pvefw_chains_iptables("iptables", "raw");
+    PVE::Firewall::remove_pvefw_chains_iptables("ip6tables", "raw");
     PVE::Firewall::remove_pvefw_chains_ipset();
     PVE::Firewall::remove_pvefw_chains_ebtables();
 
 }
 
 sub remove_pvefw_chains_iptables {
-    my ($iptablescmd) = @_;
+    my ($iptablescmd, $table) = @_;
 
-    my ($chash, $hooks) = iptables_get_chains($iptablescmd);
-    my $cmdlist = "*filter\n";
+    $table = 'filter' if !$table;
 
-    foreach my $h (qw(INPUT OUTPUT FORWARD)) {
+    my ($chash, $hooks) = iptables_get_chains($iptablescmd, $table);
+    my $cmdlist = "*$table\n";
+
+    foreach my $h (qw(INPUT OUTPUT FORWARD PREROUTING)) {
 	if ($hooks->{$h}) {
 	    $cmdlist .= "-D $h -j PVEFW-$h\n";
 	}
@@ -4305,9 +4375,9 @@ sub remove_pvefw_chains_iptables {
     $cmdlist .= "COMMIT\n";
 
     if($iptablescmd eq "ip6tables") {
-	ip6tables_restore_cmdlist($cmdlist);
+	ip6tables_restore_cmdlist($cmdlist, $table);
     } else {
-	iptables_restore_cmdlist($cmdlist);
+	iptables_restore_cmdlist($cmdlist, $table);
     }
 }
 
