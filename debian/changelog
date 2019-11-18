@@ -1,3 +1,23 @@
+pve-firewall (4.0-8) pve; urgency=medium
+
+  * increase default nf_conntrack_max to the kernel's default
+
+  * fix some "use of uninitialized value" warnings when updating CIDRs
+
+  * update schema documentation
+
+  * add explicit dependency on libpve-cluster-perl
+
+  * add support for "raw" tables
+
+  * add options for synflood protection for host firewall:
+    - nf_conntrack_tcp_timeout_syn_recv
+    - protection_synflood: boolean
+    - protection_synflood_rate: SYN rate limit (default 200 per second)
+    - protection_synflood_burst: SYN burst limit (default 1000)
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 18 Nov 2019 13:48:20 +0100
+
 pve-firewall (4.0-7) pve; urgency=medium
 
   * only add VM chains and rules if VM firewall is enabled
