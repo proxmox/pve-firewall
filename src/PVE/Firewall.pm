@@ -2505,6 +2505,7 @@ sub enable_host_firewall {
     ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 5900:5999", "-j $accept_action");  # PVE VNC Console
     ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 3128", "-j $accept_action");  # SPICE Proxy
     ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 22", "-j $accept_action");  # SSH
+    ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 60000:60050", "-j $accept_action");  # Migration
 
     # corosync inbound rules
     if (defined($corosync_conf)) {
