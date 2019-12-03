@@ -1,3 +1,10 @@
+pve-firewall (4.0-9) pve; urgency=medium
+
+  * ensure port range used for offline storage migration and insecure migration
+    traffic is allowed by default rule set.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 03 Dec 2019 08:12:20 +0100
+
 pve-firewall (4.0-8) pve; urgency=medium
 
   * increase default nf_conntrack_max to the kernel's default
