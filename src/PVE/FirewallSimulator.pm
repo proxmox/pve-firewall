@@ -34,7 +34,7 @@ sub debug {
 
     return $debug;
 }
-    
+
 sub reset_trace {
     $trace = '';
 }
@@ -120,22 +120,22 @@ sub rule_match {
 
 	    return undef if $cstate eq 'INVALID'; # no match
 	    return undef if $cstate eq 'RELATED,ESTABLISHED'; # no match
-	    
+
 	    next if $cstate =~ m/NEW/;
-	    
+
 	    die "cstate test '$cstate' not implemented\n";
 	}
 
 	if ($rule =~ s/^-m addrtype --src-type (\S+)\s*//) {
 	    my $atype = $1;
-	    die "missing source address type (srctype)\n" 
+	    die "missing source address type (srctype)\n"
 		if !$pkg->{srctype};
 	    return undef if $atype ne $pkg->{srctype};
 	}
 
 	if ($rule =~ s/^-m addrtype --dst-type (\S+)\s*//) {
 	    my $atype = $1;
-	    die "missing destination address type (dsttype)\n" 
+	    die "missing destination address type (dsttype)\n"
 		if !$pkg->{dsttype};
 	    return undef if $atype ne $pkg->{dsttype};
 	}
@@ -178,7 +178,7 @@ sub rule_match {
 	    return undef if !$ip->overlaps(Net::IP->new($pkg->{source})); # no match
 	    next;
 	}
-    
+
 	if ($rule =~ s/^-d (\S+)\s*//) {
 	    die "missing destination" if !$pkg->{dest};
 	    my $ip = Net::IP->new($1);
@@ -248,7 +248,7 @@ sub rule_match {
 	}
 
 	if ($rule =~ s/^-j NFLOG --nflog-prefix \"[^\"]+\"$//) {
-	    return undef; 
+	    return undef;
 	}
 
 	last;
@@ -261,7 +261,7 @@ sub ruleset_simulate_chain {
     my ($ruleset, $ipset_ruleset, $chain, $pkg) = @_;
 
     add_trace("ENTER chain $chain\n");
-    
+
     my $counter = 0;
 
     if ($chain eq 'PVEFW-Drop') {
@@ -289,7 +289,7 @@ sub ruleset_simulate_chain {
 	    next;
 	}
 	add_trace("MATCH: $rule\n");
-	
+
 	if ($action eq 'ACCEPT' || $action eq 'DROP' || $action eq 'REJECT') {
 	    add_trace("TERMINATE chain $chain: $action\n");
 	    return ($action, $counter);
@@ -382,7 +382,7 @@ sub route_packet {
 	    $pkg->{iface_out} = $from_info->{fwbr} || die 'internal error';
 	    $pkg->{physdev_in} = $from_info->{tapdev} || die 'internal error';
 	    $pkg->{physdev_out} = $from_info->{fwln} || die 'internal error';
-	
+
 	} elsif ($route_state eq 'fwbr-in') {
 
 	    $chain = 'PVEFW-FORWARD';
@@ -393,7 +393,7 @@ sub route_packet {
 	    $pkg->{physdev_out} = $target->{tapdev} || die 'internal error';
 
 	} elsif ($route_state =~ m/^vmbr\d+$/) {
-	    
+
 	    die "missing physdev_in - internal error?" if !$physdev_in;
 	    $pkg->{physdev_in} = $physdev_in;
 
@@ -443,7 +443,7 @@ sub route_packet {
 	    my ($res, $ctr) = ruleset_simulate_chain($ruleset, $ipset_ruleset, $chain, $pkg);
 	    $rule_check_counter += $ctr;
 	    return ($res, $ipt_invocation_counter, $rule_check_counter) if $res ne 'ACCEPT';
-	} 
+	}
 
 	$route_state = $next_route_state;
 
@@ -494,9 +494,9 @@ sub simulate_firewall {
     my $from = $test->{from} || die "missing 'from' field";
     my $to = $test->{to} || die "missing 'to' field";
     my $action = $test->{action} || die "missing 'action'";
-    
+
     my $testid = $test->{id};
-    
+
     die "from/to needs to be different" if $from eq $to;
 
     my $pkg = {
@@ -545,14 +545,14 @@ sub simulate_firewall {
 	return 'SKIPPED' if !$have_lxc;
 	my $vmid = $1;
 	$from_info = extract_ct_info($vmdata, $vmid, 0);
-	$start_state = 'fwbr-out'; 
+	$start_state = 'fwbr-out';
 	$pkg->{mac_source} = $from_info->{macaddr};
     } elsif ($from =~ m/^vm(\d+)(i(\d))?$/) {
 	return 'SKIPPED' if !$have_qemu_server;
 	my $vmid = $1;
 	my $netnum = $3 || 0;
 	$from_info = extract_vm_info($vmdata, $vmid, $netnum);
-	$start_state = 'fwbr-out'; 
+	$start_state = 'fwbr-out';
 	$pkg->{mac_source} = $from_info->{macaddr};
     } else {
 	die "unable to parse \"from => '$from'\"\n";
@@ -593,16 +593,16 @@ sub simulate_firewall {
     $pkg->{source} = '100.100.1.2' if !defined($pkg->{source});
     $pkg->{dest} = '100.200.3.4' if !defined($pkg->{dest});
 
-    my ($res, $ic, $rc) = route_packet($ruleset, $ipset_ruleset, $pkg, 
+    my ($res, $ic, $rc) = route_packet($ruleset, $ipset_ruleset, $pkg,
 				       $from_info, $target, $start_state);
 
     add_trace("IPT statistics: invocation = $ic, checks = $rc\n");
- 
+
     return $res if $action eq 'QUERY';
 
     die "test failed ($res != $action)\n" if $action ne $res;
 
-    return undef; 
+    return undef;
 }
 
 1;

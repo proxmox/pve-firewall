@@ -9,7 +9,7 @@ use PVE::Firewall;
 
 use base qw(PVE::RESTHandler);
 
-my $api_properties = { 
+my $api_properties = {
     pos => {
 	description => "Rule position.",
 	type => 'integer',
@@ -35,7 +35,7 @@ my $additional_param_hash = {};
 
 sub rule_env {
     my ($class, $param) = @_;
-    
+
     die "implement this in subclass";
 }
 
@@ -105,7 +105,7 @@ sub register_get_rule {
     my $properties = $class->additional_parameters();
 
     $properties->{pos} = $api_properties->{pos};
-    
+
     my $rule_env = $class->rule_env();
 
     $class->register_method({
@@ -182,9 +182,9 @@ sub register_get_rule {
 	    my ($cluster_conf, $fw_conf, $rules) = $class->load_config($param);
 
 	    my ($list, $digest) = PVE::Firewall::copy_list_with_digest($rules);
-	
+
 	    die "no rule at position $param->{pos}\n" if $param->{pos} >= scalar(@$list);
-	
+
 	    my $rule = $list->[$param->{pos}];
 	    $rule->{pos} = $param->{pos};
 
@@ -200,7 +200,7 @@ sub register_create_rule {
     my $create_rule_properties = PVE::Firewall::add_rule_properties($properties);
     $create_rule_properties->{action}->{optional} = 0;
     $create_rule_properties->{type}->{optional} = 0;
-    
+
     my $rule_env = $class->rule_env();
 
     $class->register_method({
@@ -242,7 +242,7 @@ sub register_update_rule {
     my $properties = $class->additional_parameters();
 
     $properties->{pos} = $api_properties->{pos};
-    
+
     my $rule_env = $class->rule_env();
 
     $properties->{moveto} = {
@@ -282,7 +282,7 @@ sub register_update_rule {
 	    PVE::Tools::assert_if_modified($digest, $param->{digest});
 
 	    die "no rule at position $param->{pos}\n" if $param->{pos} >= scalar(@$rules);
-	
+
 	    my $rule = $rules->[$param->{pos}];
 
 	    my $moveto = $param->{moveto};
@@ -299,7 +299,7 @@ sub register_update_rule {
 		$rules = $newrules;
 	    } else {
 		PVE::Firewall::copy_rule_data($rule, $param);
-		
+
 		PVE::Firewall::delete_rule_properties($rule, $param->{'delete'}) if $param->{'delete'};
 
 		PVE::Firewall::verify_rule($rule, $cluster_conf, $fw_conf, $class->rule_env());
@@ -319,7 +319,7 @@ sub register_delete_rule {
     $properties->{pos} = $api_properties->{pos};
 
     $properties->{digest} = get_standard_option('pve-config-digest');
-    
+
     my $rule_env = $class->rule_env();
 
     $class->register_method({
@@ -342,11 +342,11 @@ sub register_delete_rule {
 
 	    my (undef, $digest) = PVE::Firewall::copy_list_with_digest($rules);
 	    PVE::Tools::assert_if_modified($digest, $param->{digest});
-	
+
 	    die "no rule at position $param->{pos}\n" if $param->{pos} >= scalar(@$rules);
-	
+
 	    splice(@$rules, $param->{pos}, 1);
-	    
+
 	    $class->save_rules($param, $fw_conf, $rules);
 
 	    return undef;
@@ -376,7 +376,7 @@ __PACKAGE__->additional_parameters({ group => get_standard_option('pve-security-
 
 sub rule_env {
     my ($class, $param) = @_;
-    
+
     return 'group';
 }
 
@@ -413,17 +413,17 @@ __PACKAGE__->register_method({
     },
     parameters => {
 	additionalProperties => 0,
-	properties => { 
+	properties => {
 	    group => get_standard_option('pve-security-group-name'),
 	},
     },
     returns => { type => 'null' },
     code => sub {
 	my ($param) = @_;
-	    
+
 	my (undef, $cluster_conf, $rules) = __PACKAGE__->load_config($param);
 
-	die "Security group '$param->{group}' is not empty\n" 
+	die "Security group '$param->{group}' is not empty\n"
 	    if scalar(@$rules);
 
 	__PACKAGE__->save_rules($param, $cluster_conf, undef);
@@ -442,7 +442,7 @@ use base qw(PVE::API2::Firewall::RulesBase);
 
 sub rule_env {
     my ($class, $param) = @_;
-    
+
     return 'cluster';
 }
 
@@ -476,7 +476,7 @@ __PACKAGE__->additional_parameters({ node => get_standard_option('pve-node')});
 
 sub rule_env {
     my ($class, $param) = @_;
-    
+
     return 'host';
 }
 
@@ -507,14 +507,14 @@ use PVE::JSONSchema qw(get_standard_option);
 
 use base qw(PVE::API2::Firewall::RulesBase);
 
-__PACKAGE__->additional_parameters({ 
+__PACKAGE__->additional_parameters({
     node => get_standard_option('pve-node'),
-    vmid => get_standard_option('pve-vmid'),				   
+    vmid => get_standard_option('pve-vmid'),
 });
 
 sub rule_env {
     my ($class, $param) = @_;
-    
+
     return 'vm';
 }
 
@@ -545,14 +545,14 @@ use PVE::JSONSchema qw(get_standard_option);
 
 use base qw(PVE::API2::Firewall::RulesBase);
 
-__PACKAGE__->additional_parameters({ 
+__PACKAGE__->additional_parameters({
     node => get_standard_option('pve-node'),
-    vmid => get_standard_option('pve-vmid'),				   
+    vmid => get_standard_option('pve-vmid'),
 });
 
 sub rule_env {
     my ($class, $param) = @_;
-    
+
     return 'ct';
 }
 

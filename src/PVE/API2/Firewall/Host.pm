@@ -14,7 +14,7 @@ use PVE::API2::Firewall::Rules;
 use base qw(PVE::RESTHandler);
 
 __PACKAGE__->register_method ({
-    subclass => "PVE::API2::Firewall::HostRules",  
+    subclass => "PVE::API2::Firewall::HostRules",
     path => 'rules',
 });
 
@@ -58,7 +58,7 @@ my $add_option_properties = sub {
     foreach my $k (keys %$option_properties) {
 	$properties->{$k} = $option_properties->{$k};
     }
-    
+
     return $properties;
 };
 
@@ -124,7 +124,7 @@ __PACKAGE__->register_method({
 
 	if ($param->{delete}) {
 	    foreach my $opt (PVE::Tools::split_list($param->{delete})) {
-		raise_param_exc({ delete => "no such option '$opt'" }) 
+		raise_param_exc({ delete => "no such option '$opt'" })
 		    if !$option_properties->{$opt};
 		delete $hostfw_conf->{options}->{$opt};
 	    }
@@ -136,7 +136,7 @@ __PACKAGE__->register_method({
 
 	foreach my $k (keys %$option_properties) {
 	    next if !defined($param->{$k});
-	    $hostfw_conf->{options}->{$k} = $param->{$k}; 
+	    $hostfw_conf->{options}->{$k} = $param->{$k};
 	}
 
 	PVE::Firewall::save_hostfw_conf($hostfw_conf);
@@ -145,8 +145,8 @@ __PACKAGE__->register_method({
     }});
 
 __PACKAGE__->register_method({
-    name => 'log', 
-    path => 'log', 
+    name => 'log',
+    path => 'log',
     method => 'GET',
     description => "Read firewall log",
     proxyto => 'node',
@@ -172,7 +172,7 @@ __PACKAGE__->register_method({
     },
     returns => {
 	type => 'array',
-	items => { 
+	items => {
 	    type => "object",
 	    properties => {
 		n => {
@@ -196,8 +196,8 @@ __PACKAGE__->register_method({
 	my ($count, $lines) = PVE::Tools::dump_logfile("/var/log/pve-firewall.log", $param->{start}, $param->{limit});
 
 	$rpcenv->set_result_attrib('total', $count);
-	    
-	return $lines; 
+
+	return $lines;
     }});
 
 1;

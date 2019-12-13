@@ -9,7 +9,7 @@ use PVE::Firewall;
 
 use base qw(PVE::RESTHandler);
 
-my $api_properties = { 
+my $api_properties = {
     cidr => {
 	description => "Network/IP specification in CIDR format.",
 	type => 'string', format => 'IPorCIDR',
@@ -41,7 +41,7 @@ sub save_aliases {
 
 sub rule_env {
     my ($class, $param) = @_;
-    
+
     die "implement this in subclass";
 }
 
@@ -97,7 +97,7 @@ sub register_get_aliases {
 			type => 'string',
 			optional => 1,
 		    },
-		    digest => get_standard_option('pve-config-digest', { optional => 0} ),	
+		    digest => get_standard_option('pve-config-digest', { optional => 0} ),
 		},
 	    },
 	    links => [ { rel => 'child', href => "{name}" } ],
@@ -140,10 +140,10 @@ sub register_create_alias {
 	    my ($fw_conf, $aliases) = $class->load_config($param);
 
 	    my $name = lc($param->{name});
-	    
-	    raise_param_exc({ name => "alias '$param->{name}' already exists" }) 
+
+	    raise_param_exc({ name => "alias '$param->{name}' already exists" })
 		if defined($aliases->{$name});
-	    
+
 	    my $data = { name => $param->{name}, cidr => $param->{cidr} };
 	    $data->{comment} = $param->{comment} if $param->{comment};
 
@@ -161,7 +161,7 @@ sub register_read_alias {
     my $properties = $class->additional_parameters();
 
     $properties->{name} = $api_properties->{name};
-    
+
     $class->register_method({
 	name => 'read_alias',
 	path => '{name}',
@@ -234,7 +234,7 @@ sub register_update_alias {
 	    $rename = lc($rename) if $rename;
 
 	    if ($rename && ($name ne $rename)) {
-		raise_param_exc({ name => "alias '$param->{rename}' already exists" }) 
+		raise_param_exc({ name => "alias '$param->{rename}' already exists" })
 		    if defined($aliases->{$rename});
 		$aliases->{$name}->{name} = $param->{rename};
 		$aliases->{$rename} = $aliases->{$name};
@@ -280,7 +280,7 @@ sub register_delete_alias {
 	    delete $aliases->{$name};
 
 	    $class->save_aliases($param, $fw_conf, $aliases);
-	    
+
 	    return undef;
 	}});
 }
@@ -304,7 +304,7 @@ use base qw(PVE::API2::Firewall::AliasesBase);
 
 sub rule_env {
     my ($class, $param) = @_;
-    
+
     return 'cluster';
 }
 
@@ -336,13 +336,13 @@ use base qw(PVE::API2::Firewall::AliasesBase);
 
 sub rule_env {
     my ($class, $param) = @_;
-    
+
     return 'vm';
 }
 
-__PACKAGE__->additional_parameters({ 
+__PACKAGE__->additional_parameters({
     node => get_standard_option('pve-node'),
-    vmid => get_standard_option('pve-vmid'),				   
+    vmid => get_standard_option('pve-vmid'),
 });
 
 sub load_config {
@@ -374,13 +374,13 @@ use base qw(PVE::API2::Firewall::AliasesBase);
 
 sub rule_env {
     my ($class, $param) = @_;
-    
+
     return 'ct';
 }
 
-__PACKAGE__->additional_parameters({ 
+__PACKAGE__->additional_parameters({
     node => get_standard_option('pve-node'),
-    vmid => get_standard_option('pve-vmid'),				   
+    vmid => get_standard_option('pve-vmid'),
 });
 
 sub load_config {

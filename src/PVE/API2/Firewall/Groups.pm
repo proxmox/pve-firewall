@@ -16,7 +16,7 @@ my $get_security_group_list = sub {
 
     my $res = [];
     foreach my $group (sort keys %{$cluster_conf->{groups}}) {
-	my $data = { 
+	my $data = {
 	    group => $group,
 	};
 	if (my $comment = $cluster_conf->{group_comments}->{$group}) {
@@ -44,10 +44,10 @@ __PACKAGE__->register_method({
 	type => 'array',
 	items => {
 	    type => "object",
-	    properties => { 
+	    properties => {
 		group => get_standard_option('pve-security-group-name'),
 		digest => get_standard_option('pve-config-digest', { optional => 0} ),
-		comment => { 
+		comment => {
 		    type => 'string',
 		    optional => 1,
 		}
@@ -74,7 +74,7 @@ __PACKAGE__->register_method({
     },
     parameters => {
 	additionalProperties => 0,
-	properties => { 
+	properties => {
 	    group => get_standard_option('pve-security-group-name'),
 	    comment => {
 		type => 'string',
@@ -97,7 +97,7 @@ __PACKAGE__->register_method({
 	    my (undef, $digest) = &$get_security_group_list($cluster_conf);
 	    PVE::Tools::assert_if_modified($digest, $param->{digest});
 
-	    raise_param_exc({ group => "Security group '$param->{rename}' does not exists" }) 
+	    raise_param_exc({ group => "Security group '$param->{rename}' does not exist" })
 		if !$cluster_conf->{groups}->{$param->{rename}};
 
 	    # prevent overwriting an existing group
@@ -113,7 +113,7 @@ __PACKAGE__->register_method({
 	    $cluster_conf->{group_comments}->{$param->{group}} = $param->{comment} if defined($param->{comment});
 	} else {
 	    foreach my $name (keys %{$cluster_conf->{groups}}) {
-		raise_param_exc({ group => "Security group '$name' already exists" }) 
+		raise_param_exc({ group => "Security group '$name' already exists" })
 		    if $name eq $param->{group};
 	    }
 
@@ -122,12 +122,12 @@ __PACKAGE__->register_method({
 	}
 
 	PVE::Firewall::save_clusterfw_conf($cluster_conf);
-	
+
 	return undef;
     }});
 
 __PACKAGE__->register_method ({
-    subclass => "PVE::API2::Firewall::GroupRules",  
+    subclass => "PVE::API2::Firewall::GroupRules",
     path => '{group}',
 });
 

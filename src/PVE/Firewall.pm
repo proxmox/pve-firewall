@@ -978,8 +978,8 @@ sub local_network {
 }
 
 # ipset names are limited to 31 characters,
-# and we use '-v4' or '-v6' to indicate IP versions, 
-# and we use '_swap' suffix for atomic update, 
+# and we use '-v4' or '-v6' to indicate IP versions,
+# and we use '_swap' suffix for atomic update,
 # for example PVEFW-${VMID}-${ipset_name}_swap
 
 my $max_iptables_ipset_name_length = 31 - length("PVEFW-") - length("_swap");
@@ -1672,7 +1672,7 @@ sub verify_rule {
     }
 
     if ($rule->{source}) {
-	eval { 
+	eval {
 	    my $source_ipversion = parse_address_list($rule->{source});
 	    &$set_ip_version($source_ipversion);
 	};
@@ -1681,8 +1681,8 @@ sub verify_rule {
     }
 
     if ($rule->{dest}) {
-	eval { 
-	    my $dest_ipversion = parse_address_list($rule->{dest}); 
+	eval {
+	    my $dest_ipversion = parse_address_list($rule->{dest});
 	    &$set_ip_version($dest_ipversion);
 	};
 	&$add_error('dest', $@) if $@;
@@ -2260,7 +2260,7 @@ sub ruleset_create_vm_chain {
     if (!(defined($options->{dhcp}) && $options->{dhcp} == 0)) {
 	if ($ipversion == 4) {
 	    if ($direction eq 'OUT') {
-		ruleset_generate_rule($ruleset, $chain, $ipversion, 
+		ruleset_generate_rule($ruleset, $chain, $ipversion,
 				      { action => 'PVEFW-SET-ACCEPT-MARK',
 					proto => 'udp', sport => 68, dport => 67 });
 	    } else {
@@ -2838,7 +2838,7 @@ sub parse_ip_or_cidr {
     my ($cidr) = @_;
 
     my $ipversion;
-    
+
     if ($cidr =~ m!^(?:$IPV6RE)(/(\d+))?$!) {
 	$cidr =~ s|/128$||;
 	$ipversion = 6;
@@ -2925,7 +2925,7 @@ sub generic_fw_config_parser {
 		warn "$prefix: $err";
 		next;
 	    }
-	    
+
 	    $res->{$section}->{$group} = [];
 	    $res->{group_comments}->{$group} =  decode('utf8', $comment)
 		if $comment;
@@ -2941,7 +2941,7 @@ sub generic_fw_config_parser {
 	    $section = 'ipset';
 	    $group = lc($1);
 	    my $comment = $2;
-	    eval {	
+	    eval {
 		die "ipset name too long\n" if length($group) > $max_ipset_name_length;
 		die "invalid ipset name '$group'\n" if $group !~ m/^${ipset_name_pattern}$/;
 	    };
@@ -3010,7 +3010,7 @@ sub generic_fw_config_parser {
 		$errors->{nomatch} = "nomatch not supported by kernel";
 	    }
 
-	    eval { 
+	    eval {
 		if ($cidr =~ m/^${ip_alias_pattern}$/) {
 		    resolve_alias($cluster_conf, $res, $cidr); # make sure alias exists
 		} else {
@@ -3188,7 +3188,7 @@ my $format_aliases = sub {
 
 my $format_ipsets = sub {
     my ($fw_conf) = @_;
-    
+
     my $raw = '';
 
     foreach my $ipset (sort keys %{$fw_conf->{ipset}}) {
@@ -3279,12 +3279,12 @@ sub read_vm_firewall_configs {
 
     foreach my $vmid (keys %{$vmdata->{qemu}}) {
 	my $vmfw_conf = load_vmfw_conf($cluster_conf, 'vm', $vmid, $dir);
-	next if !$vmfw_conf->{options}; # skip if file does not exists
+	next if !$vmfw_conf->{options}; # skip if file does not exist
 	$vmfw_configs->{$vmid} = $vmfw_conf;
     }
     foreach my $vmid (keys %{$vmdata->{lxc}}) {
         my $vmfw_conf = load_vmfw_conf($cluster_conf, 'ct', $vmid, $dir);
-        next if !$vmfw_conf->{options}; # skip if file does not exists
+        next if !$vmfw_conf->{options}; # skip if file does not exist
         $vmfw_configs->{$vmid} = $vmfw_conf;
     }
 
@@ -3475,7 +3475,7 @@ sub save_clusterfw_conf {
     $raw .= &$format_aliases($aliases) if $aliases && scalar(keys %$aliases);
 
     $raw .= &$format_ipsets($cluster_conf) if $cluster_conf->{ipset};
- 
+
     my $rules = $cluster_conf->{rules};
     if ($rules && scalar(@$rules)) {
 	$raw .= "[RULES]\n\n";
@@ -3728,7 +3728,7 @@ sub compile_ipsets {
 	my $localnet_ver;
 	($localnet, $localnet_ver) = parse_ip_or_cidr(local_network() || '127.0.0.0/8');
 
-	$cluster_conf->{aliases}->{local_network} = { 
+	$cluster_conf->{aliases}->{local_network} = {
 	    name => 'local_network', cidr => $localnet, ipversion => $localnet_ver };
     }
 
@@ -4441,7 +4441,7 @@ sub remove_pvefw_chains_ipset {
     my $ipset_chains = ipset_get_chains();
 
     my $cmdlist = "";
- 
+
     foreach my $chain (keys %$ipset_chains) {
 	$cmdlist .= "flush $chain\n";
 	$cmdlist .= "destroy $chain\n";

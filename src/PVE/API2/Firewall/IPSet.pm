@@ -9,7 +9,7 @@ use PVE::Firewall;
 
 use base qw(PVE::RESTHandler);
 
-my $api_properties = { 
+my $api_properties = {
     cidr => {
 	description => "Network/IP specification in CIDR format.",
 	type => 'string', format => 'IPorCIDRorAlias',
@@ -41,7 +41,7 @@ sub save_config {
 
 sub rule_env {
     my ($class, $param) = @_;
-    
+
     die "implement this in subclass";
 }
 
@@ -106,7 +106,7 @@ sub register_get_ipset {
 			type => 'boolean',
 			optional => 1,
 		    },
-		    digest => get_standard_option('pve-config-digest', { optional => 0} ),	
+		    digest => get_standard_option('pve-config-digest', { optional => 0} ),
 		},
 	    },
 	    links => [ { rel => 'child', href => "{cidr}" } ],
@@ -141,10 +141,10 @@ sub register_delete_ipset {
 	returns => { type => 'null' },
 	code => sub {
 	    my ($param) = @_;
-	    
+
 	    my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
 
-	    die "IPSet '$param->{name}' is not empty\n" 
+	    die "IPSet '$param->{name}' is not empty\n"
 		if scalar(@$ipset);
 
 	    $class->save_ipset($param, $fw_conf, undef);
@@ -181,9 +181,9 @@ sub register_create_ip {
 	    my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
 
 	    my $cidr = $param->{cidr};
-	    
+
 	    foreach my $entry (@$ipset) {
-		raise_param_exc({ cidr => "address '$cidr' already exists" }) 
+		raise_param_exc({ cidr => "address '$cidr' already exists" })
 		    if $entry->{cidr} eq $cidr;
 	    }
 
@@ -214,7 +214,7 @@ sub register_read_ip {
 
     $properties->{name} = $api_properties->{name};
     $properties->{cidr} = $api_properties->{cidr};
-    
+
     $class->register_method({
 	name => 'read_ip',
 	path => '{cidr}',
@@ -318,13 +318,13 @@ sub register_delete_ip {
 	    PVE::Tools::assert_if_modified($digest, $param->{digest});
 
 	    my $new = [];
-   
+
 	    foreach my $entry (@$ipset) {
 		push @$new, $entry if $entry->{cidr} ne $param->{cidr};
 	    }
 
 	    $class->save_ipset($param, $fw_conf, $new);
-	    
+
 	    return undef;
 	}});
 }
@@ -349,7 +349,7 @@ use base qw(PVE::API2::Firewall::IPSetBase);
 
 sub rule_env {
     my ($class, $param) = @_;
-    
+
     return 'cluster';
 }
 
@@ -381,13 +381,13 @@ use base qw(PVE::API2::Firewall::IPSetBase);
 
 sub rule_env {
     my ($class, $param) = @_;
-    
+
     return 'vm';
 }
 
-__PACKAGE__->additional_parameters({ 
+__PACKAGE__->additional_parameters({
     node => get_standard_option('pve-node'),
-    vmid => get_standard_option('pve-vmid'),				   
+    vmid => get_standard_option('pve-vmid'),
 });
 
 sub load_config {
@@ -419,13 +419,13 @@ use base qw(PVE::API2::Firewall::IPSetBase);
 
 sub rule_env {
     my ($class, $param) = @_;
-    
+
     return 'ct';
 }
 
-__PACKAGE__->additional_parameters({ 
+__PACKAGE__->additional_parameters({
     node => get_standard_option('pve-node'),
-    vmid => get_standard_option('pve-vmid'),				   
+    vmid => get_standard_option('pve-vmid'),
 });
 
 sub load_config {
@@ -459,7 +459,7 @@ use base qw(PVE::RESTHandler);
 
 sub load_config {
     my ($class, $param) = @_;
- 
+
     die "implement this in subclass";
 
     #return ($cluster_conf, $fw_conf);
@@ -473,7 +473,7 @@ sub save_config {
 
 sub rule_env {
     my ($class, $param) = @_;
-    
+
     die "implement this in subclass";
 }
 
@@ -498,7 +498,7 @@ my $get_ipset_list = sub {
 
     my $res = [];
     foreach my $name (sort keys %{$fw_conf->{ipset}}) {
-	my $data = { 
+	my $data = {
 	    name => $name,
 	};
 	if (my $comment = $fw_conf->{ipset_comments}->{$name}) {
@@ -531,10 +531,10 @@ sub register_index {
 	    type => 'array',
 	    items => {
 		type => "object",
-		properties => { 
+		properties => {
 		    name => get_standard_option('ipset-name'),
 		    digest => get_standard_option('pve-config-digest', { optional => 0} ),
-		    comment => { 
+		    comment => {
 			type => 'string',
 			optional => 1,
 		    }
@@ -544,10 +544,10 @@ sub register_index {
 	},
 	code => sub {
 	    my ($param) = @_;
-	    
+
 	    my ($cluster_conf, $fw_conf) = $class->load_config($param);
 
-	    return &$get_ipset_list($fw_conf); 
+	    return &$get_ipset_list($fw_conf);
 	}});
 }
 
@@ -580,14 +580,14 @@ sub register_create {
 	returns => { type => 'null' },
 	code => sub {
 	    my ($param) = @_;
-	    
+
 	    my ($cluster_conf, $fw_conf) = $class->load_config($param);
 
 	    if ($param->{rename}) {
 		my (undef, $digest) = &$get_ipset_list($fw_conf);
 		PVE::Tools::assert_if_modified($digest, $param->{digest});
 
-		raise_param_exc({ name => "IPSet '$param->{rename}' does not exists" }) 
+		raise_param_exc({ name => "IPSet '$param->{rename}' does not exist" })
 		    if !$fw_conf->{ipset}->{$param->{rename}};
 
 		# prevent overwriting existing ipset
@@ -601,9 +601,9 @@ sub register_create {
 		    $fw_conf->{ipset_comments}->{$param->{name}} = $comment;
 		}
 		$fw_conf->{ipset_comments}->{$param->{name}} = $param->{comment} if defined($param->{comment});
-	    } else { 
+	    } else {
 		foreach my $name (keys %{$fw_conf->{ipset}}) {
-		    raise_param_exc({ name => "IPSet '$name' already exists" }) 
+		    raise_param_exc({ name => "IPSet '$name' already exists" })
 			if $name eq $param->{name};
 		}
 
@@ -634,13 +634,13 @@ use base qw(PVE::API2::Firewall::BaseIPSetList);
 
 sub rule_env {
     my ($class, $param) = @_;
-    
+
     return 'cluster';
 }
 
 sub load_config {
     my ($class, $param) = @_;
- 
+
     my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
     return (undef, $cluster_conf);
 }
@@ -654,10 +654,10 @@ sub save_config {
 __PACKAGE__->register_handlers();
 
 __PACKAGE__->register_method ({
-    subclass => "PVE::API2::Firewall::ClusterIPset",  
+    subclass => "PVE::API2::Firewall::ClusterIPset",
     path => '{name}',
-    # set fragment delimiter (no subdirs) - we need that, because CIDR address contain a slash '/' 
-    fragmentDelimiter => '', 
+    # set fragment delimiter (no subdirs) - we need that, because CIDR address contain a slash '/'
+    fragmentDelimiter => '',
 });
 
 package PVE::API2::Firewall::VMIPSetList;
@@ -669,20 +669,20 @@ use PVE::Firewall;
 
 use base qw(PVE::API2::Firewall::BaseIPSetList);
 
-__PACKAGE__->additional_parameters({ 
+__PACKAGE__->additional_parameters({
     node => get_standard_option('pve-node'),
-    vmid => get_standard_option('pve-vmid'),				   
+    vmid => get_standard_option('pve-vmid'),
 });
 
 sub rule_env {
     my ($class, $param) = @_;
-    
+
     return 'vm';
 }
 
 sub load_config {
     my ($class, $param) = @_;
- 
+
     my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
     my $fw_conf = PVE::Firewall::load_vmfw_conf($cluster_conf, 'vm', $param->{vmid});
     return ($cluster_conf, $fw_conf);
@@ -697,10 +697,10 @@ sub save_config {
 __PACKAGE__->register_handlers();
 
 __PACKAGE__->register_method ({
-    subclass => "PVE::API2::Firewall::VMIPset",  
+    subclass => "PVE::API2::Firewall::VMIPset",
     path => '{name}',
-    # set fragment delimiter (no subdirs) - we need that, because CIDR address contain a slash '/' 
-    fragmentDelimiter => '', 
+    # set fragment delimiter (no subdirs) - we need that, because CIDR address contain a slash '/'
+    fragmentDelimiter => '',
 });
 
 package PVE::API2::Firewall::CTIPSetList;
@@ -712,20 +712,20 @@ use PVE::Firewall;
 
 use base qw(PVE::API2::Firewall::BaseIPSetList);
 
-__PACKAGE__->additional_parameters({ 
+__PACKAGE__->additional_parameters({
     node => get_standard_option('pve-node'),
-    vmid => get_standard_option('pve-vmid'),				   
+    vmid => get_standard_option('pve-vmid'),
 });
 
 sub rule_env {
     my ($class, $param) = @_;
-    
+
     return 'ct';
 }
 
 sub load_config {
     my ($class, $param) = @_;
- 
+
     my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
     my $fw_conf = PVE::Firewall::load_vmfw_conf($cluster_conf, 'ct', $param->{vmid});
     return ($cluster_conf, $fw_conf);
@@ -740,10 +740,10 @@ sub save_config {
 __PACKAGE__->register_handlers();
 
 __PACKAGE__->register_method ({
-    subclass => "PVE::API2::Firewall::CTIPset",  
+    subclass => "PVE::API2::Firewall::CTIPset",
     path => '{name}',
-    # set fragment delimiter (no subdirs) - we need that, because CIDR address contain a slash '/' 
-    fragmentDelimiter => '', 
+    # set fragment delimiter (no subdirs) - we need that, because CIDR address contain a slash '/'
+    fragmentDelimiter => '',
 });
 
 1;

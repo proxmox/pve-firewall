@@ -21,7 +21,7 @@ my $add_option_properties = sub {
     foreach my $k (keys %$option_properties) {
 	$properties->{$k} = $option_properties->{$k};
     }
-    
+
     return $properties;
 };
 
@@ -130,7 +130,7 @@ sub register_handlers {
 
 	    if ($param->{delete}) {
 		foreach my $opt (PVE::Tools::split_list($param->{delete})) {
-		    raise_param_exc({ delete => "no such option '$opt'" }) 
+		    raise_param_exc({ delete => "no such option '$opt'" })
 			if !$option_properties->{$opt};
 		    delete $vmfw_conf->{options}->{$opt};
 		}
@@ -142,17 +142,17 @@ sub register_handlers {
 
 	    foreach my $k (keys %$option_properties) {
 		next if !defined($param->{$k});
-		$vmfw_conf->{options}->{$k} = $param->{$k}; 
+		$vmfw_conf->{options}->{$k} = $param->{$k};
 	    }
 
 	    PVE::Firewall::save_vmfw_conf($param->{vmid}, $vmfw_conf);
-	    
+
 	    return undef;
 	}});
 
     $class->register_method({
-	name => 'log', 
-	path => 'log', 
+	name => 'log',
+	path => 'log',
 	method => 'GET',
 	description => "Read firewall log",
 	proxyto => 'node',
@@ -179,7 +179,7 @@ sub register_handlers {
 	},
 	returns => {
 	    type => 'array',
-	    items => { 
+	    items => {
 		type => "object",
 		properties => {
 		    n => {
@@ -200,13 +200,13 @@ sub register_handlers {
 	    my $user = $rpcenv->get_user();
 	    my $vmid = $param->{vmid};
 
-	    my ($count, $lines) = PVE::Tools::dump_logfile("/var/log/pve-firewall.log", 
+	    my ($count, $lines) = PVE::Tools::dump_logfile("/var/log/pve-firewall.log",
 							   $param->{start}, $param->{limit},
 							   "^$vmid ");
-	    
+
 	    $rpcenv->set_result_attrib('total', $count);
-	    
-	    return $lines; 
+
+	    return $lines;
 	}});
 
 
@@ -235,7 +235,7 @@ sub register_handlers {
 	    type => 'array',
 	    items => {
 		type => "object",
-		properties => { 
+		properties => {
 		    type => {
 			type => 'string',
 			enum => ['alias', 'ipset'],
@@ -243,7 +243,7 @@ sub register_handlers {
 		    name => {
 			type => 'string',
 		    },
-		    comment => { 
+		    comment => {
 			type => 'string',
 			optional => 1,
 		    },
@@ -252,7 +252,7 @@ sub register_handlers {
 	},
 	code => sub {
 	    my ($param) = @_;
-	    
+
 	    my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
 	    my $fw_conf = PVE::Firewall::load_vmfw_conf($cluster_conf, $rule_env, $param->{vmid});
 
@@ -263,7 +263,7 @@ sub register_handlers {
 		next if !$conf;
 		if (!$param->{type} || $param->{type} eq 'ipset') {
 		    foreach my $name (keys %{$conf->{ipset}}) {
-			my $data = { 
+			my $data = {
 			    type => 'ipset',
 			    name => $name,
 			    ref => "+$name",
@@ -278,7 +278,7 @@ sub register_handlers {
 		if (!$param->{type} || $param->{type} eq 'alias') {
 		    foreach my $name (keys %{$conf->{aliases}}) {
 			my $e = $conf->{aliases}->{$name};
-			my $data = { 
+			my $data = {
 			    type => 'alias',
 			    name => $name,
 			    ref => $name,
@@ -292,8 +292,8 @@ sub register_handlers {
 	    my $res = [];
 	    foreach my $e (values %$ipsets) { push @$res, $e; };
 	    foreach my $e (values %$aliases) { push @$res, $e; };
-	    
-	    return $res; 
+
+	    return $res;
 	}});
 }
 
@@ -305,17 +305,17 @@ use warnings;
 use base qw(PVE::API2::Firewall::VMBase);
 
 __PACKAGE__->register_method ({
-    subclass => "PVE::API2::Firewall::VMRules",  
+    subclass => "PVE::API2::Firewall::VMRules",
     path => 'rules',
 });
 
 __PACKAGE__->register_method ({
-    subclass => "PVE::API2::Firewall::VMAliases",  
+    subclass => "PVE::API2::Firewall::VMAliases",
     path => 'aliases',
 });
 
 __PACKAGE__->register_method ({
-    subclass => "PVE::API2::Firewall::VMIPSetList",  
+    subclass => "PVE::API2::Firewall::VMIPSetList",
     path => 'ipset',
 });
 
@@ -329,17 +329,17 @@ use warnings;
 use base qw(PVE::API2::Firewall::VMBase);
 
 __PACKAGE__->register_method ({
-    subclass => "PVE::API2::Firewall::CTRules",  
+    subclass => "PVE::API2::Firewall::CTRules",
     path => 'rules',
 });
 
 __PACKAGE__->register_method ({
-    subclass => "PVE::API2::Firewall::CTAliases",  
+    subclass => "PVE::API2::Firewall::CTAliases",
     path => 'aliases',
 });
 
 __PACKAGE__->register_method ({
-    subclass => "PVE::API2::Firewall::CTIPSetList",  
+    subclass => "PVE::API2::Firewall::CTIPSetList",
     path => 'ipset',
 });
 
