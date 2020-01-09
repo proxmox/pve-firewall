@@ -1,15 +1,18 @@
 #!/usr/bin/perl
 
 use lib '../src';
+
 use strict;
 use warnings;
+
 use Data::Dumper;
+use File::Basename;
+use Getopt::Long;
+use Net::IP;
+
+use PVE::Corosync;
 use PVE::FirewallSimulator;
 use PVE::INotify;
-use PVE::Corosync;
-use Getopt::Long;
-use File::Basename;
-use Net::IP;
 
 my $debug = 0;
 
@@ -29,7 +32,7 @@ my $local_hostname = PVE::INotify::nodename();
 my $corosync_conf = PVE::Corosync::parse_conf($corosync_conf_fn, $raw_replaced);
 
 PVE::FirewallSimulator::debug($debug);
- 
+
 my $testfilename = shift;
 my $testid = shift;
 
