@@ -86,7 +86,8 @@ __PACKAGE__->register_method({
     code => sub {
 	my ($param) = @_;
 
-	my $hostfw_conf = PVE::Firewall::load_hostfw_conf();
+	my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
+	my $hostfw_conf = PVE::Firewall::load_hostfw_conf($cluster_conf);
 
 	return PVE::Firewall::copy_opject_with_digest($hostfw_conf->{options});
     }});
@@ -117,7 +118,8 @@ __PACKAGE__->register_method({
     code => sub {
 	my ($param) = @_;
 
-	my $hostfw_conf = PVE::Firewall::load_hostfw_conf();
+	my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
+	my $hostfw_conf = PVE::Firewall::load_hostfw_conf($cluster_conf);
 
 	my (undef, $digest) = PVE::Firewall::copy_opject_with_digest($hostfw_conf->{options});
 	PVE::Tools::assert_if_modified($digest, $param->{digest});
