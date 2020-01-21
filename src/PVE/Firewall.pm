@@ -394,6 +394,10 @@ my $pve_fw_macros = {
 	{ action => 'PARAM', proto => 'udp', dport => '5632' },
 	{ action => 'PARAM', proto => 'tcp', dport => '5631' },
     ],
+    'PMG' => [
+	"Proxmox Mail Gateway web interface",
+	{ action => 'PARAM', proto => 'tcp', dport => '8006' },
+    ],
     'POP3' => [
 	"POP3 traffic",
 	{ action => 'PARAM', proto => 'tcp', dport => '110' },
