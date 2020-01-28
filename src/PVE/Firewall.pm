@@ -2491,6 +2491,7 @@ sub enable_host_firewall {
 	$rule->{iface_in} = $rule->{iface} if $rule->{iface};
 
 	eval {
+	    $rule->{logmsg} = "$rule->{action}: ";
 	    if ($rule->{type} eq 'group') {
 		ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, 'IN', $accept_action, $ipversion);
 	    } elsif ($rule->{type} eq 'in') {
