@@ -2897,6 +2897,8 @@ sub generic_fw_config_parser {
     }
     return {} if !$raw;
 
+    my $curr_group_keys = {};
+
     my $linenr = 0;
     while ($raw =~ /^\h*(.*?)\h*$/gm) {
 	my $line = $1;
@@ -2957,6 +2959,8 @@ sub generic_fw_config_parser {
 	    }
 
 	    $res->{$section}->{$group} = [];
+	    $curr_group_keys = {};
+
 	    $res->{ipset_comments}->{$group} = decode('utf8', $comment)
 		if $comment;
 	    next;
@@ -3021,6 +3025,8 @@ sub generic_fw_config_parser {
 		} else {
 		    $cidr = parse_ip_or_cidr($cidr);
 		}
+		die "duplicate ipset entry for '$cidr'\n"
+		    if defined($curr_group_keys->{$cidr});
 	    };
 	    if (my $err = $@) {
 		chomp $err;
@@ -3044,6 +3050,7 @@ sub generic_fw_config_parser {
 	    }
 
 	    push @{$res->{$section}->{$group}}, $entry;
+	    $curr_group_keys->{$cidr} = 1;
 	} else {
 	    warn "$prefix: skip line - unknown section\n";
 	    next;
@@ -3221,7 +3228,13 @@ my $format_ipsets = sub {
 
 	my $nethash = {};
 	foreach my $entry (@$options) {
-	    $nethash->{$entry->{cidr}} = $entry;
+	    my $cidr = $entry->{cidr};
+	    if (defined($nethash->{$cidr})) {
+		warn "ignoring duplicate ipset entry '$cidr'\n";
+		next;
+	    }
+
+	    $nethash->{$cidr} = $entry;
 	}
 
 	foreach my $cidr (sort keys %$nethash) {
