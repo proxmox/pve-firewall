@@ -785,12 +785,14 @@ my $icmp_type_names = {
 # ip6tables -p icmpv6 -h
 
 my $icmpv6_type_names = {
-    'any' => 1,
     'destination-unreachable' => 1,
     'no-route' => 1,
     'communication-prohibited' => 1,
+    'beyond-scope' => 1,
     'address-unreachable' => 1,
     'port-unreachable' => 1,
+    'failed-policy' => 1,
+    'reject-route' => 1,
     'packet-too-big' => 1,
     'time-exceeded' => 1,
     'ttl-zero-during-transit' => 1,
