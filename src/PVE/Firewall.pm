@@ -1623,6 +1623,8 @@ sub verify_rule {
 		if !$allow_groups;
 	    &$add_error('action', "invalid characters in security group name")
 		if $action && ($action !~ m/^${security_group_name_pattern}$/);
+	    &$add_error('action', "security group '$action' does not exist")
+		if $action && !defined($cluster_conf->{groups}->{$action});
 	} else {
 	    &$add_error('type', "unknown rule type '$type'");
 	}
