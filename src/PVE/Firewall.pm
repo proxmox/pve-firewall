@@ -3053,6 +3053,8 @@ sub generic_fw_config_parser {
     return $res;
 }
 
+# this is only used to prevent concurrent runs of rule compilation/application
+# see lock_*_conf for cfs locks protectiong config modification
 sub run_locked {
     my ($code, @param) = @_;
 
@@ -3100,6 +3102,18 @@ sub read_local_vm_config {
 
     return $vmdata;
 };
+
+sub lock_vmfw_conf {
+    my ($vmid, $timeout, $code, @param) = @_;
+
+    die "can't lock VM firewall config for undefined VMID\n"
+	if !defined($vmid);
+
+    my $res = PVE::Cluster::cfs_lock_firewall("vm-$vmid", $timeout, $code, @param);
+    die $@ if $@;
+
+    return $res;
+}
 
 sub load_vmfw_conf {
     my ($cluster_conf, $rule_env, $vmid, $dir) = @_;
@@ -3448,6 +3462,15 @@ my $set_global_log_ratelimit = sub {
     }
 };
 
+sub lock_clusterfw_conf {
+    my ($timeout, $code, @param) = @_;
+
+    my $res = PVE::Cluster::cfs_lock_firewall("cluster", $timeout, $code, @param);
+    die $@ if $@;
+
+    return $res;
+}
+
 sub load_clusterfw_conf {
     my ($filename) = @_;
 
@@ -3509,6 +3532,15 @@ sub save_clusterfw_conf {
     } else {
 	unlink $clusterfw_conf_filename;
     }
+}
+
+sub lock_hostfw_conf {
+    my ($timeout, $code, @param) = @_;
+
+    my $res = PVE::Cluster::cfs_lock_firewall("host-$nodename", $timeout, $code, @param);
+    die $@ if $@;
+
+    return $res;
 }
 
 sub load_hostfw_conf {
