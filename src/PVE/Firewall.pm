@@ -2043,11 +2043,17 @@ sub ipt_rule_to_cmds {
 		    # Note: we use dport to store --icmp-type
 		    die "unknown icmp-type '$rule->{dport}'\n"
 			if $rule->{dport} !~ /^\d+$/ && !defined($icmp_type_names->{$rule->{dport}});
+		    # values for icmp-type range between 0 and 255
+		    # higher values and iptables-restore fails
+		    die "invalid icmp-type '$rule->{dport}'\n" if ($rule->{dport} =~ m/^(\d+)$/) && ($1 > 255);
 		    push @match, "-m icmp --icmp-type $rule->{dport}";
 		} elsif ($proto eq 'icmpv6') {
 		    # Note: we use dport to store --icmpv6-type
 		    die "unknown icmpv6-type '$rule->{dport}'\n"
 			if $rule->{dport} !~ /^\d+$/ && !defined($icmpv6_type_names->{$rule->{dport}});
+		    # values for icmpv6-type range between 0 and 255
+		    # higher values and iptables-restore fails
+		    die "invalid icmpv6-type '$rule->{dport}'\n" if ($rule->{dport} =~ m/^(\d+)$/) && ($1 > 255);
 		    push @match, "-m icmpv6 --icmpv6-type $rule->{dport}";
 		} elsif (!$PROTOCOLS_WITH_PORTS->{$proto}) {
 		    die "protocol $proto does not have ports\n";
