@@ -195,6 +195,13 @@ sub register_create_ip {
 		my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
 
 		my $cidr = $param->{cidr};
+		if ($cidr =~ m/^${PVE::Firewall::ip_alias_pattern}$/) {
+		    # make sure alias exists (if $cidr is an alias)
+		    PVE::Firewall::resolve_alias($cluster_conf, $fw_conf, $cidr);
+		} else {
+		    # normalize like config parser, otherwise duplicates might slip through
+		    $cidr = PVE::Firewall::parse_ip_or_cidr($cidr);
+		}
 
 		foreach my $entry (@$ipset) {
 		    raise_param_exc({ cidr => "address '$cidr' already exists" })
@@ -204,9 +211,6 @@ sub register_create_ip {
 		raise_param_exc({ cidr => "a zero prefix is not allowed in ipset entries" })
 		    if $cidr =~ m!/0+$!;
 
-		# make sure alias exists (if $cidr is an alias)
-		PVE::Firewall::resolve_alias($cluster_conf, $fw_conf, $cidr)
-		    if $cidr =~ m/^${PVE::Firewall::ip_alias_pattern}$/;
 
 		my $data = { cidr => $cidr };
 
