@@ -148,12 +148,17 @@ sub register_delete_ipset {
 	code => sub {
 	    my ($param) = @_;
 
-	    my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
+	    $class->lock_config($param, sub {
+		my ($param) = @_;
 
-	    die "IPSet '$param->{name}' is not empty\n"
-		if scalar(@$ipset);
+		my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
 
-	    $class->save_ipset($param, $fw_conf, undef);
+		die "IPSet '$param->{name}' is not empty\n"
+		    if scalar(@$ipset);
+
+		$class->save_ipset($param, $fw_conf, undef);
+
+	    });
 
 	    return undef;
 	}});
@@ -184,30 +189,35 @@ sub register_create_ip {
 	code => sub {
 	    my ($param) = @_;
 
-	    my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
+	    $class->lock_config($param, sub {
+		my ($param) = @_;
 
-	    my $cidr = $param->{cidr};
+		my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
 
-	    foreach my $entry (@$ipset) {
-		raise_param_exc({ cidr => "address '$cidr' already exists" })
-		    if $entry->{cidr} eq $cidr;
-	    }
+		my $cidr = $param->{cidr};
 
-	    raise_param_exc({ cidr => "a zero prefix is not allowed in ipset entries" })
-		if $cidr =~ m!/0+$!;
+		foreach my $entry (@$ipset) {
+		    raise_param_exc({ cidr => "address '$cidr' already exists" })
+			if $entry->{cidr} eq $cidr;
+		}
 
-	    # make sure alias exists (if $cidr is an alias)
-	    PVE::Firewall::resolve_alias($cluster_conf, $fw_conf, $cidr)
-		if $cidr =~ m/^${PVE::Firewall::ip_alias_pattern}$/;
+		raise_param_exc({ cidr => "a zero prefix is not allowed in ipset entries" })
+		    if $cidr =~ m!/0+$!;
 
-	    my $data = { cidr => $cidr };
+		# make sure alias exists (if $cidr is an alias)
+		PVE::Firewall::resolve_alias($cluster_conf, $fw_conf, $cidr)
+		    if $cidr =~ m/^${PVE::Firewall::ip_alias_pattern}$/;
 
-	    $data->{nomatch} = 1 if $param->{nomatch};
-	    $data->{comment} = $param->{comment} if $param->{comment};
+		my $data = { cidr => $cidr };
 
-	    unshift @$ipset, $data;
+		$data->{nomatch} = 1 if $param->{nomatch};
+		$data->{comment} = $param->{comment} if $param->{comment};
 
-	    $class->save_ipset($param, $fw_conf, $ipset);
+		unshift @$ipset, $data;
+
+		$class->save_ipset($param, $fw_conf, $ipset);
+
+	    });
 
 	    return undef;
 	}});
@@ -276,19 +286,27 @@ sub register_update_ip {
 	code => sub {
 	    my ($param) = @_;
 
-	    my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
+	    my $found = $class->lock_config($param, sub {
+		my ($param) = @_;
 
-	    my (undef, $digest) = PVE::Firewall::copy_list_with_digest($ipset);
-	    PVE::Tools::assert_if_modified($digest, $param->{digest});
+		my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
 
-	    foreach my $entry (@$ipset) {
-		if($entry->{cidr} eq $param->{cidr}) {
-		    $entry->{nomatch} = $param->{nomatch};
-		    $entry->{comment} = $param->{comment};
-		    $class->save_ipset($param, $fw_conf, $ipset);
-		    return;
+		my (undef, $digest) = PVE::Firewall::copy_list_with_digest($ipset);
+		PVE::Tools::assert_if_modified($digest, $param->{digest});
+
+		foreach my $entry (@$ipset) {
+		    if($entry->{cidr} eq $param->{cidr}) {
+			$entry->{nomatch} = $param->{nomatch};
+			$entry->{comment} = $param->{comment};
+			$class->save_ipset($param, $fw_conf, $ipset);
+			return 1;
+		    }
 		}
-	    }
+
+		return 0;
+	    });
+
+	    return if $found;
 
 	    raise_param_exc({ cidr => "no such IP/Network" });
 	}});
@@ -318,18 +336,22 @@ sub register_delete_ip {
 	code => sub {
 	    my ($param) = @_;
 
-	    my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
+	    $class->lock_config($param, sub {
+		my ($param) = @_;
 
-	    my (undef, $digest) = PVE::Firewall::copy_list_with_digest($ipset);
-	    PVE::Tools::assert_if_modified($digest, $param->{digest});
+		my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
 
-	    my $new = [];
+		my (undef, $digest) = PVE::Firewall::copy_list_with_digest($ipset);
+		PVE::Tools::assert_if_modified($digest, $param->{digest});
 
-	    foreach my $entry (@$ipset) {
-		push @$new, $entry if $entry->{cidr} ne $param->{cidr};
-	    }
+		my $new = [];
 
-	    $class->save_ipset($param, $fw_conf, $new);
+		foreach my $entry (@$ipset) {
+		    push @$new, $entry if $entry->{cidr} ne $param->{cidr};
+		}
+
+		$class->save_ipset($param, $fw_conf, $new);
+	    });
 
 	    return undef;
 	}});
@@ -611,37 +633,41 @@ sub register_create {
 	code => sub {
 	    my ($param) = @_;
 
-	    my ($cluster_conf, $fw_conf) = $class->load_config($param);
+	    $class->lock_config($param, sub {
+		my ($param) = @_;
 
-	    if ($param->{rename}) {
-		my (undef, $digest) = &$get_ipset_list($fw_conf);
-		PVE::Tools::assert_if_modified($digest, $param->{digest});
+		my ($cluster_conf, $fw_conf) = $class->load_config($param);
 
-		raise_param_exc({ name => "IPSet '$param->{rename}' does not exist" })
-		    if !$fw_conf->{ipset}->{$param->{rename}};
+		if ($param->{rename}) {
+		    my (undef, $digest) = &$get_ipset_list($fw_conf);
+		    PVE::Tools::assert_if_modified($digest, $param->{digest});
 
-		# prevent overwriting existing ipset
-		raise_param_exc({ name => "IPSet '$param->{name}' does already exist"})
-		    if $fw_conf->{ipset}->{$param->{name}} &&
-		    $param->{name} ne $param->{rename};
+		    raise_param_exc({ name => "IPSet '$param->{rename}' does not exist" })
+			if !$fw_conf->{ipset}->{$param->{rename}};
 
-		my $data = delete $fw_conf->{ipset}->{$param->{rename}};
-		$fw_conf->{ipset}->{$param->{name}} = $data;
-		if (my $comment = delete $fw_conf->{ipset_comments}->{$param->{rename}}) {
-		    $fw_conf->{ipset_comments}->{$param->{name}} = $comment;
+		    # prevent overwriting existing ipset
+		    raise_param_exc({ name => "IPSet '$param->{name}' does already exist"})
+			if $fw_conf->{ipset}->{$param->{name}} &&
+			$param->{name} ne $param->{rename};
+
+		    my $data = delete $fw_conf->{ipset}->{$param->{rename}};
+		    $fw_conf->{ipset}->{$param->{name}} = $data;
+		    if (my $comment = delete $fw_conf->{ipset_comments}->{$param->{rename}}) {
+			$fw_conf->{ipset_comments}->{$param->{name}} = $comment;
+		    }
+		    $fw_conf->{ipset_comments}->{$param->{name}} = $param->{comment} if defined($param->{comment});
+		} else {
+		    foreach my $name (keys %{$fw_conf->{ipset}}) {
+			raise_param_exc({ name => "IPSet '$name' already exists" })
+			    if $name eq $param->{name};
+		    }
+
+		    $fw_conf->{ipset}->{$param->{name}} = [];
+		    $fw_conf->{ipset_comments}->{$param->{name}} = $param->{comment} if defined($param->{comment});
 		}
-		$fw_conf->{ipset_comments}->{$param->{name}} = $param->{comment} if defined($param->{comment});
-	    } else {
-		foreach my $name (keys %{$fw_conf->{ipset}}) {
-		    raise_param_exc({ name => "IPSet '$name' already exists" })
-			if $name eq $param->{name};
-		}
 
-		$fw_conf->{ipset}->{$param->{name}} = [];
-		$fw_conf->{ipset_comments}->{$param->{name}} = $param->{comment} if defined($param->{comment});
-	    }
-
-	    $class->save_config($param, $fw_conf);
+		$class->save_config($param, $fw_conf);
+	    });
 
 	    return undef;
 	}});

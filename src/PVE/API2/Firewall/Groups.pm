@@ -91,37 +91,39 @@ __PACKAGE__->register_method({
     code => sub {
 	my ($param) = @_;
 
-	my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
+	PVE::Firewall::lock_clusterfw_conf(10, sub {
+	    my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
 
-	if ($param->{rename}) {
-	    my (undef, $digest) = &$get_security_group_list($cluster_conf);
-	    PVE::Tools::assert_if_modified($digest, $param->{digest});
+	    if ($param->{rename}) {
+		my (undef, $digest) = &$get_security_group_list($cluster_conf);
+		PVE::Tools::assert_if_modified($digest, $param->{digest});
 
-	    raise_param_exc({ group => "Security group '$param->{rename}' does not exist" })
-		if !$cluster_conf->{groups}->{$param->{rename}};
+		raise_param_exc({ group => "Security group '$param->{rename}' does not exist" })
+		    if !$cluster_conf->{groups}->{$param->{rename}};
 
-	    # prevent overwriting an existing group
-	    raise_param_exc({ group => "Security group '$param->{group}' does already exist" })
-		if $cluster_conf->{groups}->{$param->{group}} &&
-		$param->{group} ne $param->{rename};
+		# prevent overwriting an existing group
+		raise_param_exc({ group => "Security group '$param->{group}' does already exist" })
+		    if $cluster_conf->{groups}->{$param->{group}} &&
+		    $param->{group} ne $param->{rename};
 
-	    my $data = delete $cluster_conf->{groups}->{$param->{rename}};
-	    $cluster_conf->{groups}->{$param->{group}} = $data;
-	    if (my $comment = delete $cluster_conf->{group_comments}->{$param->{rename}}) {
-		$cluster_conf->{group_comments}->{$param->{group}} = $comment;
+		my $data = delete $cluster_conf->{groups}->{$param->{rename}};
+		$cluster_conf->{groups}->{$param->{group}} = $data;
+		if (my $comment = delete $cluster_conf->{group_comments}->{$param->{rename}}) {
+		    $cluster_conf->{group_comments}->{$param->{group}} = $comment;
+		}
+		$cluster_conf->{group_comments}->{$param->{group}} = $param->{comment} if defined($param->{comment});
+	    } else {
+		foreach my $name (keys %{$cluster_conf->{groups}}) {
+		    raise_param_exc({ group => "Security group '$name' already exists" })
+			if $name eq $param->{group};
+		}
+
+		$cluster_conf->{groups}->{$param->{group}} = [];
+		$cluster_conf->{group_comments}->{$param->{group}} = $param->{comment} if defined($param->{comment});
 	    }
-	    $cluster_conf->{group_comments}->{$param->{group}} = $param->{comment} if defined($param->{comment});
-	} else {
-	    foreach my $name (keys %{$cluster_conf->{groups}}) {
-		raise_param_exc({ group => "Security group '$name' already exists" })
-		    if $name eq $param->{group};
-	    }
 
-	    $cluster_conf->{groups}->{$param->{group}} = [];
-	    $cluster_conf->{group_comments}->{$param->{group}} = $param->{comment} if defined($param->{comment});
-	}
-
-	PVE::Firewall::save_clusterfw_conf($cluster_conf);
+	    PVE::Firewall::save_clusterfw_conf($cluster_conf);
+	});
 
 	return undef;
     }});

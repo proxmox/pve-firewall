@@ -225,18 +225,22 @@ sub register_create_rule {
 	code => sub {
 	    my ($param) = @_;
 
-	    my ($cluster_conf, $fw_conf, $rules) = $class->load_config($param);
+	    $class->lock_config($param, sub {
+		my ($param) = @_;
 
-	    my $rule = {};
+		my ($cluster_conf, $fw_conf, $rules) = $class->load_config($param);
 
-	    PVE::Firewall::copy_rule_data($rule, $param);
-	    PVE::Firewall::verify_rule($rule, $cluster_conf, $fw_conf, $class->rule_env());
+		my $rule = {};
 
-	    $rule->{enable} = 0 if !defined($param->{enable});
+		PVE::Firewall::copy_rule_data($rule, $param);
+		PVE::Firewall::verify_rule($rule, $cluster_conf, $fw_conf, $class->rule_env());
 
-	    unshift @$rules, $rule;
+		$rule->{enable} = 0 if !defined($param->{enable});
 
-	    $class->save_rules($param, $fw_conf, $rules);
+		unshift @$rules, $rule;
+
+		$class->save_rules($param, $fw_conf, $rules);
+	    });
 
 	    return undef;
 	}});
@@ -282,36 +286,40 @@ sub register_update_rule {
 	code => sub {
 	    my ($param) = @_;
 
-	    my ($cluster_conf, $fw_conf, $rules) = $class->load_config($param);
+	    $class->lock_config($param, sub {
+		my ($param) = @_;
 
-	    my (undef, $digest) = PVE::Firewall::copy_list_with_digest($rules);
-	    PVE::Tools::assert_if_modified($digest, $param->{digest});
+		my ($cluster_conf, $fw_conf, $rules) = $class->load_config($param);
 
-	    die "no rule at position $param->{pos}\n" if $param->{pos} >= scalar(@$rules);
+		my (undef, $digest) = PVE::Firewall::copy_list_with_digest($rules);
+		PVE::Tools::assert_if_modified($digest, $param->{digest});
 
-	    my $rule = $rules->[$param->{pos}];
+		die "no rule at position $param->{pos}\n" if $param->{pos} >= scalar(@$rules);
 
-	    my $moveto = $param->{moveto};
-	    if (defined($moveto) && $moveto != $param->{pos}) {
-		my $newrules = [];
-		for (my $i = 0; $i < scalar(@$rules); $i++) {
-		    next if $i == $param->{pos};
-		    if ($i == $moveto) {
-			push @$newrules, $rule;
+		my $rule = $rules->[$param->{pos}];
+
+		my $moveto = $param->{moveto};
+		if (defined($moveto) && $moveto != $param->{pos}) {
+		    my $newrules = [];
+		    for (my $i = 0; $i < scalar(@$rules); $i++) {
+			next if $i == $param->{pos};
+			if ($i == $moveto) {
+			    push @$newrules, $rule;
+			}
+			push @$newrules, $rules->[$i];
 		    }
-		    push @$newrules, $rules->[$i];
+		    push @$newrules, $rule if $moveto >= scalar(@$rules);
+		    $rules = $newrules;
+		} else {
+		    PVE::Firewall::copy_rule_data($rule, $param);
+
+		    PVE::Firewall::delete_rule_properties($rule, $param->{'delete'}) if $param->{'delete'};
+
+		    PVE::Firewall::verify_rule($rule, $cluster_conf, $fw_conf, $class->rule_env());
 		}
-		push @$newrules, $rule if $moveto >= scalar(@$rules);
-		$rules = $newrules;
-	    } else {
-		PVE::Firewall::copy_rule_data($rule, $param);
 
-		PVE::Firewall::delete_rule_properties($rule, $param->{'delete'}) if $param->{'delete'};
-
-		PVE::Firewall::verify_rule($rule, $cluster_conf, $fw_conf, $class->rule_env());
-	    }
-
-	    $class->save_rules($param, $fw_conf, $rules);
+		$class->save_rules($param, $fw_conf, $rules);
+	    });
 
 	    return undef;
 	}});
@@ -344,16 +352,20 @@ sub register_delete_rule {
 	code => sub {
 	    my ($param) = @_;
 
-	    my ($cluster_conf, $fw_conf, $rules) = $class->load_config($param);
+	    $class->lock_config($param, sub {
+		my ($param) = @_;
 
-	    my (undef, $digest) = PVE::Firewall::copy_list_with_digest($rules);
-	    PVE::Tools::assert_if_modified($digest, $param->{digest});
+		my ($cluster_conf, $fw_conf, $rules) = $class->load_config($param);
 
-	    die "no rule at position $param->{pos}\n" if $param->{pos} >= scalar(@$rules);
+		my (undef, $digest) = PVE::Firewall::copy_list_with_digest($rules);
+		PVE::Tools::assert_if_modified($digest, $param->{digest});
 
-	    splice(@$rules, $param->{pos}, 1);
+		die "no rule at position $param->{pos}\n" if $param->{pos} >= scalar(@$rules);
 
-	    $class->save_rules($param, $fw_conf, $rules);
+		splice(@$rules, $param->{pos}, 1);
+
+		$class->save_rules($param, $fw_conf, $rules);
+	    });
 
 	    return undef;
 	}});
@@ -433,12 +445,16 @@ __PACKAGE__->register_method({
     code => sub {
 	my ($param) = @_;
 
-	my (undef, $cluster_conf, $rules) = __PACKAGE__->load_config($param);
+	__PACKAGE__->lock_config($param, sub {
+	    my ($param) = @_;
 
-	die "Security group '$param->{group}' is not empty\n"
-	    if scalar(@$rules);
+	    my (undef, $cluster_conf, $rules) = __PACKAGE__->load_config($param);
 
-	__PACKAGE__->save_rules($param, $cluster_conf, undef);
+	    die "Security group '$param->{group}' is not empty\n"
+		if scalar(@$rules);
+
+	    __PACKAGE__->save_rules($param, $cluster_conf, undef);
+	});
 
 	return undef;
     }});

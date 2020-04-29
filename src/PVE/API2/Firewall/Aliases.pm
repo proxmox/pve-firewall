@@ -143,19 +143,23 @@ sub register_create_alias {
 	code => sub {
 	    my ($param) = @_;
 
-	    my ($fw_conf, $aliases) = $class->load_config($param);
+	    $class->lock_config($param, sub {
+		my ($param) = @_;
 
-	    my $name = lc($param->{name});
+		my ($fw_conf, $aliases) = $class->load_config($param);
 
-	    raise_param_exc({ name => "alias '$param->{name}' already exists" })
-		if defined($aliases->{$name});
+		my $name = lc($param->{name});
 
-	    my $data = { name => $param->{name}, cidr => $param->{cidr} };
-	    $data->{comment} = $param->{comment} if $param->{comment};
+		raise_param_exc({ name => "alias '$param->{name}' already exists" })
+		    if defined($aliases->{$name});
 
-	    $aliases->{$name} = $data;
+		my $data = { name => $param->{name}, cidr => $param->{cidr} };
+		$data->{comment} = $param->{comment} if $param->{comment};
 
-	    $class->save_aliases($param, $fw_conf, $aliases);
+		$aliases->{$name} = $data;
+
+		$class->save_aliases($param, $fw_conf, $aliases);
+	    });
 
 	    return undef;
 	}});
@@ -219,35 +223,39 @@ sub register_update_alias {
 	code => sub {
 	    my ($param) = @_;
 
-	    my ($fw_conf, $aliases) = $class->load_config($param);
+	    $class->lock_config($param, sub {
+		my ($param) = @_;
 
-	    my $list = &$aliases_to_list($aliases);
+		my ($fw_conf, $aliases) = $class->load_config($param);
 
-	    my (undef, $digest) = PVE::Firewall::copy_list_with_digest($list);
+		my $list = &$aliases_to_list($aliases);
 
-	    PVE::Tools::assert_if_modified($digest, $param->{digest});
+		my (undef, $digest) = PVE::Firewall::copy_list_with_digest($list);
 
-	    my $name = lc($param->{name});
+		PVE::Tools::assert_if_modified($digest, $param->{digest});
 
-	    raise_param_exc({ name => "no such alias" }) if !$aliases->{$name};
+		my $name = lc($param->{name});
 
-	    my $data = { name => $param->{name}, cidr => $param->{cidr} };
-	    $data->{comment} = $param->{comment} if $param->{comment};
+		raise_param_exc({ name => "no such alias" }) if !$aliases->{$name};
 
-	    $aliases->{$name} = $data;
+		my $data = { name => $param->{name}, cidr => $param->{cidr} };
+		$data->{comment} = $param->{comment} if $param->{comment};
 
-	    my $rename = $param->{rename};
-	    $rename = lc($rename) if $rename;
+		$aliases->{$name} = $data;
 
-	    if ($rename && ($name ne $rename)) {
-		raise_param_exc({ name => "alias '$param->{rename}' already exists" })
-		    if defined($aliases->{$rename});
-		$aliases->{$name}->{name} = $param->{rename};
-		$aliases->{$rename} = $aliases->{$name};
-		delete $aliases->{$name};
-	    }
+		my $rename = $param->{rename};
+		$rename = lc($rename) if $rename;
 
-	    $class->save_aliases($param, $fw_conf, $aliases);
+		if ($rename && ($name ne $rename)) {
+		    raise_param_exc({ name => "alias '$param->{rename}' already exists" })
+			if defined($aliases->{$rename});
+		    $aliases->{$name}->{name} = $param->{rename};
+		    $aliases->{$rename} = $aliases->{$name};
+		    delete $aliases->{$name};
+		}
+
+		$class->save_aliases($param, $fw_conf, $aliases);
+	    });
 
 	    return undef;
 	}});
@@ -276,16 +284,20 @@ sub register_delete_alias {
 	code => sub {
 	    my ($param) = @_;
 
-	    my ($fw_conf, $aliases) = $class->load_config($param);
+	    $class->lock_config($param, sub {
+		my ($param) = @_;
 
-	    my $list = &$aliases_to_list($aliases);
-	    my (undef, $digest) = PVE::Firewall::copy_list_with_digest($list);
-	    PVE::Tools::assert_if_modified($digest, $param->{digest});
+		my ($fw_conf, $aliases) = $class->load_config($param);
 
-	    my $name = lc($param->{name});
-	    delete $aliases->{$name};
+		my $list = &$aliases_to_list($aliases);
+		my (undef, $digest) = PVE::Firewall::copy_list_with_digest($list);
+		PVE::Tools::assert_if_modified($digest, $param->{digest});
 
-	    $class->save_aliases($param, $fw_conf, $aliases);
+		my $name = lc($param->{name});
+		delete $aliases->{$name};
+
+		$class->save_aliases($param, $fw_conf, $aliases);
+	    });
 
 	    return undef;
 	}});

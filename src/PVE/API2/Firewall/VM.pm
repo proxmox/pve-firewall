@@ -121,31 +121,32 @@ sub register_handlers {
 	code => sub {
 	    my ($param) = @_;
 
+	    PVE::Firewall::lock_vmfw_conf($param->{vmid}, 10, sub {
+		my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
+		my $vmfw_conf = PVE::Firewall::load_vmfw_conf($cluster_conf, $rule_env, $param->{vmid});
 
-	    my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
-	    my $vmfw_conf = PVE::Firewall::load_vmfw_conf($cluster_conf, $rule_env, $param->{vmid});
+		my (undef, $digest) = PVE::Firewall::copy_opject_with_digest($vmfw_conf->{options});
+		PVE::Tools::assert_if_modified($digest, $param->{digest});
 
-	    my (undef, $digest) = PVE::Firewall::copy_opject_with_digest($vmfw_conf->{options});
-	    PVE::Tools::assert_if_modified($digest, $param->{digest});
-
-	    if ($param->{delete}) {
-		foreach my $opt (PVE::Tools::split_list($param->{delete})) {
-		    raise_param_exc({ delete => "no such option '$opt'" })
-			if !$option_properties->{$opt};
-		    delete $vmfw_conf->{options}->{$opt};
+		if ($param->{delete}) {
+		    foreach my $opt (PVE::Tools::split_list($param->{delete})) {
+			raise_param_exc({ delete => "no such option '$opt'" })
+			    if !$option_properties->{$opt};
+			delete $vmfw_conf->{options}->{$opt};
+		    }
 		}
-	    }
 
-	    if (defined($param->{enable})) {
-		$param->{enable} = $param->{enable} ? 1 : 0;
-	    }
+		if (defined($param->{enable})) {
+		    $param->{enable} = $param->{enable} ? 1 : 0;
+		}
 
-	    foreach my $k (keys %$option_properties) {
-		next if !defined($param->{$k});
-		$vmfw_conf->{options}->{$k} = $param->{$k};
-	    }
+		foreach my $k (keys %$option_properties) {
+		    next if !defined($param->{$k});
+		    $vmfw_conf->{options}->{$k} = $param->{$k};
+		}
 
-	    PVE::Firewall::save_vmfw_conf($param->{vmid}, $vmfw_conf);
+		PVE::Firewall::save_vmfw_conf($param->{vmid}, $vmfw_conf);
+	    });
 
 	    return undef;
 	}});

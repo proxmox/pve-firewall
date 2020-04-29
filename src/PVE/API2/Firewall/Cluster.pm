@@ -132,29 +132,31 @@ __PACKAGE__->register_method({
     code => sub {
 	my ($param) = @_;
 
-	my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
+	PVE::Firewall::lock_clusterfw_conf(10, sub {
+	    my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
 
-	my (undef, $digest) = PVE::Firewall::copy_opject_with_digest($cluster_conf->{options});
-	PVE::Tools::assert_if_modified($digest, $param->{digest});
+	    my (undef, $digest) = PVE::Firewall::copy_opject_with_digest($cluster_conf->{options});
+	    PVE::Tools::assert_if_modified($digest, $param->{digest});
 
-	if ($param->{delete}) {
-	    foreach my $opt (PVE::Tools::split_list($param->{delete})) {
-		raise_param_exc({ delete => "no such option '$opt'" })
-		    if !$option_properties->{$opt};
-		delete $cluster_conf->{options}->{$opt};
+	    if ($param->{delete}) {
+		foreach my $opt (PVE::Tools::split_list($param->{delete})) {
+		    raise_param_exc({ delete => "no such option '$opt'" })
+			if !$option_properties->{$opt};
+		    delete $cluster_conf->{options}->{$opt};
+		}
 	    }
-	}
 
-	if (defined($param->{enable}) && ($param->{enable} > 1)) {
-	    $param->{enable} = time();
-	}
+	    if (defined($param->{enable}) && ($param->{enable} > 1)) {
+		$param->{enable} = time();
+	    }
 
-	foreach my $k (keys %$option_properties) {
-	    next if !defined($param->{$k});
-	    $cluster_conf->{options}->{$k} = $param->{$k};
-	}
+	    foreach my $k (keys %$option_properties) {
+		next if !defined($param->{$k});
+		$cluster_conf->{options}->{$k} = $param->{$k};
+	    }
 
-	PVE::Firewall::save_clusterfw_conf($cluster_conf);
+	    PVE::Firewall::save_clusterfw_conf($cluster_conf);
+	});
 
 	# instant firewall update when using double (anti-lockout) API call
 	# -> not waiting for a firewall update at the first (timestamp enable) set
