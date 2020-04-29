@@ -17,6 +17,12 @@ my $api_properties = {
     },
 };
 
+sub lock_config {
+    my ($class, $param, $code) = @_;
+
+    die "implement this in subclass";
+}
+
 sub load_config {
     my ($class, $param) = @_;
 
@@ -380,6 +386,12 @@ sub rule_env {
     return 'group';
 }
 
+sub lock_config {
+    my ($class, $param, $code) = @_;
+
+    PVE::Firewall::lock_clusterfw_conf(10, $code, $param);
+}
+
 sub load_config {
     my ($class, $param) = @_;
 
@@ -446,6 +458,12 @@ sub rule_env {
     return 'cluster';
 }
 
+sub lock_config {
+    my ($class, $param, $code) = @_;
+
+    PVE::Firewall::lock_clusterfw_conf(10, $code, $param);
+}
+
 sub load_config {
     my ($class, $param) = @_;
 
@@ -478,6 +496,12 @@ sub rule_env {
     my ($class, $param) = @_;
 
     return 'host';
+}
+
+sub lock_config {
+    my ($class, $param, $code) = @_;
+
+    PVE::Firewall::lock_hostfw_conf(10, $code, $param);
 }
 
 sub load_config {
@@ -518,6 +542,12 @@ sub rule_env {
     return 'vm';
 }
 
+sub lock_config {
+    my ($class, $param, $code) = @_;
+
+    PVE::Firewall::lock_vmfw_conf($param->{vmid}, 10, $code, $param);
+}
+
 sub load_config {
     my ($class, $param) = @_;
 
@@ -554,6 +584,12 @@ sub rule_env {
     my ($class, $param) = @_;
 
     return 'ct';
+}
+
+sub lock_config {
+    my ($class, $param, $code) = @_;
+
+    PVE::Firewall::lock_vmfw_conf($param->{vmid}, 10, $code, $param);
 }
 
 sub load_config {
