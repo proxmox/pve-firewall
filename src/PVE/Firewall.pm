@@ -3904,7 +3904,9 @@ sub compile_ebtables_filter {
 		    # ebtables changes this to a .0/MASK network but we just
 		    # want the address here, no network - see #2193
 		    $ip =~ s|/(\d+)$||;
-		    push @$arpfilter, $ip;
+		    if ($ip ne 'dhcp') {
+			push @$arpfilter, $ip;
+		    }
 		}
 		generate_tap_layer2filter($ruleset, $iface, $macaddr, $vmfw_conf, $vmid, $arpfilter);
 	    }
