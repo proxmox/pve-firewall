@@ -1,49 +1,41 @@
-=A simple simulator to test our iptables rules=
+= A simple simulator to test our iptables rule generation =
 
-==Invovation==
+== Invocation ==
 
  # ./fwtester.pl
 
-This scans for subdirectory named test-* an invokes fwtester.pl 
-for each subdirectory with:
+This scans for subdirectory named test-* an invokes fwtester.pl for each
+subdirectory with:
 
- # ./fwtester.pl test-<name>/tests 
+ # ./fwtester.pl test-<name>/tests
 
-==Test directory contents==
+== Test directory contents ==
 
 Each test directory can contain the following files:
 
-*cluster.fw  Cluster wide firewall config
-  
-*host.fw     Host firewall config
+ * cluster.fw  Cluster wide firewall config
+ * host.fw     Host firewall config
+ * <VMID>.fw   Firewall config for VMs
+ * tests       Test descriptions
 
-*<VMID>.fw   Firewall config for VMs     
+== Test description ==
 
-*tests	     Test descriptions
-
-==Test description==
-
-The test description file can contain one or more tests using
-the following syntax:
+The test description file can contain one or more tests using the following
+syntax:
 
  { from => '<zone>' , to => '<zone>', action => '<DROP|RECECT|ACCEPT>', [ source => '<ip>',] [ dest => '<ip>',] [ proto => '<tcp|udp>',] [ dport => <port>,], [ sport => <port>,] }
 
 The following <zone> definition exist currently:
 
-* host:              The host itself
+ * host:              The host itself
+ * outside:           The outside world (alias for 'vmbr0/eth0')
+ * vm<ID>:            A qemu virtual machine
+ * ct<ID>:            An openvz container
+ * nfvm:              Non firewalled VM (alias for 'vmbr0/tapXYZ')
+ * vmbr<\d+>/<bport>: Unmanaged bridge port
 
-* outside:  	     The outside world (alias for 'vmbr0/eth0')
 
-* vm<ID>:   	     A qemu virtual machine
-
-* ct<ID>:   	     An openvz container
-
-* nfvm:              Non firewalled VM (alias for 'vmbr0/tapXYZ')
-
-* vmbr<\d+>/<bport>: Unmanaged bridge port
-
- 
-==Test examples==
+== Test examples ==
 
  { from => 'outside', to => 'ct200', dport => 22, action => 'ACCEPT' }
  { from => 'vm101', to => 'vm100', dport => 443, action => 'ACCEPT', id => 'vm2vm'}
@@ -51,4 +43,3 @@ The following <zone> definition exist currently:
 You can assign an 'id' to each test, so that you can run them separately:
 
  ./fwtester.pl -d test-basic1/tests vm2vm
-
