@@ -1,3 +1,21 @@
+pve-firewall (4.1-1) pve; urgency=medium
+
+  * logging: add missing log message for inbound rules
+
+  * fix #2686: avoid adding 'arp-ip-src' IP filter if guests uses DHCP
+
+  * IPSets: parse the CIDR before checking for duplicates
+
+  * verify that a referenced security group exists
+
+  * ICMP: fix iptables-restore failing if ICMP-type values bigger than '255'
+
+  * ICMP: allow one to specify the 'echo-reply' (0) type also as integer
+
+  * improve handling concurrent (parallel) access and modifications to rules
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 04 May 2020 15:01:57 +0200
+
 pve-firewall (4.0-10) pve; urgency=medium
 
   * macros: add macro for Proxmox Mail Gateway web interface
