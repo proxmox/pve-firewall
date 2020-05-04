@@ -2039,7 +2039,7 @@ sub ipt_rule_to_cmds {
 	    my $multisport = defined($rule->{sport}) && parse_port_name_number_or_range($rule->{sport}, 0);
 
 	    my $add_dport = sub {
-		return if !$rule->{dport};
+		return if !defined($rule->{dport});
 
 		if ($proto eq 'icmp') {
 		    # Note: we use dport to store --icmp-type
@@ -2062,6 +2062,7 @@ sub ipt_rule_to_cmds {
 		} elsif ($multidport) {
 		    push @match, "--match multiport", "--dports $rule->{dport}";
 		} else {
+		    return if !$rule->{dport};
 		    push @match, "--dport $rule->{dport}";
 		}
 	    };
