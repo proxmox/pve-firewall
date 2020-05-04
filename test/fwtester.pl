@@ -92,15 +92,10 @@ sub run_tests {
 		}
 	    };
 	    if (my $err = $@) {
-
 		print Dumper($ruleset->{filter}) if !$debug;
-
 		print PVE::FirewallSimulator::get_trace() . "\n" if !$debug;
-
 		print "$filename line $.: $line";
-
 		print "test failed: $err\n";
-
 		exit(-1);
 	    }
 	} else {
