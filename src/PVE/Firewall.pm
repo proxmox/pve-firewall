@@ -1082,7 +1082,7 @@ sub parse_port_name_number_or_range {
 	}
     }
 
-    die "ICPM ports not allowed in port range\n" if $icmp_port && $count > 0;
+    die "ICMP ports not allowed in port range\n" if $icmp_port && $count > 0;
 
     # I really don't like to use the word number here, but it's the only thing
     # that makes sense in a literal way. The range 1:100 counts as 2, not as
