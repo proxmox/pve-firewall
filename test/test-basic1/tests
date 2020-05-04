@@ -21,6 +21,10 @@
 { from => 'vm110', to => 'vm100', dport => 22, action => 'DROP' }
 { from => 'vm110', to => 'vm100', dport => 443, action => 'ACCEPT' }
 
+{ from => 'vm110', to => 'vm100', dport => 0, proto => 'icmp', action => 'ACCEPT' }
+{ from => 'vm110', to => 'vm100', dport => 'host-unreachable', proto => 'icmp', action => 'ACCEPT' }
+{ from => 'vm110', to => 'vm100', dport => 255, proto => 'icmpv6', action => 'DROP' }
+
 { from => 'outside', to => 'ct200', dport => 22, action => 'ACCEPT' }
 { from => 'outside', to => 'ct200', dport => 23, action => 'DROP' }
 { from => 'outside', to => 'vm100', dport => 22, action => 'DROP' }

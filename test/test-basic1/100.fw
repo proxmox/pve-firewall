@@ -5,4 +5,6 @@ enable: 1
 [RULES]
 
 IN ACCEPT -p tcp -dport 443
+IN ACCEPT -p icmp -dport 0
+IN ACCEPT -p icmp -dport host-unreachable
 OUT REJECT -p tcp -dport 81

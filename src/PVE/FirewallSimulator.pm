@@ -29,9 +29,7 @@ my $NUMBER_RE = qr/0x[0-9a-fA-F]+|\d+/;
 
 sub debug {
     my $new_value = shift;
-
     $debug = $new_value if defined($new_value);
-
     return $debug;
 }
 
@@ -138,6 +136,13 @@ sub rule_match {
 	    die "missing destination address type (dsttype)\n"
 		if !$pkg->{dsttype};
 	    return undef if $atype ne $pkg->{dsttype};
+	}
+
+	if ($rule =~ s/^-m icmp(v6)? --icmp-type (\S+)\s*//) {
+	    my $icmpv6 = !!$1;
+	    my $icmptype = $2;
+	    die "missing destination address type (dsttype)\n" if !defined($pkg->{dport});
+	    return undef if $icmptype ne $pkg->{dport};
 	}
 
 	if ($rule =~ s/^-i (\S+)\s*//) {
