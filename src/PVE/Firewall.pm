@@ -1144,6 +1144,19 @@ sub pve_fw_verify_protocol_spec {
    return $proto;
 }
 
+PVE::JSONSchema::register_format('pve-fw-icmp-type-spec', \&pve_fw_verify_icmp_type_spec);
+sub pve_fw_verify_icmp_type_spec {
+    my ($icmp_type) = @_;
+
+    if ($icmp_type_names->{$icmp_type} ||  $icmpv6_type_names->{$icmp_type}) {
+	return $icmp_type;
+    }
+
+    die "invalid icmp-type value '$icmp_type'\n" if $icmp_type ne '';
+
+    return $icmp_type;
+}
+
 
 # helper function for API
 
@@ -1471,6 +1484,11 @@ my $rule_properties = {
 	type => 'string',
 	optional => 1,
     },
+    'icmp-type' => {
+	description => "Specify icmp-type. Only valid if proto equals 'icmp'.",
+	type => 'string', format => 'pve-fw-icmp-type-spec',
+	optional => 1,
+    },
 };
 
 sub add_rule_properties {
@@ -1664,7 +1682,8 @@ sub verify_rule {
 	eval { pve_fw_verify_protocol_spec($rule->{proto}); };
 	&$add_error('proto', $@) if $@;
 	&$set_ip_version(4) if $rule->{proto} eq 'icmp';
- 	&$set_ip_version(6) if $rule->{proto} eq 'icmpv6';
+	&$set_ip_version(6) if $rule->{proto} eq 'icmpv6';
+	&$set_ip_version(6) if $rule->{proto} eq 'ipv6-icmp';
     }
 
     if ($rule->{dport}) {
@@ -1676,6 +1695,19 @@ sub verify_rule {
 	&$add_error('dport', "protocol '$proto' does not support ports")
 	    if !$PROTOCOLS_WITH_PORTS->{$proto} &&
 		$proto ne 'icmp' && $proto ne 'icmpv6'; # special cases
+    }
+
+    if (my $icmp_type = $rule ->{'icmp-type'}) {
+	my $proto = $rule->{proto};
+	&$add_error('proto', "missing property - 'icmp-type' requires this property")
+	    if $proto ne 'icmp' && $proto ne 'icmpv6' && $proto ne 'ipv6-icmp';
+	&$add_error('icmp-type', "'icmp-type' cannot be specified together with 'dport'")
+	    if $rule->{dport};
+	if ($proto eq 'icmp' && !$icmp_type_names->{$icmp_type}) {
+	    &$add_error('icmp-type', "invalid icmp-type '$icmp_type' for proto 'icmp'");
+	} elsif (($proto eq 'icmpv6' || $proto eq 'ipv6-icmp') && !$icmpv6_type_names->{$icmp_type}) {
+	    &$add_error('icmp-type', "invalid icmp-type '$icmp_type' for proto '$proto'");
+	}
     }
 
     if ($rule->{sport}) {
@@ -2080,7 +2112,18 @@ sub ipt_rule_to_cmds {
 		}
 	    };
 
+	    my $add_icmp_type = sub {
+		return if !defined($rule->{'icmp-type'}) || $rule->{'icmp-type'} eq '';
+
+		die "'icmp-type' can only be set if 'icmp', 'icmpv6' or 'ipv6-icmp' is specified\n"
+		    if ($proto ne 'icmp') && ($proto ne 'icmpv6') && ($proto ne 'ipv6-icmp');
+		my $type = $proto eq 'icmp' ? 'icmp-type' : 'icmpv6-type';
+
+		push @match, "-m $proto --$type $rule->{'icmp-type'}";
+	    };
+
 	    # order matters - single port before multiport!
+	    $add_icmp_type->();
 	    $add_dport->() if $multisport;
 	    $add_sport->();
 	    $add_dport->() if !$multisport;
@@ -2730,6 +2773,10 @@ sub parse_fw_rule {
 	    $rule->{log} = $1;
 	    next;
 	}
+	if ($line =~ s/^-icmp-type (\S+)\s*//) {
+	    $rule->{'icmp-type'} = $1;
+	    next;
+	}
 
 	last;
     }
@@ -3179,6 +3226,7 @@ my $format_rules = sub {
 		$raw .= " -dport $rule->{dport}" if $rule->{dport};
 		$raw .= " -sport $rule->{sport}" if $rule->{sport};
 		$raw .= " -log $rule->{log}" if $rule->{log};
+		$raw .= " -icmp-type $rule->{'icmp-type'}" if defined($rule->{'icmp-type'}) && $rule->{'icmp-type'} ne '';
 	    }
 
 	    $raw .= " # " . encode('utf8', $rule->{comment})

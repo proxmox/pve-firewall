@@ -151,6 +151,10 @@ sub register_get_rule {
 		log => PVE::Firewall::get_standard_option('pve-fw-loglevel', {
 		    description => 'Log level for firewall rule',
 		}),
+		'icmp-type' => {
+		    type => 'string',
+		    optional => 1,
+		},
 		iface => {
 		    type => 'string',
 		    optional => 1,
