@@ -1944,9 +1944,10 @@ sub ebtables_get_chains {
 	my $line = shift;
 	return if $line =~ m/^#/;
 	return if $line =~ m/^\s*$/;
-	if ($line =~ m/^:(\S+)\s\S+$/) {
+	if ($line =~ m/^:(\S+)\s(ACCEPT|DROP|RETURN)$/) {
 	    # Make sure we know chains exist even if they're empty.
 	    $chains->{$1} //= [];
+	    $res->{$1}->{policy} = $2;
 	} elsif ($line =~ m/^(?:\S+)\s(\S+)\s(?:\S+).*/) {
 	    my $chain = $1;
 	    $line =~ s/\s+$//;
@@ -4063,6 +4064,7 @@ sub get_ruleset_status {
 	if (defined($change_only_regex)) {
 	    $action = 'ignore' if ($chain !~ m/$change_only_regex/);
 	    $statushash->{$chain}->{rules} = $active_chains->{$chain}->{rules};
+	    $statushash->{$chain}->{policy} = $active_chains->{$chain}->{policy};
 	    $sig = $sig->{sig};
 	}
 	$statushash->{$chain}->{action} = $action;
@@ -4163,7 +4165,8 @@ sub get_ebtables_cmdlist {
     my $pve_include = 0;
     foreach my $chain (sort keys %$statushash) {
 	next if ($statushash->{$chain}->{action} eq 'delete');
-	$cmdlist .= ":$chain ACCEPT\n";
+	my $policy = $statushash->{$chain}->{policy} // 'ACCEPT';
+	$cmdlist .= ":$chain $policy\n";
 	$pve_include = 1 if ($chain eq 'PVEFW-FORWARD');
     }
 
