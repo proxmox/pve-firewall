@@ -1256,7 +1256,7 @@ our $cluster_option_properties = {
 		type => 'integer',
 		minimum => 0,
 		optional => 1,
-		description => 'Inital burst of packages which will get logged',
+		description => 'Initial burst of packages which will always get logged before the rate is applied',
 		default => 5,
 	    },
 	},
