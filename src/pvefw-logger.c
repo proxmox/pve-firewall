@@ -1035,11 +1035,11 @@ main(int argc, char *argv[])
     for (int i = 10; i >= 0; i--) {
         if (flock(lockfd, LOCK_EX|LOCK_NB) != 0) {
             if (!i) {
-                fprintf(stderr, "unable to aquire lock '%s': %s\n", LOCKFILE, strerror (errno));
+                fprintf(stderr, "unable to acquire lock '%s': %s\n", LOCKFILE, strerror (errno));
                 exit(-1);
             }
             if (i == 10)
-                fprintf(stderr, "unable to aquire lock '%s' - trying again.\n", LOCKFILE);
+                fprintf(stderr, "unable to acquire lock '%s' - trying again.\n", LOCKFILE);
 
             sleep(1);
         }

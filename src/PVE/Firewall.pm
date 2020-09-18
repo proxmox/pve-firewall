@@ -213,7 +213,7 @@ my $pve_fw_macros = {
 	{ action => 'PARAM', proto => 'udp', dport => '6881' },
     ],
     'Ceph' => [
-        "Ceph Storage Cluster traffic (Ceph Monitors, OSD & MDS Deamons)",
+        "Ceph Storage Cluster traffic (Ceph Monitors, OSD & MDS Daemons)",
 	# Legacy port for protocol v1
         { action => 'PARAM', proto => 'tcp', dport => '6789' },
 	# New port for protocol v2
@@ -276,7 +276,7 @@ my $pve_fw_macros = {
 	{ action => 'PARAM', proto => 'tcp', dport => '9418' },
     ],
     'HKP' => [
-	"OpenPGP HTTP keyserver protocol traffic",
+	"OpenPGP HTTP key server protocol traffic",
 	{ action => 'PARAM', proto => 'tcp', dport => '11371' },
     ],
     'HTTP' => [
@@ -636,7 +636,7 @@ $pve_std_chains_conf->{4} = {
     ],
     'PVEFW-tcpflags' => [
 	# same as shorewall tcpflags action.
-	# Packets arriving on this interface are checked for som illegal combinations of TCP flags
+	# Packets arriving on this interface are checked for some illegal combinations of TCP flags
 	{ match => '-p tcp -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG FIN,PSH,URG', target => '-g PVEFW-logflags' },
 	{ match => '-p tcp -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG NONE', target => '-g PVEFW-logflags' },
 	{ match => '-p tcp -m tcp --tcp-flags SYN,RST SYN,RST', target => '-g PVEFW-logflags' },
@@ -729,7 +729,7 @@ $pve_std_chains_conf->{6} = {
     ],
     'PVEFW-tcpflags' => [
 	# same as shorewall tcpflags action.
-	# Packets arriving on this interface are checked for som illegal combinations of TCP flags
+	# Packets arriving on this interface are checked for some illegal combinations of TCP flags
 	{ match => '-p tcp -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG FIN,PSH,URG', target => '-g PVEFW-logflags' },
 	{ match => '-p tcp -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG NONE', target => '-g PVEFW-logflags' },
 	{ match => '-p tcp -m tcp --tcp-flags SYN,RST SYN,RST', target => '-g PVEFW-logflags' },
@@ -1609,7 +1609,7 @@ sub verify_rule {
     my $set_ip_version = sub {
 	my $vers = shift;
 	if ($vers) {
-	    die "detected mixed ipv4/ipv6 adresses in rule\n"
+	    die "detected mixed ipv4/ipv6 addresses in rule\n"
 		if $ipversion && ($vers != $ipversion);
 	    $ipversion = $vers;
 	}
@@ -1999,7 +1999,7 @@ sub ebtables_get_chains {
     return $res;
 }
 
-# substitude action of rule according to action hash
+# substitute action of rule according to action hash
 sub rule_substitude_action {
     my ($rule, $actions) = @_;
 
@@ -3857,7 +3857,7 @@ sub compile_ipsets {
 	    return if !$vmfw_conf;
 
 	    # When the 'ipfilter' option is enabled every device for which there
-	    # is no 'ipfilter-netX' ipset defiend gets an implicit empty default
+	    # is no 'ipfilter-netX' ipset defined gets an implicit empty default
 	    # ipset.
 	    # The reason is that ipfilter ipsets are always filled with standard
 	    # IPv6 link-local filters.
@@ -3896,7 +3896,7 @@ sub compile_ipsets {
 	    return if !$vmfw_conf;
 
 	    # When the 'ipfilter' option is enabled every device for which there
-	    # is no 'ipfilter-netX' ipset defiend gets an implicit empty default
+	    # is no 'ipfilter-netX' ipset defined gets an implicit empty default
 	    # ipset.
 	    # The reason is that ipfilter ipsets are always filled with standard
 	    # IPv6 link-local filters, as well as the IP addresses configured
