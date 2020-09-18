@@ -1,3 +1,11 @@
+pve-firewall (4.1-3) pve; urgency=medium
+
+  * fix #2773: ebtables: keep policy of custom chains
+
+  * introduce new icmp-type parameter
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 18 Sep 2020 16:51:27 +0200
+
 pve-firewall (4.1-2) pve; urgency=medium
 
   * revert: rules: verify referenced security group exists
