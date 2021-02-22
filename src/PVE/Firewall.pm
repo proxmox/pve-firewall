@@ -2747,33 +2747,33 @@ sub parse_fw_rule {
 
 	last if $rule->{type} eq 'group';
 
-	if ($line =~ s/^-p (\S+)\s*//) {
+	if ($line =~ s/^(?:-p|--?proto) (\S+)\s*//) {
 	    $rule->{proto} = $1;
 	    next;
 	}
 
-	if ($line =~ s/^-dport (\S+)\s*//) {
+	if ($line =~ s/^--?dport (\S+)\s*//) {
 	    $rule->{dport} = $1;
 	    next;
 	}
 
-	if ($line =~ s/^-sport (\S+)\s*//) {
+	if ($line =~ s/^--?sport (\S+)\s*//) {
 	    $rule->{sport} = $1;
 	    next;
 	}
-	if ($line =~ s/^-source (\S+)\s*//) {
+	if ($line =~ s/^--?source (\S+)\s*//) {
 	    $rule->{source} = $1;
 	    next;
 	}
-	if ($line =~ s/^-dest (\S+)\s*//) {
+	if ($line =~ s/^--?dest (\S+)\s*//) {
 	    $rule->{dest} = $1;
 	    next;
 	}
-	if ($line =~ s/^-log (emerg|alert|crit|err|warning|notice|info|debug|nolog)\s*//) {
+	if ($line =~ s/^--?log (emerg|alert|crit|err|warning|notice|info|debug|nolog)\s*//) {
 	    $rule->{log} = $1;
 	    next;
 	}
-	if ($line =~ s/^-icmp-type (\S+)\s*//) {
+	if ($line =~ s/^--?icmp-type (\S+)\s*//) {
 	    $rule->{'icmp-type'} = $1;
 	    next;
 	}
