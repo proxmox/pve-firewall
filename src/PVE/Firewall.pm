@@ -1449,11 +1449,13 @@ my $rule_properties = {
 	description => "Restrict packet source address. $addr_list_descr",
 	type => 'string', format => 'pve-fw-addr-spec',
 	optional => 1,
+	maxLength => 512,
     },
     dest => {
 	description => "Restrict packet destination address. $addr_list_descr",
 	type => 'string', format => 'pve-fw-addr-spec',
 	optional => 1,
+	maxLength => 512,
     },
     proto => {
 	description => "IP protocol. You can use protocol names ('tcp'/'udp') or simple numbers, as defined in '/etc/protocols'.",
