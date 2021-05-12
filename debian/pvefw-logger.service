@@ -12,3 +12,5 @@ PIDFile=/run/pvefw-logger.pid
 TimeoutStopSec=5
 Type=forking
 
+[Install]
+WantedBy=multi-user.target
