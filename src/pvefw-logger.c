@@ -1,6 +1,6 @@
 /*
 
-  Copyright (C) 2014 Proxmox Server Solutions GmbH
+  Copyright (C) 2014 - 2021 Proxmox Server Solutions GmbH
 
   This software is written by Proxmox Server Solutions GmbH <support@proxmox.com>
 
@@ -65,7 +65,7 @@ gboolean conntrack = FALSE;
 
 LOG FORMAT:
 
-Special care was taken to allow fast parsing (and filer messages for a singl VM).
+Special care was taken to allow fast parsing and filering messages for a single VM.
 
 <VMID> <LOGLEVEL> <CHAIN> <TIME> <TIMEZONE> <MSG>
 

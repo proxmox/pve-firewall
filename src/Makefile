@@ -22,14 +22,12 @@ pve-firewall.zsh-completion: PVE/Service/pve_firewall.pm
 	perl -I. -T -e "use PVE::Service::pve_firewall; PVE::Service::pve_firewall->generate_zsh_completions();" >$@.tmp
 	mv $@.tmp $@
 
-CPPFLAGS:=$(shell dpkg-buildflags --get CPPFLAGS)
 CFLAGS:=$(shell dpkg-buildflags --get CFLAGS)
+CFLAGS+=$(shell pkg-config libnetfilter_log libnetfilter_conntrack glib-2.0 --libs --cflags)
 LDFLAGS:=$(shell dpkg-buildflags --get LDFLAGS)
 
 pvefw-logger: pvefw-logger.c
-	gcc -Wall -Werror pvefw-logger.c -o pvefw-logger -std=gnu99 \
-	$(CPPFLAGS) $(CFLAGS) $(LDFLAGS) \
-	$(shell pkg-config libnetfilter_log libnetfilter_conntrack glib-2.0 --libs --cflags)
+	gcc -Wall -Werror pvefw-logger.c -o pvefw-logger -std=gnu99 $(CFLAGS) $(LDFLAGS)
 
 .PHONY: install
 install: pve-firewall pve-firewall.8 pve-firewall.bash-completion pve-firewall.zsh-completion pvefw-logger
