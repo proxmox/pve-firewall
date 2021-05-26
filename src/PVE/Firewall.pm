@@ -1818,11 +1818,9 @@ sub rules_audit_permissions {
 }
 
 # core functions
-my $bridge_firewall_enabled = 0;
 
 sub enable_bridge_firewall {
 
-    return if $bridge_firewall_enabled; # only once
 
     PVE::ProcFSTools::write_proc_entry("/proc/sys/net/bridge/bridge-nf-call-iptables", "1");
     PVE::ProcFSTools::write_proc_entry("/proc/sys/net/bridge/bridge-nf-call-ip6tables", "1");
@@ -1830,7 +1828,6 @@ sub enable_bridge_firewall {
     # make sure syncookies are enabled (which is default on newer 3.X kernels anyways)
     PVE::ProcFSTools::write_proc_entry("/proc/sys/net/ipv4/tcp_syncookies", "1");
 
-    $bridge_firewall_enabled = 1;
 }
 
 sub iptables_restore_cmdlist {
