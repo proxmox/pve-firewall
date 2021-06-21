@@ -1,3 +1,9 @@
+pve-firewall (4.2-2) bullseye; urgency=medium
+
+  * re-set relevant sysctls on every apply round
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 21 Jun 2021 11:31:42 +0200
+
 pve-firewall (4.2-1) bullseye; urgency=medium
 
   * fix #967: source: dest: limit length
