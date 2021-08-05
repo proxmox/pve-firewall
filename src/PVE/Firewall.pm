@@ -592,7 +592,6 @@ $pve_std_chains_conf->{4} = {
 	# same as shorewall 'Drop', which is equal to DROP,
 	# but REJECT/DROP some packages to reduce logging,
 	# and ACCEPT critical ICMP types
-	{ action => 'PVEFW-reject',  proto => 'tcp', dport => '43' }, # REJECT 'auth'
 	# we are not interested in BROADCAST/MULTICAST/ANYCAST
 	{ action => 'PVEFW-DropBroadcast' },
 	# ACCEPT critical ICMP types
@@ -615,7 +614,6 @@ $pve_std_chains_conf->{4} = {
 	# same as shorewall 'Reject', which is equal to Reject,
 	# but REJECT/DROP some packages to reduce logging,
 	# and ACCEPT critical ICMP types
-	{ action => 'PVEFW-reject',  proto => 'tcp', dport => '43' }, # REJECT 'auth'
 	# we are not interested in BROADCAST/MULTICAST/ANYCAST
 	{ action => 'PVEFW-DropBroadcast' },
 	# ACCEPT critical ICMP types
