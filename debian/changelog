@@ -1,3 +1,9 @@
+pve-firewall (4.2-4) bullseye; urgency=medium
+
+  * re-build to avoid issues stemming from semi-broken systemd-debhelper version
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 12 Oct 2021 10:39:05 +0200
+
 pve-firewall (4.2-3) bullseye; urgency=medium
 
   * fix #2721: remove the (nowadays) bogus reject for TCP port 43 from the
