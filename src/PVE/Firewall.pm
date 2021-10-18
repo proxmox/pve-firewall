@@ -1948,6 +1948,10 @@ sub ipset_get_chains {
 	if ($line =~ m/^(?:\S+)\s(PVEFW-\S+)\s(?:\S+).*/) {
 	    my $chain = $1;
 	    $line =~ s/\s+$//; # delete trailing white space
+	    # ignore bucketsize onwards from output of ipset v7+
+	    if ($line =~ m/^(.*?)(?:\sbucketsize.*)/) {
+		$line = $1;
+	    }
 	    push @{$chains->{$chain}}, $line;
 	} else {
 	    # simply ignore the rest
