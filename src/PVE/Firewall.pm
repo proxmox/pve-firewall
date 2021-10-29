@@ -1947,11 +1947,9 @@ sub ipset_get_chains {
 	return if $line =~ m/^\s*$/;
 	if ($line =~ m/^(?:\S+)\s(PVEFW-\S+)\s(?:\S+).*/) {
 	    my $chain = $1;
+	    # ignore initval from ipset v7.7+, won't set that yet so it'd mess up change detection
+	    $line =~ s/\binitval 0x[0-9a-f]+//;
 	    $line =~ s/\s+$//; # delete trailing white space
-	    # ignore bucketsize onwards from output of ipset v7+
-	    if ($line =~ m/^(.*?)(?:\sbucketsize.*)/) {
-		$line = $1;
-	    }
 	    push @{$chains->{$chain}}, $line;
 	} else {
 	    # simply ignore the rest
@@ -3487,9 +3485,13 @@ sub generate_ipset_chains {
 		$hashsize = round_powerof2($hashsize);
 	    }
 
+	    my $bucketsize = 12; # lower than the default of 14, faster but slightly more memory use
+
 	    my $family = $ipversion == "6" ? "inet6" : "inet";
 
-	    $ipset_ruleset->{$name} = ["create $name hash:net family $family hashsize $hashsize maxelem $hashsize"];
+	    $ipset_ruleset->{$name} = [
+		"create $name hash:net family $family hashsize $hashsize maxelem $hashsize bucketsize $bucketsize"
+	    ];
 
 	    foreach my $cidr (sort keys %$data) {
 		my $entry = $data->{$cidr};
