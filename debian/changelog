@@ -1,3 +1,10 @@
+pve-firewall (4.2-5) bullseye; urgency=medium
+
+  * fix #3677 ipset get chains: handle newer ipset output for actual
+    change detection
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 04 Nov 2021 16:37:13 +0100
+
 pve-firewall (4.2-4) bullseye; urgency=medium
 
   * re-build to avoid issues stemming from semi-broken systemd-debhelper version
