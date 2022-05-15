@@ -1357,7 +1357,7 @@ our $vm_option_properties = {
     macfilter => {
 	description => "Enable/disable MAC address filter.",
 	type => 'boolean',
-	default => 0,
+	default => 1,
 	optional => 1,
     },
     dhcp => {
