@@ -494,6 +494,10 @@ my $pve_fw_macros = {
 	{ action => 'PARAM', proto => '41' },
 	{ action => 'PARAM', proto => 'udp', dport => '5072,8374' },
     ],
+    'SPICE' => [
+	"SPICE display proxy traffic",
+	{ action => 'PARAM', proto => 'tcp', dport => '3128' },
+    ],
     'Squid' => [
 	"Squid web proxy traffic",
 	{ action => 'PARAM', proto => 'tcp', dport => '3128' },
