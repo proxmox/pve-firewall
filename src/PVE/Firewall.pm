@@ -1971,10 +1971,18 @@ sub ebtables_get_chains {
 
     my $res = {};
     my $chains = {};
+    my $table;
     my $parser = sub {
 	my $line = shift;
 	return if $line =~ m/^#/;
 	return if $line =~ m/^\s*$/;
+	if ($line =~ m/^\*(\S+)$/) {
+	    $table = $1;
+	    return;
+	}
+
+	return if $table ne "filter";
+
 	if ($line =~ m/^:(\S+)\s(ACCEPT|DROP|RETURN)$/) {
 	    # Make sure we know chains exist even if they're empty.
 	    $chains->{$1} //= [];
