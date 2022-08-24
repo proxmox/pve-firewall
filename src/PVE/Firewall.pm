@@ -3964,7 +3964,7 @@ sub compile_ebtables_filter {
 	eval {
 	    my $conf = $vmdata->{qemu}->{$vmid};
 	    my $vmfw_conf = $vmfw_configs->{$vmid};
-	    return if !$vmfw_conf;
+	    return if !$vmfw_conf || !$vmfw_conf->{options}->{enable};
 	    my $ipsets = $vmfw_conf->{ipset};
 
 	    foreach my $netid (sort keys %$conf) {
