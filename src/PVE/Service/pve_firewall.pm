@@ -2,20 +2,22 @@ package PVE::Service::pve_firewall;
 
 use strict;
 use warnings;
-use PVE::SafeSyslog;
-use PVE::Daemon;
 
-use Time::HiRes qw (gettimeofday);
-use PVE::Tools qw(dir_glob_foreach file_read_firstline);
-use PVE::ProcFSTools;
-use PVE::INotify;
+use Data::Dumper;
+use Time::HiRes qw (gettimeofday usleep);
+
+use PVE::CLIHandler;
 use PVE::Cluster qw(cfs_read_file);
 use PVE::Corosync;
+use PVE::Daemon;
+use PVE::INotify;
+use PVE::ProcFSTools;
 use PVE::RPCEnvironment;
-use PVE::CLIHandler;
+use PVE::SafeSyslog;
+use PVE::Tools qw(dir_glob_foreach file_read_firstline);
+
 use PVE::Firewall;
 use PVE::FirewallSimulator;
-use Data::Dumper;
 
 use base qw(PVE::Daemon);
 
@@ -28,7 +30,6 @@ my $daemon = __PACKAGE__->new('pve-firewall', $cmdline, %daemon_options);
 my $nodename = PVE::INotify::nodename();
 
 sub init {
-
     PVE::Cluster::cfs_update();
 
     PVE::Firewall::init();
@@ -70,7 +71,6 @@ sub run {
     local $SIG{'__WARN__'} = 'IGNORE'; # do not fill up logs
 
     for (;;) { # forever
-
 	$next_update = time() + $updatetime;
 
 	my ($ccsec, $cusec) = gettimeofday ();
@@ -116,9 +116,10 @@ sub run {
 
 $daemon->register_start_command("Start the Proxmox VE firewall service.");
 $daemon->register_restart_command(1, "Restart the Proxmox VE firewall service.");
-$daemon->register_stop_command("Stop firewall. This removes all Proxmox VE " .
-			       "related iptable rules. " .
-			       "The host is unprotected afterwards.");
+$daemon->register_stop_command(
+    "Stop the Proxmox VE firewall service. Note, stopping actively removes all Proxmox VE related"
+    ." iptable rules rendering the host potentially unprotected."
+);
 
 __PACKAGE__->register_method ({
     name => 'status',
@@ -302,7 +303,8 @@ __PACKAGE__->register_method ({
     name => 'simulate',
     path => 'simulate',
     method => 'GET',
-    description => "Simulate firewall rules. This does not simulate kernel 'routing' table. Instead, this simply assumes that routing from source zone to destination zone is possible.",
+    description => "Simulate firewall rules. This does not simulates the kernel 'routing' table,"
+	." but simply assumes that routing from source zone to destination zone is possible.",
     parameters => {
 	additionalProperties => 0,
 	properties => {
@@ -406,8 +408,8 @@ __PACKAGE__->register_method ({
 
 	$test->{action} = 'QUERY';
 
-	my $res = PVE::FirewallSimulator::simulate_firewall($ruleset->{filter}, $ipset_ruleset,
-							    $host_ip, $vmdata, $test);
+	my $res = PVE::FirewallSimulator::simulate_firewall(
+	    $ruleset->{filter}, $ipset_ruleset, $host_ip, $vmdata, $test);
 
 	print "ACTION: $res\n";
 

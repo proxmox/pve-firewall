@@ -3156,13 +3156,13 @@ sub read_local_vm_config {
 		}
 	    }
         } elsif ($d->{type} eq 'lxc') {
-            if ($have_lxc) {
-                my $cfspath = PVE::LXC::Config->cfs_config_path($vmid);
-                if (my $conf = PVE::Cluster::cfs_read_file($cfspath)) {
-                    $lxc->{$vmid} = $conf;
-                }
-            }
-        }
+	    if ($have_lxc) {
+		my $cfspath = PVE::LXC::Config->cfs_config_path($vmid);
+		if (my $conf = PVE::Cluster::cfs_read_file($cfspath)) {
+		    $lxc->{$vmid} = $conf;
+		}
+	    }
+	}
     }
 
     return $vmdata;
@@ -4040,7 +4040,7 @@ sub generate_tap_layer2filter {
     ruleset_create_chain($ruleset, $tapchain);
 
     if (defined($macaddr) && !(defined($options->{macfilter}) && $options->{macfilter} == 0)) {
-	    ruleset_addrule($ruleset, $tapchain, "-s ! $macaddr", '-j DROP');
+	ruleset_addrule($ruleset, $tapchain, "-s ! $macaddr", '-j DROP');
     }
 
     if (@$arpfilter){
