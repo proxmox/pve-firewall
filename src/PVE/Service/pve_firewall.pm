@@ -35,10 +35,7 @@ sub init {
     PVE::Firewall::init();
 }
 
-my $restart_request = 0;
-my $next_update = 0;
-
-my $cycle = 0;
+my ($next_update, $cycle, $restart_request) = (0, 0, 0);
 my $updatetime = 10;
 
 my $initial_memory_usage;
@@ -46,12 +43,12 @@ my $initial_memory_usage;
 sub shutdown {
     my ($self) = @_;
 
-    syslog('info' , "server closing");
+    syslog('info' , "server shutting down");
 
     # wait for children
     1 while (waitpid(-1, POSIX::WNOHANG()) > 0);
 
-    syslog('info' , "clear firewall rules");
+    syslog('info' , "clear PVE-generated firewall rules");
 
     eval { PVE::Firewall::remove_pvefw_chains(); };
     warn $@ if $@;
@@ -78,13 +75,11 @@ sub run {
 	    PVE::Cluster::cfs_update();
 	    PVE::Firewall::update();
 	};
-	my $err = $@;
-
-	if ($err) {
+	if (my $err = $@) {
 	    syslog('err', "status update error: $err");
 	}
 
-	my ($ccsec_end, $cusec_end) = gettimeofday ();
+	my ($ccsec_end, $cusec_end) = gettimeofday();
 	my $cptime = ($ccsec_end-$ccsec) + ($cusec_end - $cusec)/1000000;
 
 	syslog('info', sprintf("firewall update time (%.3f seconds)", $cptime))
@@ -98,7 +93,7 @@ sub run {
 	    $initial_memory_usage = $mem->{resident};
 	} else {
 	    my $diff = $mem->{resident} - $initial_memory_usage;
-	    if ($diff > 5*1024*1024) {
+	    if ($diff > 5 * 1024 * 1024) {
 		syslog ('info', "restarting server after $cycle cycles to " .
 			"reduce memory usage (free $mem->{resident} ($diff) bytes)");
 		$self->restart_daemon();
@@ -268,8 +263,8 @@ __PACKAGE__->register_method ({
 
 	my $localnet = PVE::Firewall::local_network() || '127.0.0.0/8';
 	print "network auto detect: $localnet\n";
-	if ($cluster_conf->{aliases}->{local_network}) {
-	    print "using user defined local_network: $cluster_conf->{aliases}->{local_network}->{cidr}\n";
+	if (my $local_network = $cluster_conf->{aliases}->{local_network}) {
+	    print "using user defined local_network: $local_network->{cidr}\n";
 	} else {
 	    print "using detected local_network: $localnet\n";
 	}
