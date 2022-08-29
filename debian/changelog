@@ -1,3 +1,13 @@
+pve-firewall (4.2-6) bullseye; urgency=medium
+
+  * config defaults: document that the mac filter defaults to on
+
+  * fix #4175: ignore non-filter ebtables tables
+
+  * fix enabling ebtables if VM firewall config is invalid
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 29 Aug 2022 09:43:53 +0200
+
 pve-firewall (4.2-5) bullseye; urgency=medium
 
   * fix #3677 ipset get chains: handle newer ipset output for actual
