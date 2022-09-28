@@ -3624,10 +3624,12 @@ sub save_clusterfw_conf {
     }
 }
 
-sub lock_hostfw_conf {
-    my ($timeout, $code, @param) = @_;
+sub lock_hostfw_conf : prototype($$$@) {
+    my ($node, $timeout, $code, @param) = @_;
 
-    my $res = PVE::Cluster::cfs_lock_firewall("host-$nodename", $timeout, $code, @param);
+    $node = $nodename if !defined($node);
+
+    my $res = PVE::Cluster::cfs_lock_firewall("host-$node", $timeout, $code, @param);
     die $@ if $@;
 
     return $res;
@@ -3643,7 +3645,9 @@ sub load_hostfw_conf {
 }
 
 sub save_hostfw_conf {
-    my ($hostfw_conf) = @_;
+    my ($hostfw_conf, $filename) = @_;
+
+    $filename = $hostfw_conf_filename if !defined($filename);
 
     my $raw = '';
 
@@ -3658,9 +3662,9 @@ sub save_hostfw_conf {
     }
 
     if ($raw) {
-	PVE::Tools::file_set_contents($hostfw_conf_filename, $raw);
+	PVE::Tools::file_set_contents($filename, $raw);
     } else {
-	unlink $hostfw_conf_filename;
+	unlink $filename;
     }
 }
 

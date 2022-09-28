@@ -522,7 +522,7 @@ sub rule_env {
 sub lock_config {
     my ($class, $param, $code) = @_;
 
-    PVE::Firewall::lock_hostfw_conf(10, $code, $param);
+    PVE::Firewall::lock_hostfw_conf(undef, 10, $code, $param);
 }
 
 sub load_config {

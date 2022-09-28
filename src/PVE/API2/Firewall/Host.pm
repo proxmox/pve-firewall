@@ -118,7 +118,7 @@ __PACKAGE__->register_method({
     code => sub {
 	my ($param) = @_;
 
-	PVE::Firewall::lock_hostfw_conf(10, sub {
+	PVE::Firewall::lock_hostfw_conf(undef, 10, sub {
 	    my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
 	    my $hostfw_conf = PVE::Firewall::load_hostfw_conf($cluster_conf);
 
