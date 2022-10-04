@@ -120,7 +120,7 @@ __PACKAGE__->register_method({
 		    $group ne $rename;
 
 		if ($rename eq $group) {
-		   $cluster_conf->{group_comments}->{$rename} = $comment if defined($comment);
+		    $cluster_conf->{group_comments}->{$rename} = $comment if defined($comment);
 		    PVE::Firewall::save_clusterfw_conf($cluster_conf);
 		    return;
 		}
@@ -143,7 +143,7 @@ __PACKAGE__->register_method({
 		        my $host_conf_path = "/etc/pve/nodes/$host/host.fw";
 		        my $host_conf = PVE::Firewall::load_hostfw_conf($cluster_conf, $host_conf_path);
 
-			if(defined($host_conf)) {
+			if (defined($host_conf)) {
 			    &$rename_fw_rules($rename,
 			        $group,
 			        $host_conf->{rules});
