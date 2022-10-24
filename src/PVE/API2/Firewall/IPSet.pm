@@ -132,6 +132,11 @@ sub register_delete_ipset {
     my $properties = $class->additional_parameters();
 
     $properties->{name} = get_standard_option('ipset-name');
+    $properties->{force} = {
+	type => 'boolean',
+	optional => 1,
+	description => 'Delete all members of the IPSet, if there are any.',
+    };
 
     $class->register_method({
 	name => 'delete_ipset',
@@ -154,7 +159,7 @@ sub register_delete_ipset {
 		my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
 
 		die "IPSet '$param->{name}' is not empty\n"
-		    if scalar(@$ipset);
+		    if scalar(@$ipset) && !$param->{force};
 
 		$class->save_ipset($param, $fw_conf, undef);
 
