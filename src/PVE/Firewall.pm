@@ -3182,16 +3182,9 @@ sub read_local_vm_config {
     return $vmdata;
 };
 
+# FIXME: move use sites over to moved helper and break older packages, then remove this here
 sub lock_vmfw_conf {
-    my ($vmid, $timeout, $code, @param) = @_;
-
-    die "can't lock VM firewall config for undefined VMID\n"
-	if !defined($vmid);
-
-    my $res = PVE::Cluster::cfs_lock_firewall("vm-$vmid", $timeout, $code, @param);
-    die $@ if $@;
-
-    return $res;
+    return PVE::Firewall::Helpers::lock_vmfw_conf(@_);
 }
 
 sub load_vmfw_conf {

@@ -3,15 +3,29 @@ package PVE::Firewall::Helpers;
 use strict;
 use warnings;
 
+use PVE::Cluster;
 use PVE::Tools qw(file_get_contents file_set_contents);
 
 use base 'Exporter';
 our @EXPORT_OK = qw(
+lock_vmfw_conf
 remove_vmfw_conf
 clone_vmfw_conf
 );
 
 my $pvefw_conf_dir = "/etc/pve/firewall";
+
+sub lock_vmfw_conf {
+    my ($vmid, $timeout, $code, @param) = @_;
+
+    die "can't lock VM firewall config for undefined VMID\n"
+	if !defined($vmid);
+
+    my $res = PVE::Cluster::cfs_lock_firewall("vm-$vmid", $timeout, $code, @param);
+    die $@ if $@;
+
+    return $res;
+}
 
 sub remove_vmfw_conf {
     my ($vmid) = @_;
