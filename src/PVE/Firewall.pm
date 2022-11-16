@@ -24,6 +24,8 @@ use PVE::SafeSyslog;
 use PVE::Tools qw($IPV4RE $IPV6RE);
 use PVE::Tools qw(run_command lock_file dir_glob_foreach);
 
+use PVE::Firewall::Helpers;
+
 my $pvefw_conf_dir = "/etc/pve/firewall";
 my $clusterfw_conf_filename = "$pvefw_conf_dir/cluster.fw";
 
@@ -3350,6 +3352,16 @@ sub save_vmfw_conf {
     } else {
 	unlink $filename;
     }
+}
+
+# FIXME: remove with 8.0 and break older qemu-server/pve-container
+sub remove_vmfw_conf {
+    return PVE::Firewall::Helpers::remove_vmfw_conf(@_);
+}
+
+# FIXME: remove with 8.0 and break older qemu-server/pve-container
+sub clone_vmfw_conf {
+    return PVE::Firewall::Helpers::clone_vmfw_conf(@_);
 }
 
 sub read_vm_firewall_configs {
