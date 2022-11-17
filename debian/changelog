@@ -1,3 +1,14 @@
+pve-firewall (4.2-7) bullseye; urgency=medium
+
+  * fix #4018: add firewall macro for SPICE proxy
+
+  * fix #4204: automatically update each usage of a group to the new ID when
+    it is renamed
+
+  * fix #4268: add 'force' parameter to delete IPSet with members
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 17 Nov 2022 19:53:04 +0100
+
 pve-firewall (4.2-6) bullseye; urgency=medium
 
   * config defaults: document that the mac filter defaults to on
