@@ -69,8 +69,12 @@ sub pve_verify_ip_or_cidr {
     my ($cidr, $noerr) = @_;
 
     if ($cidr =~ m!^(?:$IPV6RE|$IPV4RE)(/(\d+))?$!) {
-	return $cidr if Net::IP->new($cidr);
+        # Net::IP throws an error if the masked CIDR part isn't zero, e.g., `192.168.1.155/24`
+        # fails but `192.168.1.0/24` succeeds. clean_cidr removes the non zero bits from the CIDR.
+	my $clean_cidr = clean_cidr($cidr);
+	return $cidr if Net::IP->new($clean_cidr);
 	return undef if $noerr;
+
 	die Net::IP::Error() . "\n";
     }
     return undef if $noerr;
@@ -84,6 +88,19 @@ sub pve_verify_ip_or_cidr_or_alias {
     return if $cidr =~ m/^(?:$ip_alias_pattern)$/;
 
     return pve_verify_ip_or_cidr($cidr, $noerr);
+}
+
+sub clean_cidr {
+    my ($cidr) = @_;
+    my ($ip, $len) = split('/', $cidr);
+    return $cidr if !$len;
+    my $ver = ($ip =~ m!^$IPV4RE$!) ? 4 : 6;
+
+    my $bin_ip = Net::IP::ip_iptobin( Net::IP::ip_expand_address($ip, $ver), $ver);
+    my $bin_mask = Net::IP::ip_get_mask($len, $ver);
+    my $clean_ip = Net::IP::ip_compress_address( Net::IP::ip_bintoip($bin_ip & $bin_mask, $ver), $ver);
+
+    return "${clean_ip}/$len";
 }
 
 PVE::JSONSchema::register_standard_option('ipset-name', {
