@@ -68,7 +68,7 @@ PVE::JSONSchema::register_format('IPorCIDR', \&pve_verify_ip_or_cidr);
 sub pve_verify_ip_or_cidr {
     my ($cidr, $noerr) = @_;
 
-    if ($cidr =~ m!^(?:$IPV6RE|$IPV4RE)(/(\d+))?$!) {
+    if ($cidr =~ m!^(?:$IPV6RE|$IPV4RE)(?:/\d+)?$!) {
         # Net::IP throws an error if the masked CIDR part isn't zero, e.g., `192.168.1.155/24`
         # fails but `192.168.1.0/24` succeeds. clean_cidr removes the non zero bits from the CIDR.
 	my $clean_cidr = clean_cidr($cidr);
