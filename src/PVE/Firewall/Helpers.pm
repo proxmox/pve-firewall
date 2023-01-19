@@ -3,6 +3,10 @@ package PVE::Firewall::Helpers;
 use strict;
 use warnings;
 
+use Date::Parse qw(str2time);
+use Errno qw(ENOENT);
+use File::Basename qw(fileparse);
+use IO::Zlib;
 use PVE::Cluster;
 use PVE::Tools qw(file_get_contents file_set_contents);
 
@@ -50,6 +54,80 @@ sub clone_vmfw_conf {
 	    file_set_contents($clonevm_conffile, $data);
 	}
     });
+}
+
+sub dump_fw_logfile {
+    my ($filename, $param, $callback) = @_;
+    my ($start, $limit, $since, $until) = $param->@{qw(start limit since until)};
+
+    my $filter = sub {
+	my ($line) = @_;
+
+	if (defined($callback)) {
+	    return undef if !$callback->($line);
+	}
+
+	if ($since || $until) {
+	    my @words = split / /, $line;
+	    my $timestamp = str2time($words[3], $words[4]);
+	    return undef if $since && $timestamp < $since;
+	    return undef if $until && $timestamp > $until;
+	}
+
+	return $line;
+    };
+
+    if (!defined($since) && !defined($until)) {
+	return PVE::Tools::dump_logfile($filename, $start, $limit, $filter);
+    }
+
+    my %state = (
+	'count' => 0,
+	'lines' => [],
+	'start' => $start,
+	'limit' => $limit,
+    );
+
+    # Take into consideration also rotated logs
+    my ($basename, $logdir, $type) = fileparse($filename);
+    my $regex = qr/^\Q$basename\E(\.[\d]+(\.gz)?)?$/;
+    my @files = ();
+
+    PVE::Tools::dir_glob_foreach($logdir, $regex, sub {
+	my ($file) = @_;
+	push @files,  $file;
+    });
+
+    @files = reverse sort @files;
+
+    my $filecount = 0;
+    for my $filename (@files) {
+	$state{'final'} = $filecount == $#files;
+	$filecount++;
+
+	my $fh;
+	if ($filename =~ /\.gz$/) {
+	    $fh = IO::Zlib->new($logdir.$filename, "r");
+	} else {
+	    $fh = IO::File->new($logdir.$filename, "r");
+	}
+
+	if (!$fh) {
+	    # If file vanished since reading dir entries, ignore
+	    next if $!{ENOENT};
+
+	    my $lines = $state{'lines'};
+	    my $count = ++$state{'count'};
+	    push @$lines, ($count, { n => $count, t => "unable to open file - $!"});
+	    last;
+	}
+
+	PVE::Tools::dump_logfile_by_filehandle($fh, $filter, \%state);
+
+	close($fh);
+    }
+
+    return ($state{'count'}, $state{'lines'});
 }
 
 1;

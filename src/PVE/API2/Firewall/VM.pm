@@ -176,6 +176,18 @@ sub register_handlers {
 		    minimum => 0,
 		    optional => 1,
 		},
+		since => {
+		    type => 'integer',
+		    minimum => 0,
+		    description => "Display log since this UNIX epoch.",
+		    optional => 1,
+		},
+		until => {
+		    type => 'integer',
+		    minimum => 0,
+		    description => "Display log until this UNIX epoch.",
+		    optional => 1,
+		},
 	    },
 	},
 	returns => {
@@ -199,11 +211,17 @@ sub register_handlers {
 
 	    my $rpcenv = PVE::RPCEnvironment::get();
 	    my $user = $rpcenv->get_user();
-	    my $vmid = $param->{vmid};
+	    my $filename = "/var/log/pve-firewall.log";
+	    my $vmid = $param->{'vmid'};
 
-	    my ($count, $lines) = PVE::Tools::dump_logfile("/var/log/pve-firewall.log",
-							   $param->{start}, $param->{limit},
-							   "^$vmid ");
+	    my $callback = sub {
+		my ($line) = @_;
+		my $reg = "^$vmid ";
+		return $line =~ m/$reg/;
+	    };
+
+	    my ($count, $lines) = PVE::Firewall::Helpers::dump_fw_logfile(
+		$filename, $param, $callback);
 
 	    $rpcenv->set_result_attrib('total', $count);
 
