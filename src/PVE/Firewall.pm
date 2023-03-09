@@ -578,6 +578,18 @@ my $pve_fw_macros = {
     ],
 };
 
+my $pve_fw_helpers = {
+    'amanda' => { proto => 'udp', dport => '10080', 'v4' => 1, 'v6' => 1 },
+    'ftp' => { proto => 'tcp', dport => '21', 'v4' => 1, 'v6' => 1},
+    'irc' => { proto => 'tcp', dport => '6667', 'v4' => 1 },
+    'netbios-ns' => { proto => 'udp', dport => '137', 'v4' => 1 },
+    'pptp' => { proto => 'tcp', dport => '1723', 'v4' => 1, },
+    'sane' => { proto => 'tcp', dport => '6566', 'v4' => 1, 'v6' => 1 },
+    'sip' => { proto => 'udp', dport => '5060', 'v4' => 1, 'v6' => 1 },
+    'snmp' => { proto => 'udp', dport => '161', 'v4' => 1 },
+    'tftp' => { proto => 'udp', dport => '69', 'v4' => 1, 'v6' => 1},
+};
+
 my $pve_fw_parsed_macros;
 my $pve_fw_macro_descr;
 my $pve_fw_macro_ipversion = {};
@@ -1125,6 +1137,19 @@ sub parse_port_name_number_or_range {
     return (scalar(@elements) > 1);
 }
 
+PVE::JSONSchema::register_format('pve-fw-conntrack-helper', \&pve_fw_verify_conntrack_helper);
+sub pve_fw_verify_conntrack_helper {
+   my ($list) = @_;
+
+   my @helpers = split(/,/, $list);
+   die "extraneous commas in list\n" if $list ne join(',', @helpers);
+   foreach my $helper (@helpers) {
+	die "unknown helper $helper" if !$pve_fw_helpers->{$helper};
+   }
+
+   return $list;
+}
+
 PVE::JSONSchema::register_format('pve-fw-sport-spec', \&pve_fw_verify_sport_spec);
 sub pve_fw_verify_sport_spec {
    my ($portstr) = @_;
@@ -1342,6 +1367,13 @@ our $host_option_properties = {
 	description => "Allow invalid packets on connection tracking.",
 	type => 'boolean',
 	default => 0,
+	optional => 1,
+    },
+    nf_conntrack_helpers => {
+	type => 'string', format => 'pve-fw-conntrack-helper',
+	description => "Enable conntrack helpers for specific protocols. ".
+	    "Supported protocols: amanda, ftp, irc, netbios-ns, pptp, sane, sip, snmp, tftp",
+	default => '',
 	optional => 1,
     },
     protection_synflood => {
@@ -2879,6 +2911,10 @@ sub parse_hostfw_option {
     } elsif ($line =~ m/^(log_level_in|log_level_out|tcp_flags_log_level|smurf_log_level):\s*(($loglevels)\s*)?$/i) {
 	$opt = lc($1);
 	$value = $2 ? lc($3) : '';
+    } elsif ($line =~ m/^(nf_conntrack_helpers):\s*(((\S+)[,]?)+)\s*$/i) {
+	$opt = lc($1);
+	$value = lc($2);
+	pve_fw_verify_conntrack_helper($value);
     } elsif ($line =~ m/^(nf_conntrack_max|nf_conntrack_tcp_timeout_established|nf_conntrack_tcp_timeout_syn_recv|protection_synflood_rate|protection_synflood_burst|protection_limit):\s*(\d+)\s*$/i) {
 	$opt = lc($1);
 	$value = int($2);
@@ -3729,6 +3765,9 @@ sub compile_iptables_raw {
 
     my $hostfw_options = $hostfw_conf->{options} || {};
     my $protection_synflood = $hostfw_options->{protection_synflood} || 0;
+    my $conntrack_helpers = $hostfw_options->{nf_conntrack_helpers} || '';
+
+    ruleset_create_chain($ruleset, "PVEFW-PREROUTING") if $protection_synflood != 0 || $conntrack_helpers ne '';
 
     if($protection_synflood) {
 
@@ -3739,8 +3778,12 @@ sub compile_iptables_raw {
 	$protection_synflood_expire = $protection_synflood_expire * 1000;
 	my $protection_synflood_mask = $ipversion == 4 ? 32 : 64;
 
-	ruleset_create_chain($ruleset, "PVEFW-PREROUTING");
 	ruleset_addrule($ruleset, "PVEFW-PREROUTING", "-p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m hashlimit --hashlimit-above $protection_synflood_rate/sec --hashlimit-burst $protection_synflood_burst --hashlimit-mode srcip --hashlimit-name syn --hashlimit-htable-size 2097152 --hashlimit-srcmask $protection_synflood_mask --hashlimit-htable-expire $protection_synflood_expire", "-j DROP");
+    }
+
+    foreach my $conntrack_helper (split(/,/, $conntrack_helpers)) {
+	my $helper = $pve_fw_helpers->{$conntrack_helper};
+	ruleset_addrule($ruleset, "PVEFW-PREROUTING", "-p $helper->{proto} -m $helper->{proto} --dport $helper->{dport} -j CT", "--helper $conntrack_helper") if $helper && $helper->{"v$ipversion"};
     }
 
     return $ruleset;
