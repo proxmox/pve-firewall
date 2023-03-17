@@ -1,6 +1,6 @@
 pve-firewall (4.3-1) UNRELEASED; urgency=medium
 
-  * allow entering IP address whith the host bits (those inside the mask) not
+  * allow entering IP address with the host bits (those inside the mask) not
     being all zero non-zero, like 192.168.1.155/24 for example.
 
   * api: firewall logger: add optional parameters `since` and `until` for
