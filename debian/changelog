@@ -1,3 +1,16 @@
+pve-firewall (4.3-1) UNRELEASED; urgency=medium
+
+  * allow entering IP address whith the host bits (those inside the mask) not
+    being all zero non-zero, like 192.168.1.155/24 for example.
+
+  * api: firewall logger: add optional parameters `since` and `until` for
+    time-range filtering
+
+  * fix #4550: host options: add nf_conntrack_helpers to compensate that
+    kernel 6.1 and newer have removed the auto helpers
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 17 Mar 2023 15:24:56 +0100
+
 pve-firewall (4.2-7) bullseye; urgency=medium
 
   * fix #4018: add firewall macro for SPICE proxy
