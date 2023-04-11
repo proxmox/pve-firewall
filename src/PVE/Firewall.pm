@@ -2203,8 +2203,7 @@ sub ipt_rule_to_cmds {
 	$targetstr = $rule->{target};
     } else {
 	my $action = (defined $rule->{action}) ? $rule->{action} : "";
-	my $goto = 1 if $action eq 'PVEFW-SET-ACCEPT-MARK';
-	$targetstr = ($goto) ? "-g $action" : "-j $action";
+	$targetstr = $action eq 'PVEFW-SET-ACCEPT-MARK' ? "-g $action" : "-j $action";
     }
 
     my @iptcmds;
@@ -2518,7 +2517,8 @@ sub generate_tap_rules_direction {
     my $tapchain = "$iface-$direction";
 
     my $ipfilter_name = compute_ipfilter_ipset_name($netid);
-    my $ipfilter_ipset = compute_ipset_chain_name($vmid, $ipfilter_name, $ipversion)
+    my $ipfilter_ipset;
+    $ipfilter_ipset = compute_ipset_chain_name($vmid, $ipfilter_name, $ipversion)
 	if $options->{ipfilter} || $vmfw_conf->{ipset}->{$ipfilter_name};
 
     if ($options->{enable}) {
@@ -2986,7 +2986,7 @@ sub parse_alias {
     my ($line) = @_;
 
     # we can add single line comments to the end of the line
-    my $comment = decode('utf8', $1) if $line =~ s/\s*#\s*(.*?)\s*$//;
+    my $comment = $line =~ s/\s*#\s*(.*?)\s*$// ? decode('utf8', $1) : undef;
 
     if ($line =~ m/^(\S+)\s(\S+)$/) {
 	my ($name, $cidr) = ($1, $2);
@@ -3133,7 +3133,7 @@ sub generic_fw_config_parser {
 	    push @{$res->{$section}->{$group}}, $rule;
 	} elsif ($section eq 'ipset') {
 	    # we can add single line comments to the end of the rule
-	    my $comment = decode('utf8', $1) if $line =~ s/#\s*(.*?)\s*$//;
+	    my $comment = $line =~ s/#\s*(.*?)\s*$// ? decode('utf8', $1) : undef;
 
 	    $line =~ m/^(\!)?\s*(\S+)\s*$/;
 	    my $nomatch = $1;
