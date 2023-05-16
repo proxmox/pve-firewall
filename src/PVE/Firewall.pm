@@ -856,6 +856,11 @@ my $is_valid_icmp_type = sub {
     }
 };
 
+my $proto_is_icmp = sub {
+    my $proto = shift;
+    return $proto eq 'icmp' || $proto eq 'icmpv6' || $proto eq 'ipv6-icmp';
+};
+
 sub init_firewall_macros {
 
     $pve_fw_parsed_macros = {};
@@ -1540,7 +1545,7 @@ my $rule_properties = {
 	optional => 1,
     },
     'icmp-type' => {
-	description => "Specify icmp-type. Only valid if proto equals 'icmp'.",
+	description => "Specify icmp-type. Only valid if proto equals 'icmp' or 'icmpv6'/'ipv6-icmp'.",
 	type => 'string', format => 'pve-fw-icmp-type-spec',
 	optional => 1,
     },
@@ -1733,12 +1738,14 @@ sub verify_rule {
 	}
     }
 
+    my $is_icmp = 0;
     if ($rule->{proto}) {
 	eval { pve_fw_verify_protocol_spec($rule->{proto}); };
 	&$add_error('proto', $@) if $@;
 	&$set_ip_version(4) if $rule->{proto} eq 'icmp';
 	&$set_ip_version(6) if $rule->{proto} eq 'icmpv6';
 	&$set_ip_version(6) if $rule->{proto} eq 'ipv6-icmp';
+	$is_icmp = $proto_is_icmp->($rule->{proto});
     }
 
     if ($rule->{dport}) {
@@ -1748,14 +1755,13 @@ sub verify_rule {
 	&$add_error('proto', "missing property - 'dport' requires this property")
 	    if !$proto;
 	&$add_error('dport', "protocol '$proto' does not support ports")
-	    if !$PROTOCOLS_WITH_PORTS->{$proto} &&
-		$proto ne 'icmp' && $proto ne 'icmpv6'; # special cases
+	    if !$PROTOCOLS_WITH_PORTS->{$proto} && !$is_icmp; #special cases
     }
 
     if (my $icmp_type = $rule ->{'icmp-type'}) {
 	my $proto = $rule->{proto};
 	&$add_error('proto', "missing property - 'icmp-type' requires this property")
-	    if $proto ne 'icmp' && $proto ne 'icmpv6' && $proto ne 'ipv6-icmp';
+	    if !$is_icmp;
 	&$add_error('icmp-type', "'icmp-type' cannot be specified together with 'dport'")
 	    if $rule->{dport};
 	if ($proto eq 'icmp' && !$icmp_type_names->{$icmp_type}) {
@@ -2138,6 +2144,7 @@ sub ipt_rule_to_cmds {
 
 	if (my $proto = $rule->{proto}) {
 	    push @match, "-p $proto";
+	    my $is_icmp = $proto_is_icmp->($proto);
 
 	    my $multidport = defined($rule->{dport}) && parse_port_name_number_or_range($rule->{dport}, 1);
 	    my $multisport = defined($rule->{sport}) && parse_port_name_number_or_range($rule->{sport}, 0);
@@ -2178,7 +2185,7 @@ sub ipt_rule_to_cmds {
 		return if !defined($rule->{'icmp-type'}) || $rule->{'icmp-type'} eq '';
 
 		die "'icmp-type' can only be set if 'icmp', 'icmpv6' or 'ipv6-icmp' is specified\n"
-		    if ($proto ne 'icmp') && ($proto ne 'icmpv6') && ($proto ne 'ipv6-icmp');
+		    if !$is_icmp;
 		my $type = $proto eq 'icmp' ? 'icmp-type' : 'icmpv6-type';
 
 		push @match, "-m $proto --$type $rule->{'icmp-type'}";
