@@ -1100,6 +1100,9 @@ sub parse_address_list {
     return $ipversion;
 }
 
+# $dport must only be set to 1 if the parsed parameter is dport and the
+# protocol is one of the ICMP variants - ICMP type values used to be stored in
+# the dport parameter.
 sub parse_port_name_number_or_range {
     my ($str, $dport) = @_;
 
@@ -1749,7 +1752,7 @@ sub verify_rule {
     }
 
     if ($rule->{dport}) {
-	eval { parse_port_name_number_or_range($rule->{dport}, 1); };
+	eval { parse_port_name_number_or_range($rule->{dport}, $is_icmp); };
 	&$add_error('dport', $@) if $@;
 	my $proto = $rule->{proto};
 	&$add_error('proto', "missing property - 'dport' requires this property")
@@ -2146,7 +2149,7 @@ sub ipt_rule_to_cmds {
 	    push @match, "-p $proto";
 	    my $is_icmp = $proto_is_icmp->($proto);
 
-	    my $multidport = defined($rule->{dport}) && parse_port_name_number_or_range($rule->{dport}, 1);
+	    my $multidport = defined($rule->{dport}) && parse_port_name_number_or_range($rule->{dport}, $is_icmp);
 	    my $multisport = defined($rule->{sport}) && parse_port_name_number_or_range($rule->{sport}, 0);
 
 	    my $add_dport = sub {
