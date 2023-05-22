@@ -1,0 +1,7 @@
+/*.build
+/*.buildinfo
+/*.changes
+/*.deb
+/*.dsc
+/*.tar*
+/pve-firewall-*/
