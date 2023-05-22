@@ -30,10 +30,16 @@ $(DEB): $(BUILDDIR) check
 	lintian $(DEBS)
 
 .PHONY: dsc
-dsc: $(DSC)
+dsc:
+	rm -rf $(DSC) $(BUILDDIR)
+	$(MAKE) $(DSC)
+	lintian $(DSC)
+
 $(DSC): $(BUILDDIR)
 	cd $(BUILDDIR); dpkg-buildpackage -S -us -uc -d
-	lintian $(DSC)
+
+sbuild: $(DSC)
+	sbuild $(DSC)
 
 .PHONY: check
 check:
