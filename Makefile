@@ -3,12 +3,12 @@ include /usr/share/dpkg/architecture.mk
 
 PACKAGE=pve-firewall
 
-BUILDDIR ?= $(PACKAGE)-$(DEB_VERSION_UPSTREAM)
+BUILDDIR ?= $(PACKAGE)-$(DEB_VERSION)
 GITVERSION:=$(shell git rev-parse HEAD)
 
-DEB=$(PACKAGE)_$(DEB_VERSION_UPSTREAM_REVISION)_$(DEB_BUILD_ARCH).deb
-DSC=$(PACKAGE)_$(DEB_VERSION_UPSTREAM_REVISION).dsc
-DEB2=$(PACKAGE)-dbgsym_$(DEB_VERSION_UPSTREAM_REVISION)_$(DEB_BUILD_ARCH).deb
+DEB=$(PACKAGE)_$(DEB_VERSION)_$(DEB_HOST_ARCH).deb
+DSC=$(PACKAGE)_$(DEB_VERSION).dsc
+DEB2=$(PACKAGE)-dbgsym_$(DEB_VERSION)_$(DEB_HOST_ARCH).deb
 DEBS=$(DEB) $(DEB2)
 
 all: $(DEBS)
@@ -48,4 +48,4 @@ clean:
 
 .PHONY: upload
 upload: $(DEBS)
-	tar cf - $(DEBS) | ssh repoman@repo.proxmox.com -- upload --product pve --dist bullseye --arch $(DEB_BUILD_ARCH)
+	tar cf - $(DEBS) | ssh repoman@repo.proxmox.com -- upload --product pve --dist bullseye --arch $(DEB_HOST_ARCH)
