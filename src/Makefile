@@ -9,8 +9,7 @@ MAN8DIR=${MANDIR}/man8/
 BASHCOMPLDIR=${DESTDIR}/${PREFIX}/share/bash-completion/completions
 ZSHCOMPLDIR=${DESTDIR}/${PREFIX}/share/zsh/vendor-completions
 
-export NOVIEW=1
-include /usr/share/pve-doc-generator/pve-doc-generator.mk
+-include /usr/share/pve-doc-generator/pve-doc-generator.mk
 
 all: pve-firewall.8 pvefw-logger
 
@@ -45,9 +44,8 @@ install: pve-firewall pve-firewall.8 pve-firewall.bash-completion pve-firewall.z
 .PHONY: clean
 clean: 	
 	make -C PVE clean
-	make cleanup-docgen
-	rm -rf pvefw-logger 
-	find . -name '*~' -exec rm {} ';'
+	rm -f *.xml.tmp *.1 *.5 *.8 *(synopsis,opts).adoc docinfo.xml *~
+	rm -rf pvefw-logger
 
 
 .PHONY: distclean
