@@ -1,13 +1,13 @@
 DESTDIR=
 PREFIX= /usr
-BINDIR=${DESTDIR}/${PREFIX}/bin
-SBINDIR=${DESTDIR}/${PREFIX}/sbin
-MANDIR=${DESTDIR}/${PREFIX}/share/man
-DOCDIR=${DESTDIR}/${PREFIX}/share/doc/pve-firewall
-MAN1DIR=${MANDIR}/man1/
-MAN8DIR=${MANDIR}/man8/
-BASHCOMPLDIR=${DESTDIR}/${PREFIX}/share/bash-completion/completions
-ZSHCOMPLDIR=${DESTDIR}/${PREFIX}/share/zsh/vendor-completions
+BINDIR=$(DESTDIR)/$(PREFIX)/bin
+SBINDIR=$(DESTDIR)/$(PREFIX)/sbin
+MANDIR=$(DESTDIR)/$(PREFIX)/share/man
+DOCDIR=$(DESTDIR)/$(PREFIX)/share/doc/pve-firewall
+MAN1DIR=$(MANDIR)/man1/
+MAN8DIR=$(MANDIR)/man8/
+BASHCOMPLDIR=$(DESTDIR)/$(PREFIX)/share/bash-completion/completions
+ZSHCOMPLDIR=$(DESTDIR)/$(PREFIX)/share/zsh/vendor-completions
 
 -include /usr/share/pve-doc-generator/pve-doc-generator.mk
 
@@ -31,20 +31,20 @@ pvefw-logger: pvefw-logger.c
 .PHONY: install
 install: pve-firewall pve-firewall.8 pve-firewall.bash-completion pve-firewall.zsh-completion pvefw-logger
 	make -C PVE install
-	install -d -m 0755 ${SBINDIR}
-	install -m 0755 pve-firewall ${SBINDIR}
-	install -m 0755 pvefw-logger ${SBINDIR}
-	install -d ${MAN8DIR}
-	install -m 0644 pve-firewall.8 ${MAN8DIR}
-	install -m 0644 -D pve-firewall.bash-completion ${BASHCOMPLDIR}/pve-firewall
-	install -m 0644 -D pve-firewall.zsh-completion ${ZSHCOMPLDIR}/_pve-firewall
-	install -d -m 0755 ${DESTDIR}/usr/lib/sysctl.d/
-	install -m 0644 pve-firewall-sysctl.conf ${DESTDIR}/usr/lib/sysctl.d/pve-firewall.conf
+	install -d -m 0755 $(SBINDIR)
+	install -m 0755 pve-firewall $(SBINDIR)
+	install -m 0755 pvefw-logger $(SBINDIR)
+	install -d $(MAN8DIR)
+	install -m 0644 pve-firewall.8 $(MAN8DIR)
+	install -m 0644 -D pve-firewall.bash-completion $(BASHCOMPLDIR)/pve-firewall
+	install -m 0644 -D pve-firewall.zsh-completion $(ZSHCOMPLDIR)/_pve-firewall
+	install -d -m 0755 $(DESTDIR)/usr/lib/sysctl.d/
+	install -m 0644 pve-firewall-sysctl.conf $(DESTDIR)/usr/lib/sysctl.d/pve-firewall.conf
 
 .PHONY: clean
 clean: 	
 	make -C PVE clean
-	rm -f *.xml.tmp *.1 *.5 *.8 *(synopsis,opts).adoc docinfo.xml *~
+	rm -f *.xml.tmp *.1 *.5 *.8 *{synopsis,opts}.adoc docinfo.xml *~
 	rm -rf pvefw-logger
 
 
