@@ -1,3 +1,9 @@
+pve-firewall (4.3-4) bullseye; urgency=medium
+
+  * change the 'vm/' prefix to 'guest/' for guest-side aliases and ipsets
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 07 Jun 2023 16:01:38 +0200
+
 pve-firewall (4.3-3) bullseye; urgency=medium
 
   * build system improvements
