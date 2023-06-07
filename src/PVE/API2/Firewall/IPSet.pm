@@ -200,7 +200,7 @@ sub register_create_ip {
 		my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
 
 		my $cidr = $param->{cidr};
-		if ($cidr =~ m@^(dc/|vm/)?(${PVE::Firewall::ip_alias_pattern})$@) {
+		if ($cidr =~ m@^(dc/|guest/)?(${PVE::Firewall::ip_alias_pattern})$@) {
 		    my $scope = $1 // "";
 		    my $alias = $2;
 		    # make sure alias exists (if $cidr is an alias)
