@@ -85,7 +85,7 @@ PVE::JSONSchema::register_format('IPorCIDRorAlias', \&pve_verify_ip_or_cidr_or_a
 sub pve_verify_ip_or_cidr_or_alias {
     my ($cidr, $noerr) = @_;
 
-    return if $cidr =~ m/^(?:$ip_alias_pattern)$/;
+    return if $cidr =~ m@^(dc/|vm/)?(?:$ip_alias_pattern)$@;
 
     return pve_verify_ip_or_cidr($cidr, $noerr);
 }
@@ -1067,7 +1067,7 @@ sub parse_address_list {
 	return;
     }
 
-    if ($str =~ m/^${ip_alias_pattern}$/) {
+    if ($str =~ m@^(dc/|vm/)?${ip_alias_pattern}$@) {
 	die "alias name too long\n" if length($str) > $max_alias_name_length;
 	return;
     }
@@ -1690,12 +1690,19 @@ sub verify_rule {
 		} else {
 		    &$add_error($name, "invalid ipset name '$value'");
 		}
-	    } elsif ($value =~ m/^${ip_alias_pattern}$/){
-		my $alias = lc($value);
+	    } elsif ($value =~ m@^(vm/|dc/)?(${ip_alias_pattern})$@){
+		my $scope = $1 // "";
+		my $alias = lc($2);
 		&$add_error($name, "no such alias '$value'")
 		    if !($cluster_conf->{aliases}->{$alias} || ($fw_conf && $fw_conf->{aliases}->{$alias}));
-		my $e = $fw_conf ? $fw_conf->{aliases}->{$alias} : undef;
-		$e = $cluster_conf->{aliases}->{$alias} if !$e && $cluster_conf;
+
+		my $e;
+		if ($scope ne 'dc/' && $fw_conf) {
+		    $e = $fw_conf->{aliases}->{$alias};
+		}
+		if ($scope ne 'vm/' && !$e && $cluster_conf) {
+		    $e = $cluster_conf->{aliases}->{$alias};
+		}
 
 		&$set_ip_version($e->{ipversion});
 	    }
@@ -2096,7 +2103,7 @@ sub ipt_gen_src_or_dst_match {
     my $match;
     if ($adr =~ m/^\+/) {
 	if ($adr =~ m@^\+(vm/|dc/)?(${ipset_name_pattern})$@) {
-	    my $scope = $1;
+	    my $scope = $1 // "";
 	    my $name = $2;
 	    my $ipset_chain;
 	    if ($scope ne 'dc/' && $fw_conf && $fw_conf->{ipset}->{$name}) {
@@ -2110,10 +2117,16 @@ sub ipt_gen_src_or_dst_match {
 	} else {
 	    die "invalid security group name '$adr'\n";
 	}
-    } elsif ($adr =~ m/^${ip_alias_pattern}$/){
-	my $alias = lc($adr);
-	my $e = $fw_conf ? $fw_conf->{aliases}->{$alias} : undef;
-	$e = $cluster_conf->{aliases}->{$alias} if !$e && $cluster_conf;
+    } elsif ($adr =~ m@^(dc/|vm/)?(${ip_alias_pattern})$@){
+	my $scope = $1 // "";
+	my $alias = lc($2);
+	my $e;
+	if ($scope ne 'dc/' && $fw_conf) {
+	    $e = $fw_conf->{aliases}->{$alias};
+	}
+	if ($scope ne 'vm/' && !$e && $cluster_conf) {
+	    $e = $cluster_conf->{aliases}->{$alias};
+	}
 	die "no such alias '$adr'\n" if !$e;
 	$match = "-${dir} $e->{cidr}";
     } elsif ($adr =~ m/\-/){
@@ -2964,11 +2977,16 @@ sub parse_clusterfw_option {
 }
 
 sub resolve_alias {
-    my ($clusterfw_conf, $fw_conf, $cidr) = @_;
+    my ($clusterfw_conf, $fw_conf, $cidr, $scope) = @_;
 
     my $alias = lc($cidr);
-    my $e = $fw_conf ? $fw_conf->{aliases}->{$alias} : undef;
-    $e = $clusterfw_conf->{aliases}->{$alias} if !$e && $clusterfw_conf;
+    my $e;
+    if ($scope ne 'dc/' && $fw_conf) {
+	$e = $fw_conf->{aliases}->{$alias};
+    }
+    if ($scope ne 'vm/' && !$e && $clusterfw_conf) {
+	$e = $clusterfw_conf->{aliases}->{$alias};
+    }
 
     die "no such alias '$cidr'\n" if !$e;;
 
@@ -3156,8 +3174,10 @@ sub generic_fw_config_parser {
 	    }
 
 	    eval {
-		if ($cidr =~ m/^${ip_alias_pattern}$/) {
-		    resolve_alias($cluster_conf, $res, $cidr); # make sure alias exists
+		if ($cidr =~ m@^(dc/|vm/)?(${ip_alias_pattern}$)@) {
+		    my $scope = $1 // "";
+		    my $alias = $2;
+		    resolve_alias($cluster_conf, $res, $alias, $scope); # make sure alias exists
 		} else {
 		    $cidr = parse_ip_or_cidr($cidr);
 		}
@@ -3508,8 +3528,10 @@ sub generate_ipset_chains {
 	    next if $entry->{errors}; # skip entries with errors
 	    eval {
 		my ($cidr, $ver);
-		if ($entry->{cidr} =~ m/^${ip_alias_pattern}$/) {
-		    ($cidr, $ver) = resolve_alias($clusterfw_conf, $fw_conf, $entry->{cidr});
+		if ($entry->{cidr} =~ m@^(dc/|vm/)?(${ip_alias_pattern})$@) {
+		    my $scope = $1 // "";
+		    my $alias = $2;
+		    ($cidr, $ver) = resolve_alias($clusterfw_conf, $fw_conf, $alias, $scope);
 		} else {
 		    ($cidr, $ver) = parse_ip_or_cidr($entry->{cidr});
 		}
