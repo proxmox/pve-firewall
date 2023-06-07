@@ -3,6 +3,7 @@ Section: admin
 Priority: optional
 Maintainer: Proxmox Support Team <support@proxmox.com>
 Build-Depends: debhelper (>= 12),
+               libanyevent-perl,
                libglib2.0-dev,
                libnetfilter-conntrack-dev,
                libnetfilter-log-dev,
