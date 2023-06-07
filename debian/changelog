@@ -1,3 +1,9 @@
+pve-firewall (5.0.1) bookworm; urgency=medium
+
+  * fix #4556: support 'dc/' and 'guest/' prefix for aliases and ipsets
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 07 Jun 2023 16:06:10 +0200
+
 pve-firewall (5.0.0) bookworm; urgency=medium
 
   * switch to native versioning scheme
