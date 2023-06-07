@@ -1683,9 +1683,9 @@ sub verify_rule {
 
 	if (my $value = $rule->{$name}) {
 	    if ($value =~ m/^\+/) {
-		if ($value =~ m/^\+(${ipset_name_pattern})$/) {
-		    &$add_error($name, "no such ipset '$1'")
-			if !($cluster_conf->{ipset}->{$1} || ($fw_conf && $fw_conf->{ipset}->{$1}));
+		if ($value =~ m@^\+(vm/|dc/)?(${ipset_name_pattern})$@) {
+		    &$add_error($name, "no such ipset '$2'")
+			if !($cluster_conf->{ipset}->{$2} || ($fw_conf && $fw_conf->{ipset}->{$2}));
 
 		} else {
 		    &$add_error($name, "invalid ipset name '$value'");
@@ -2095,12 +2095,13 @@ sub ipt_gen_src_or_dst_match {
 
     my $match;
     if ($adr =~ m/^\+/) {
-	if ($adr =~ m/^\+(${ipset_name_pattern})$/) {
-	    my $name = $1;
+	if ($adr =~ m@^\+(vm/|dc/)?(${ipset_name_pattern})$@) {
+	    my $scope = $1;
+	    my $name = $2;
 	    my $ipset_chain;
-	    if ($fw_conf && $fw_conf->{ipset}->{$name}) {
+	    if ($scope ne 'dc/' && $fw_conf && $fw_conf->{ipset}->{$name}) {
 		$ipset_chain = compute_ipset_chain_name($fw_conf->{vmid}, $name, $ipversion);
-	    } elsif ($cluster_conf && $cluster_conf->{ipset}->{$name}) {
+	    } elsif ($scope ne 'vm/' && $cluster_conf && $cluster_conf->{ipset}->{$name}) {
 		$ipset_chain = compute_ipset_chain_name(0, $name, $ipversion);
 	    } else {
 		die "no such ipset '$name'\n";
