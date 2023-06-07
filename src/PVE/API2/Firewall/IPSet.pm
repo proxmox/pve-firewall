@@ -199,11 +199,14 @@ sub register_create_ip {
 
 		my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
 
-		my $cidr = PVE::Firewall::clean_cidr($param->{cidr});
-		if ($cidr =~ m/^${PVE::Firewall::ip_alias_pattern}$/) {
+		my $cidr = $param->{cidr};
+		if ($cidr =~ m@^(dc/|vm/)?(${PVE::Firewall::ip_alias_pattern})$@) {
+		    my $scope = $1 // "";
+		    my $alias = $2;
 		    # make sure alias exists (if $cidr is an alias)
-		    PVE::Firewall::resolve_alias($cluster_conf, $fw_conf, $cidr);
+		    PVE::Firewall::resolve_alias($cluster_conf, $fw_conf, $alias, $scope);
 		} else {
+		    $cidr = PVE::Firewall::clean_cidr($cidr);
 		    # normalize like config parser, otherwise duplicates might slip through
 		    $cidr = PVE::Firewall::parse_ip_or_cidr($cidr);
 		}
