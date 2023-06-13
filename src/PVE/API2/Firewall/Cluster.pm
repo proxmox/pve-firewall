@@ -240,6 +240,9 @@ __PACKAGE__->register_method({
 		ref => {
 		    type => 'string',
 		},
+		scope => {
+		    type => 'string',
+		},
 		comment => {
 		    type => 'string',
 		    optional => 1,
@@ -252,36 +255,7 @@ __PACKAGE__->register_method({
 
 	my $conf = PVE::Firewall::load_clusterfw_conf();
 
-	my $res = [];
-
-	if (!$param->{type} || $param->{type} eq 'ipset') {
-	    foreach my $name (keys %{$conf->{ipset}}) {
-		my $data = {
-		    type => 'ipset',
-		    name => $name,
-		    ref => "+$name",
-		};
-		if (my $comment = $conf->{ipset_comments}->{$name}) {
-		    $data->{comment} = $comment;
-		}
-		push @$res, $data;
-	    }
-	}
-
-	if (!$param->{type} || $param->{type} eq 'alias') {
-	    foreach my $name (keys %{$conf->{aliases}}) {
-		my $e = $conf->{aliases}->{$name};
-		my $data = {
-		    type => 'alias',
-		    name => $name,
-		    ref => $name,
-		};
-		$data->{comment} = $e->{comment} if $e->{comment};
-		push @$res, $data;
-	    }
-	}
-
-	return $res;
+	return PVE::Firewall::Helpers::collect_refs($conf, $param->{type}, "dc");
     }});
 
 1;

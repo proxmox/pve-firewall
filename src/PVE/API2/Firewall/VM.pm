@@ -262,6 +262,12 @@ sub register_handlers {
 		    name => {
 			type => 'string',
 		    },
+		    ref => {
+			type => 'string',
+		    },
+		    scope => {
+			type => 'string',
+		    },
 		    comment => {
 			type => 'string',
 			optional => 1,
@@ -275,44 +281,10 @@ sub register_handlers {
 	    my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
 	    my $fw_conf = PVE::Firewall::load_vmfw_conf($cluster_conf, $rule_env, $param->{vmid});
 
-	    my $ipsets = {};
-	    my $aliases = {};
+	    my $dc_refs = PVE::Firewall::Helpers::collect_refs($cluster_conf, $param->{type}, 'dc');
+	    my $vm_refs = PVE::Firewall::Helpers::collect_refs($fw_conf, $param->{type}, 'guest');
 
-	    foreach my $conf (($cluster_conf, $fw_conf)) {
-		next if !$conf;
-		if (!$param->{type} || $param->{type} eq 'ipset') {
-		    foreach my $name (keys %{$conf->{ipset}}) {
-			my $data = {
-			    type => 'ipset',
-			    name => $name,
-			    ref => "+$name",
-			};
-			if (my $comment = $conf->{ipset_comments}->{$name}) {
-			    $data->{comment} = $comment;
-			}
-			$ipsets->{$name} = $data;
-		    }
-		}
-
-		if (!$param->{type} || $param->{type} eq 'alias') {
-		    foreach my $name (keys %{$conf->{aliases}}) {
-			my $e = $conf->{aliases}->{$name};
-			my $data = {
-			    type => 'alias',
-			    name => $name,
-			    ref => $name,
-			};
-			$data->{comment} = $e->{comment} if $e->{comment};
-			$aliases->{$name} = $data;
-		    }
-		}
-	    }
-
-	    my $res = [];
-	    foreach my $e (values %$ipsets) { push @$res, $e; };
-	    foreach my $e (values %$aliases) { push @$res, $e; };
-
-	    return $res;
+	    return [@$dc_refs, @$vm_refs];
 	}});
 }
 

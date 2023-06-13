@@ -15,6 +15,7 @@ our @EXPORT_OK = qw(
 lock_vmfw_conf
 remove_vmfw_conf
 clone_vmfw_conf
+collect_refs
 );
 
 my $pvefw_conf_dir = "/etc/pve/firewall";
@@ -128,6 +129,44 @@ sub dump_fw_logfile {
     }
 
     return ($state{'count'}, $state{'lines'});
+}
+
+sub collect_refs {
+    my ($conf, $type, $scope) = @_;
+
+
+    my $res = [];
+
+    if (!$type || $type eq 'ipset') {
+	foreach my $name (keys %{$conf->{ipset}}) {
+	    my $data = {
+		type => 'ipset',
+		name => $name,
+		ref => "+$name",
+		scope => $scope,
+	    };
+	    if (my $comment = $conf->{ipset_comments}->{$name}) {
+		$data->{comment} = $comment;
+	    }
+	    push @$res, $data;
+	}
+    }
+
+    if (!$type || $type eq 'alias') {
+	foreach my $name (keys %{$conf->{aliases}}) {
+	    my $e = $conf->{aliases}->{$name};
+	    my $data = {
+		type => 'alias',
+		name => $name,
+		ref => $name,
+		scope => $scope,
+	    };
+	    $data->{comment} = $e->{comment} if $e->{comment};
+	    push @$res, $data;
+	}
+    }
+
+    return $res;
 }
 
 1;
