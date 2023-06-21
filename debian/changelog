@@ -1,3 +1,9 @@
+pve-firewall (5.0.2) bookworm; urgency=medium
+
+  * fix #4556: api: return scoped IPSets and aliases
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 21 Jun 2023 19:17:19 +0200
+
 pve-firewall (5.0.1) bookworm; urgency=medium
 
   * fix #4556: support 'dc/' and 'guest/' prefix for aliases and ipsets
