@@ -2979,13 +2979,23 @@ sub parse_clusterfw_option {
 sub resolve_alias {
     my ($clusterfw_conf, $fw_conf, $cidr, $scope) = @_;
 
+    # When we're on the cluster level, the cluster config only gets
+    # saved into fw_conf, so we need some extra handling here (to
+    # stay consistent)
+    my ($cluster_config, $local_config);
+    if (!$clusterfw_conf) {
+	($cluster_config, $local_config) = ($fw_conf, undef);
+    } else {
+	($cluster_config, $local_config) = ($clusterfw_conf, $fw_conf);
+    }
+
     my $alias = lc($cidr);
     my $e;
-    if ($scope ne 'dc/' && $fw_conf) {
-	$e = $fw_conf->{aliases}->{$alias};
+    if ($scope ne 'dc/' && $local_config) {
+	$e = $local_config->{aliases}->{$alias};
     }
-    if ($scope ne 'guest/' && !$e && $clusterfw_conf) {
-	$e = $clusterfw_conf->{aliases}->{$alias};
+    if ($scope ne 'guest/' && !$e && $cluster_config) {
+	$e = $cluster_config->{aliases}->{$alias};
     }
 
     die "no such alias '$cidr'\n" if !$e;;
