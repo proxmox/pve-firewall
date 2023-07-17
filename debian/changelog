@@ -1,3 +1,9 @@
+pve-firewall (4.3-5) bullseye; urgency=medium
+
+  * fix resolution of scoped aliases in ipsets
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 17 Jul 2023 10:43:18 +0200
+
 pve-firewall (4.3-4) bullseye; urgency=medium
 
   * change the 'vm/' prefix to 'guest/' for guest-side aliases and ipsets
