@@ -1,3 +1,9 @@
+pve-firewall (5.0.3) bookworm; urgency=medium
+
+  * fix resolution of scoped aliases in ipsets
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 17 Jul 2023 10:39:28 +0200
+
 pve-firewall (5.0.2) bookworm; urgency=medium
 
   * fix #4556: api: return scoped IPSets and aliases
