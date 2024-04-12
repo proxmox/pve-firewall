@@ -18,6 +18,7 @@ use PVE::Tools qw(dir_glob_foreach file_read_firstline);
 
 use PVE::Firewall;
 use PVE::FirewallSimulator;
+use PVE::FirewallSimulator qw($bridge_interface_pattern);
 
 use base qw(PVE::Daemon);
 
@@ -312,14 +313,14 @@ __PACKAGE__->register_method ({
 	    from => {
 		description => "Source zone.",
 		type => 'string',
-		pattern => '(host|outside|vm\d+|ct\d+|vmbr\d+/\S+)',
+		pattern => "(host|outside|vm\\d+|ct\\d+|$bridge_interface_pattern)",
 		optional => 1,
 		default => 'outside',
 	    },
 	    to => {
 		description => "Destination zone.",
 		type => 'string',
-		pattern => '(host|outside|vm\d+|ct\d+|vmbr\d+/\S+)',
+		pattern => "(host|outside|vm\\d+|ct\\d+|$bridge_interface_pattern)",
 		optional => 1,
 		default => 'host',
 	    },

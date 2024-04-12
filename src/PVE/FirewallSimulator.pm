@@ -7,6 +7,12 @@ use PVE::Firewall;
 use File::Basename;
 use Net::IP;
 
+use base 'Exporter';
+our @EXPORT_OK = qw(
+$bridge_name_pattern
+$bridge_interface_pattern
+);
+
 # dynamically include PVE::QemuServer and PVE::LXC
 # to avoid dependency problems
 my $have_qemu_server;
@@ -26,6 +32,9 @@ my $trace;
 my $debug = 0;
 
 my $NUMBER_RE = qr/0x[0-9a-fA-F]+|\d+/;
+
+our $bridge_name_pattern = '[a-zA-Z][a-zA-Z0-9]{0,9}';
+our $bridge_interface_pattern = "($bridge_name_pattern)/(\\S+)";
 
 sub debug {
     my $new_value = shift;
@@ -397,7 +406,7 @@ sub route_packet {
 	    $pkg->{physdev_in} = $target->{fwln} || die 'internal error';
 	    $pkg->{physdev_out} = $target->{tapdev} || die 'internal error';
 
-	} elsif ($route_state =~ m/^vmbr\d+$/) {
+	} elsif ($route_state =~ m/^$bridge_name_pattern$/) {
 
 	    die "missing physdev_in - internal error?" if !$physdev_in;
 	    $pkg->{physdev_in} = $physdev_in;
@@ -531,11 +540,6 @@ sub simulate_firewall {
 	$from_info->{type} = 'host';
 	$start_state = 'host';
 	$pkg->{source} = $host_ip if !defined($pkg->{source});
-    } elsif ($from =~ m|^(vmbr\d+)/(\S+)$|) {
-	$from_info->{type} = 'bport';
-	$from_info->{bridge} = $1;
-	$from_info->{iface} = $2;
-	$start_state = 'from-bport';
     } elsif ($from eq 'outside') {
 	$from_info->{type} = 'bport';
 	$from_info->{bridge} = 'vmbr0';
@@ -559,6 +563,11 @@ sub simulate_firewall {
 	$from_info = extract_vm_info($vmdata, $vmid, $netnum);
 	$start_state = 'fwbr-out';
 	$pkg->{mac_source} = $from_info->{macaddr};
+    } elsif ($from =~ m|^$bridge_interface_pattern$|) {
+	$from_info->{type} = 'bport';
+	$from_info->{bridge} = $1;
+	$from_info->{iface} = $2;
+	$start_state = 'from-bport';
     } else {
 	die "unable to parse \"from => '$from'\"\n";
     }
@@ -569,10 +578,6 @@ sub simulate_firewall {
 	$target->{type} = 'host';
 	$target->{iface} = 'host';
 	$pkg->{dest} = $host_ip if !defined($pkg->{dest});
-    } elsif ($to =~ m|^(vmbr\d+)/(\S+)$|) {
-	$target->{type} = 'bport';
-	$target->{bridge} = $1;
-	$target->{iface} = $2;
     } elsif ($to eq 'outside') {
 	$target->{type} = 'bport';
 	$target->{bridge} = 'vmbr0';
@@ -591,6 +596,10 @@ sub simulate_firewall {
 	my $vmid = $1;
 	$target = extract_vm_info($vmdata, $vmid, 0);
 	$target->{iface} = $target->{tapdev};
+    } elsif ($to =~ m|^$bridge_interface_pattern$|) {
+	$target->{type} = 'bport';
+	$target->{bridge} = $1;
+	$target->{iface} = $2;
     } else {
 	die "unable to parse \"to => '$to'\"\n";
     }
