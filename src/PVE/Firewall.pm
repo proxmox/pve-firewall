@@ -3360,7 +3360,7 @@ my $format_aliases = sub {
     my $raw = '';
 
     $raw .= "[ALIASES]\n\n";
-    foreach my $k (keys %$aliases) {
+    foreach my $k (sort keys %$aliases) {
 	my $e = $aliases->{$k};
 	$raw .= "$e->{name} $e->{cidr}";
 	$raw .= " # " . encode('utf8', $e->{comment})
