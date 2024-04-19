@@ -1,3 +1,11 @@
+pve-firewall (5.0.4) bookworm; urgency=medium
+
+  * fix #5335: stable sorting in cluster.fw
+
+  * add configuration option for new nftables firewall tech-preview
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 19 Apr 2024 20:04:09 +0200
+
 pve-firewall (5.0.3) bookworm; urgency=medium
 
   * fix resolution of scoped aliases in ipsets
