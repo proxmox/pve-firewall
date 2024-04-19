@@ -1408,6 +1408,12 @@ our $host_option_properties = {
 	default => 0,
 	optional => 1
     },
+    nftables => {
+	description => "Enable nftables based firewall (tech preview)",
+	type => 'boolean',
+	default => 0,
+	optional => 1,
+    },
 };
 
 our $vm_option_properties = {
@@ -2929,7 +2935,7 @@ sub parse_hostfw_option {
 
     my $loglevels = "emerg|alert|crit|err|warning|notice|info|debug|nolog";
 
-    if ($line =~ m/^(enable|nosmurfs|tcpflags|ndp|log_nf_conntrack|nf_conntrack_allow_invalid|protection_synflood):\s*(0|1)\s*$/i) {
+    if ($line =~ m/^(enable|nosmurfs|tcpflags|ndp|log_nf_conntrack|nf_conntrack_allow_invalid|protection_synflood|nftables):\s*(0|1)\s*$/i) {
 	$opt = lc($1);
 	$value = int($2);
     } elsif ($line =~ m/^(log_level_in|log_level_out|tcp_flags_log_level|smurf_log_level):\s*(($loglevels)\s*)?$/i) {
@@ -4673,12 +4679,30 @@ sub remove_pvefw_chains_ebtables {
     ebtables_restore_cmdlist(get_ebtables_cmdlist({}));
 }
 
-sub init {
-    my $cluster_conf = load_clusterfw_conf();
-    my $cluster_options = $cluster_conf->{options};
-    my $enable = $cluster_options->{enable};
+sub is_nftables {
+    my ($cluster_conf, $host_conf) = @_;
 
-    return if !$enable;
+    if (!-x "/usr/libexec/proxmox/proxmox-firewall") {
+	return 0;
+    }
+
+    $cluster_conf = load_clusterfw_conf() if !defined($cluster_conf);
+    $host_conf = load_hostfw_conf($cluster_conf) if !defined($host_conf);
+
+    return $host_conf->{options}->{nftables};
+}
+
+sub is_enabled_and_not_nftables {
+    my ($cluster_conf, $host_conf) = @_;
+
+    $cluster_conf = load_clusterfw_conf() if !defined($cluster_conf);
+    $host_conf = load_hostfw_conf($cluster_conf) if !defined($host_conf);
+
+    return $cluster_conf->{options}->{enable} && !is_nftables($cluster_conf, $host_conf);
+}
+
+sub init {
+    return if !is_enabled_and_not_nftables();
 
     # load required modules here
 }
@@ -4687,14 +4711,13 @@ sub update {
     my $code = sub {
 
 	my $cluster_conf = load_clusterfw_conf();
-	my $cluster_options = $cluster_conf->{options};
+	my $hostfw_conf = load_hostfw_conf($cluster_conf);
 
-	if (!$cluster_options->{enable}) {
+	if (!is_enabled_and_not_nftables($cluster_conf, $hostfw_conf)) {
 	    PVE::Firewall::remove_pvefw_chains();
 	    return;
 	}
 
-	my $hostfw_conf = load_hostfw_conf($cluster_conf);
 
 	my ($ruleset, $ipset_ruleset, $rulesetv6, $ebtables_ruleset) = compile($cluster_conf, $hostfw_conf);
 
