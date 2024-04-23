@@ -1,3 +1,9 @@
+pve-firewall (5.0.5) bookworm; urgency=medium
+
+  * simulator: adapt to more flexible bridge naming scheme
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 23 Apr 2024 13:11:43 +0200
+
 pve-firewall (5.0.4) bookworm; urgency=medium
 
   * fix #5335: stable sorting in cluster.fw
