@@ -1,3 +1,10 @@
+pve-firewall (5.0.6) bookworm; urgency=medium
+
+  * add flag to signal the new nftables-based proxmox-firewall that it's
+    disabled without the need to parse the config
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 26 Apr 2024 17:19:50 +0200
+
 pve-firewall (5.0.5) bookworm; urgency=medium
 
   * simulator: adapt to more flexible bridge naming scheme
