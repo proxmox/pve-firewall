@@ -4707,6 +4707,9 @@ sub init {
     # load required modules here
 }
 
+# This is checked in proxmox-firewall to avoid log-spam due to failing to parse the config
+my $FORCE_NFT_DISABLE_FLAG_FILE = "/run/proxmox-nftables-firewall-force-disable";
+
 sub update {
     my $code = sub {
 
@@ -4714,8 +4717,14 @@ sub update {
 	my $hostfw_conf = load_hostfw_conf($cluster_conf);
 
 	if (!is_enabled_and_not_nftables($cluster_conf, $hostfw_conf)) {
+	    unlink($FORCE_NFT_DISABLE_FLAG_FILE)
+		or $!{ENOENT} or warn "failed to unlink flag file '$FORCE_NFT_DISABLE_FLAG_FILE' - $!\n";
 	    PVE::Firewall::remove_pvefw_chains();
 	    return;
+	}
+	if (! -e $FORCE_NFT_DISABLE_FLAG_FILE) {
+	    open(my $_fh, '>', $FORCE_NFT_DISABLE_FLAG_FILE)
+	        or warn "failed to create flag file '$FORCE_NFT_DISABLE_FLAG_FILE' – $!\n";
 	}
 
 
