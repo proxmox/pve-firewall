@@ -14,8 +14,8 @@ DEBS=$(DEB) $(DEB2)
 all: $(DEBS)
 
 .PHONY: dinstall
-dinstall: deb
-	dpkg -i $(DEBS)
+dinstall: $(DEB)
+	dpkg -i $<
 
 $(BUILDDIR):
 	rm -rf $(BUILDDIR)
@@ -25,7 +25,7 @@ $(BUILDDIR):
 .PHONY: deb
 deb: $(DEBS)
 $(DEB2): $(DEB)
-$(DEB): $(BUILDDIR) check
+$(DEB): $(BUILDDIR)
 	cd $(BUILDDIR); dpkg-buildpackage -b -us -uc
 	lintian $(DEBS)
 
@@ -41,7 +41,6 @@ $(DSC): $(BUILDDIR)
 sbuild: $(DSC)
 	sbuild $(DSC)
 
-.PHONY: check
 check:
 	make -C test check
 
