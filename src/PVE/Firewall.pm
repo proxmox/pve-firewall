@@ -4692,13 +4692,34 @@ sub is_nftables {
     return $host_conf->{options}->{nftables};
 }
 
+my sub update_force_nftables_disable_flag {
+    my ($cluster_firewall_enabled, $is_nftables) = @_;
+
+    # This is checked in proxmox-firewall to avoid log-spam due to failing to parse the config
+    my $FORCE_NFT_DISABLE_FLAG_FILE = "/run/proxmox-nftables-firewall-force-disable";
+
+    if (!($cluster_firewall_enabled && $is_nftables)) {
+	if (! -e $FORCE_NFT_DISABLE_FLAG_FILE) {
+	    open(my $_fh, '>', $FORCE_NFT_DISABLE_FLAG_FILE)
+		or warn "failed to create flag file '$FORCE_NFT_DISABLE_FLAG_FILE' – $!\n";
+	}
+    } else {
+	unlink($FORCE_NFT_DISABLE_FLAG_FILE)
+	    or $!{ENOENT} or warn "failed to unlink flag file '$FORCE_NFT_DISABLE_FLAG_FILE' - $!\n";
+    }
+}
+
 sub is_enabled_and_not_nftables {
     my ($cluster_conf, $host_conf) = @_;
 
     $cluster_conf = load_clusterfw_conf() if !defined($cluster_conf);
     $host_conf = load_hostfw_conf($cluster_conf) if !defined($host_conf);
 
-    return $cluster_conf->{options}->{enable} && !is_nftables($cluster_conf, $host_conf);
+    my $is_nftables = is_nftables($cluster_conf, $host_conf);
+
+    update_force_nftables_disable_flag($cluster_conf->{options}->{enable}, $is_nftables);
+
+    return $cluster_conf->{options}->{enable} && !$is_nftables;
 }
 
 sub init {
@@ -4707,9 +4728,6 @@ sub init {
     # load required modules here
 }
 
-# This is checked in proxmox-firewall to avoid log-spam due to failing to parse the config
-my $FORCE_NFT_DISABLE_FLAG_FILE = "/run/proxmox-nftables-firewall-force-disable";
-
 sub update {
     my $code = sub {
 
@@ -4717,16 +4735,9 @@ sub update {
 	my $hostfw_conf = load_hostfw_conf($cluster_conf);
 
 	if (!is_enabled_and_not_nftables($cluster_conf, $hostfw_conf)) {
-	    unlink($FORCE_NFT_DISABLE_FLAG_FILE)
-		or $!{ENOENT} or warn "failed to unlink flag file '$FORCE_NFT_DISABLE_FLAG_FILE' - $!\n";
 	    PVE::Firewall::remove_pvefw_chains();
 	    return;
 	}
-	if (! -e $FORCE_NFT_DISABLE_FLAG_FILE) {
-	    open(my $_fh, '>', $FORCE_NFT_DISABLE_FLAG_FILE)
-	        or warn "failed to create flag file '$FORCE_NFT_DISABLE_FLAG_FILE' – $!\n";
-	}
-
 
 	my ($ruleset, $ipset_ruleset, $rulesetv6, $ebtables_ruleset) = compile($cluster_conf, $hostfw_conf);
 
