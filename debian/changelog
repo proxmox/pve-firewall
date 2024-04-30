@@ -1,3 +1,9 @@
+pve-firewall (5.0.7) bookworm; urgency=medium
+
+  * also signal force-disable nftables if FW is completely disabled
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 30 Apr 2024 10:30:16 +0200
+
 pve-firewall (5.0.6) bookworm; urgency=medium
 
   * add flag to signal the new nftables-based proxmox-firewall that it's
