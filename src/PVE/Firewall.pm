@@ -4679,7 +4679,14 @@ sub remove_pvefw_chains_ebtables {
     ebtables_restore_cmdlist(get_ebtables_cmdlist({}));
 }
 
+# This is checked in proxmox-firewall to avoid log-spam due to failing to parse the config
+my $FORCE_NFT_DISABLE_FLAG_FILE = "/run/proxmox-nftables-firewall-force-disable";
+
 sub is_nftables {
+    return !-e $FORCE_NFT_DISABLE_FLAG_FILE;
+}
+
+my sub get_nftables_option {
     my ($cluster_conf, $host_conf) = @_;
 
     if (!-x "/usr/libexec/proxmox/proxmox-firewall") {
@@ -4695,9 +4702,6 @@ sub is_nftables {
 my sub update_force_nftables_disable_flag {
     my ($cluster_firewall_enabled, $is_nftables) = @_;
 
-    # This is checked in proxmox-firewall to avoid log-spam due to failing to parse the config
-    my $FORCE_NFT_DISABLE_FLAG_FILE = "/run/proxmox-nftables-firewall-force-disable";
-
     if (!($cluster_firewall_enabled && $is_nftables)) {
 	if (! -e $FORCE_NFT_DISABLE_FLAG_FILE) {
 	    open(my $_fh, '>', $FORCE_NFT_DISABLE_FLAG_FILE)
@@ -4709,13 +4713,13 @@ my sub update_force_nftables_disable_flag {
     }
 }
 
-sub is_enabled_and_not_nftables {
+my sub is_enabled_and_not_nftables {
     my ($cluster_conf, $host_conf) = @_;
 
     $cluster_conf = load_clusterfw_conf() if !defined($cluster_conf);
     $host_conf = load_hostfw_conf($cluster_conf) if !defined($host_conf);
 
-    my $is_nftables = is_nftables($cluster_conf, $host_conf);
+    my $is_nftables = get_nftables_option($cluster_conf, $host_conf);
 
     update_force_nftables_disable_flag($cluster_conf->{options}->{enable}, $is_nftables);
 
