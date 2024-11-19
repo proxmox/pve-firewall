@@ -1,3 +1,17 @@
+pve-firewall (5.1.0) bookworm; urgency=medium
+
+  * nftables: make is_nftables check flag file instead of config
+
+  * add support for loading sdn firewall configuration and use that to support
+    parsing rules referencing IPSets in the new SDN scope and generating those
+    IPSets in the firewall.
+
+  * api ipsets: include sets from the SDN scope
+
+  * api: add base endpoints for vnet-level firewall configuration
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 19 Nov 2024 16:38:06 +0100
+
 pve-firewall (5.0.7) bookworm; urgency=medium
 
   * also signal force-disable nftables if FW is completely disabled
