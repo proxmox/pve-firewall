@@ -1918,6 +1918,11 @@ sub rules_modify_permissions {
 	return {
 	    check => ['perm', '/vms/{vmid}', [ 'VM.Config.Network' ]],
 	}
+    } elsif ($rule_env eq 'vnet') {
+	return {
+	    description => "Needs SDN.Allocate permissions on '/sdn/zones/<zone>/<vnet>'",
+	    user => 'all',
+	}
     }
 
     return undef;
@@ -1937,6 +1942,11 @@ sub rules_audit_permissions {
     } elsif ($rule_env eq 'vm' || $rule_env eq 'ct') {
 	return {
 	    check => ['perm', '/vms/{vmid}', [ 'VM.Audit' ]],
+	}
+    } elsif ($rule_env eq 'vnet') {
+	return {
+	    description => "Needs SDN.Audit or SDN.Allocate permissions on '/sdn/zones/<zone>/<vnet>'",
+	    user => 'all',
 	}
     }
 

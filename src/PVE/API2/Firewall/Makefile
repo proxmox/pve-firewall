@@ -10,6 +10,7 @@ LIB_SOURCES=			\
 	Cluster.pm		\
 	Host.pm			\
 	VM.pm			\
+	Vnet.pm			\
 	Groups.pm
 
 all:

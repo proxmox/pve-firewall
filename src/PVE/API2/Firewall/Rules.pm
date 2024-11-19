@@ -19,6 +19,25 @@ my $api_properties = {
     },
 };
 
+=head3 check_privileges_for_method($class, $method_name, $param)
+
+If the permission checks from the register_method() call are not sufficient,
+this function can be overriden for performing additional permission checks
+before API methods are executed. If the permission check fails, this function
+should die with an appropriate error message. The name of the method calling
+this function is provided by C<$method_name> and the parameters of the API
+method are provided by C<$param>
+
+Default implementation is a no-op to preserve backwards compatibility with
+existing subclasses, since this got added later on. It preserves existing
+behavior without having to change every subclass.
+
+=cut
+
+sub check_privileges_for_method {
+    my ($class, $method_name, $param) = @_;
+}
+
 sub lock_config {
     my ($class, $param, $code) = @_;
 
@@ -93,6 +112,8 @@ sub register_get_rules {
 	},
 	code => sub {
 	    my ($param) = @_;
+
+	    $class->check_privileges_for_method('get_rules', $param);
 
 	    my ($cluster_conf, $fw_conf, $rules) = $class->load_config($param);
 
@@ -191,6 +212,8 @@ sub register_get_rule {
 	code => sub {
 	    my ($param) = @_;
 
+	    $class->check_privileges_for_method('get_rule', $param);
+
 	    my ($cluster_conf, $fw_conf, $rules) = $class->load_config($param);
 
 	    my ($list, $digest) = PVE::Firewall::copy_list_with_digest($rules);
@@ -230,6 +253,8 @@ sub register_create_rule {
 	returns => { type => "null" },
 	code => sub {
 	    my ($param) = @_;
+
+	    $class->check_privileges_for_method('create_rule', $param);
 
 	    $class->lock_config($param, sub {
 		my ($param) = @_;
@@ -303,6 +328,8 @@ sub register_update_rule {
 	returns => { type => "null" },
 	code => sub {
 	    my ($param) = @_;
+
+	    $class->check_privileges_for_method('update_rule', $param);
 
 	    $class->lock_config($param, sub {
 		my ($param) = @_;
@@ -381,6 +408,8 @@ sub register_delete_rule {
 	returns => { type => "null" },
 	code => sub {
 	    my ($param) = @_;
+
+	    $class->check_privileges_for_method('delete_rule', $param);
 
 	    $class->lock_config($param, sub {
 		my ($param) = @_;
@@ -653,6 +682,61 @@ sub save_rules {
 
     $fw_conf->{rules} = $rules;
     PVE::Firewall::save_vmfw_conf($param->{vmid}, $fw_conf);
+}
+
+__PACKAGE__->register_handlers();
+
+package PVE::API2::Firewall::VnetRules;
+
+use strict;
+use warnings;
+use PVE::JSONSchema qw(get_standard_option);
+
+use base qw(PVE::API2::Firewall::RulesBase);
+
+__PACKAGE__->additional_parameters({
+    vnet => get_standard_option('pve-sdn-vnet-id'),
+});
+
+sub check_privileges_for_method {
+    my ($class, $method_name, $param) = @_;
+
+    if ($method_name eq 'get_rule' || $method_name eq 'get_rules') {
+	PVE::API2::Firewall::Helpers::check_vnet_access($param->{vnet}, ['SDN.Audit', 'SDN.Allocate']);
+    } elsif ($method_name =~ '(update|create|delete)_rule') {
+	PVE::API2::Firewall::Helpers::check_vnet_access($param->{vnet}, ['SDN.Allocate']);
+    } else {
+	die "unknown method: $method_name";
+    }
+}
+
+sub rule_env {
+    my ($class, $param) = @_;
+
+    return 'vnet';
+}
+
+sub lock_config {
+    my ($class, $param, $code) = @_;
+
+    PVE::Firewall::lock_vnetfw_conf($param->{vnet}, 10, $code, $param);
+}
+
+sub load_config {
+    my ($class, $param) = @_;
+
+    my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
+    my $fw_conf = PVE::Firewall::load_vnetfw_conf($cluster_conf, 'vnet', $param->{vnet});
+    my $rules = $fw_conf->{rules};
+
+    return ($cluster_conf, $fw_conf, $rules);
+}
+
+sub save_rules {
+    my ($class, $param, $fw_conf, $rules) = @_;
+
+    $fw_conf->{rules} = $rules;
+    PVE::Firewall::save_vnetfw_conf($param->{vnet}, $fw_conf);
 }
 
 __PACKAGE__->register_handlers();
