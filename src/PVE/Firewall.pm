@@ -3658,6 +3658,9 @@ sub load_clusterfw_conf {
     my ($filename) = @_;
 
     $filename = $clusterfw_conf_filename if !defined($filename);
+
+    my $sdn_conf = load_sdn_conf();
+
     my $empty_conf = {
 	rules => [],
 	options => {},
@@ -3666,11 +3669,15 @@ sub load_clusterfw_conf {
 	group_comments => {},
 	ipset => {} ,
 	ipset_comments => {},
-	sdn => load_sdn_conf(),
+	sdn => $sdn_conf,
     };
 
     my $cluster_conf = generic_fw_config_parser($filename, $empty_conf, $empty_conf, 'cluster');
     $set_global_log_ratelimit->($cluster_conf->{options});
+
+    if (!$cluster_conf->{sdn}) {
+	$cluster_conf->{sdn} = $sdn_conf;
+    }
 
     return $cluster_conf;
 }
