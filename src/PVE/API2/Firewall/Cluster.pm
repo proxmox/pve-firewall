@@ -9,6 +9,7 @@ use PVE::Firewall;
 use PVE::API2::Firewall::Aliases;
 use PVE::API2::Firewall::Rules;
 use PVE::API2::Firewall::Groups;
+use PVE::API2::Firewall::Helpers;
 use PVE::API2::Firewall::IPSet;
 
 #fixme: locking?
@@ -255,7 +256,16 @@ __PACKAGE__->register_method({
 
 	my $conf = PVE::Firewall::load_clusterfw_conf();
 
-	return PVE::Firewall::Helpers::collect_refs($conf, $param->{type}, "dc");
+	# we are explicitly loading the SDN config here with the scope of the current
+	# API user, so we only return the IPSets that the user can actually use
+	my $allowed_vms = PVE::API2::Firewall::Helpers::get_allowed_vms();
+	my $allowed_vnets = PVE::API2::Firewall::Helpers::get_allowed_vnets();
+	my $sdn_conf = PVE::Firewall::load_sdn_conf($allowed_vms, $allowed_vnets);
+
+	my $cluster_refs = PVE::Firewall::Helpers::collect_refs($conf, $param->{type}, "dc");
+	my $sdn_refs = PVE::Firewall::Helpers::collect_refs($sdn_conf, $param->{type}, "sdn");
+
+	return [@$sdn_refs, @$cluster_refs];
     }});
 
 1;

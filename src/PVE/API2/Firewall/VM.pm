@@ -8,6 +8,7 @@ use PVE::JSONSchema qw(get_standard_option);
 use PVE::Cluster;
 use PVE::Firewall;
 use PVE::API2::Firewall::Rules;
+use PVE::API2::Firewall::Helpers;
 use PVE::API2::Firewall::Aliases;
 
 
@@ -281,10 +282,17 @@ sub register_handlers {
 	    my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
 	    my $fw_conf = PVE::Firewall::load_vmfw_conf($cluster_conf, $rule_env, $param->{vmid});
 
+	    # we are explicitly loading the SDN config here with the scope of the current
+	    # API user, so we only return the IPSets that the user can actually use
+	    my $allowed_vms = PVE::API2::Firewall::Helpers::get_allowed_vms();
+	    my $allowed_vnets = PVE::API2::Firewall::Helpers::get_allowed_vnets();
+	    my $sdn_conf = PVE::Firewall::load_sdn_conf($allowed_vms, $allowed_vnets);
+
 	    my $dc_refs = PVE::Firewall::Helpers::collect_refs($cluster_conf, $param->{type}, 'dc');
+	    my $sdn_refs = PVE::Firewall::Helpers::collect_refs($sdn_conf, $param->{type}, "sdn");
 	    my $vm_refs = PVE::Firewall::Helpers::collect_refs($fw_conf, $param->{type}, 'guest');
 
-	    return [@$dc_refs, @$vm_refs];
+	    return [@$dc_refs, @$sdn_refs, @$vm_refs];
 	}});
 }
 
