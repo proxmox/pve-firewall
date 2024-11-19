@@ -1736,12 +1736,12 @@ sub verify_rule {
 			$add_error->($name, "no such ipset '$2'")
 		    }
 		} else {
-		    &$add_error($name, "invalid ipset name '$value'");
+		    $add_error->($name, "invalid ipset name '$value'");
 		}
 	    } elsif ($value =~ m@^(guest/|dc/)?(${ip_alias_pattern})$@){
 		my $scope = $1 // "";
 		my $alias = lc($2);
-		&$add_error($name, "no such alias '$value'")
+		$add_error->($name, "no such alias '$value'")
 		    if !($cluster_conf->{aliases}->{$alias} || ($fw_conf && $fw_conf->{aliases}->{$alias}));
 
 		my $e;
@@ -1760,8 +1760,8 @@ sub verify_rule {
     my $type = $rule->{type};
     my $action = $rule->{action};
 
-    &$add_error('type', "missing property") if !$type;
-    &$add_error('action', "missing property") if !$action;
+    $add_error->('type', "missing property") if !$type;
+    $add_error->('action', "missing property") if !$action;
 
     if ($type) {
 	my $valid_types = $rule_env_direction_lookup->{$rule_env}
@@ -1777,22 +1777,22 @@ sub verify_rule {
 	    $add_error->('action', "unknown action '$action'")
 		if $action && ($action !~ m/^(ACCEPT|DROP|REJECT)$/);
 	} elsif ($type eq 'group') {
-	    &$add_error('type', "security groups not allowed")
+	    $add_error->('type', "security groups not allowed")
 		if !$allow_groups;
-	    &$add_error('action', "invalid characters in security group name")
+	    $add_error->('action', "invalid characters in security group name")
 		if $action && ($action !~ m/^${security_group_name_pattern}$/);
 	} else {
-	    &$add_error('type', "unknown rule type '$type'");
+	    $add_error->('type', "unknown rule type '$type'");
 	}
     }
 
     if ($rule->{iface}) {
-	&$add_error('type', "parameter -i not allowed for this rule type")
+	$add_error->('type', "parameter -i not allowed for this rule type")
 	    if !$allow_iface;
 	eval { PVE::JSONSchema::pve_verify_iface($rule->{iface}); };
-	&$add_error('iface', $@) if $@;
+	$add_error->('iface', $@) if $@;
     	if ($rule_env eq 'vm' || $rule_env eq 'ct') {
-	    &$add_error('iface', "value does not match the regex pattern 'net\\d+'")
+	    $add_error->('iface', "value does not match the regex pattern 'net\\d+'")
 		if $rule->{iface} !~  m/^net(\d+)$/;
 	}
     }
@@ -1801,14 +1801,14 @@ sub verify_rule {
 	if (my $preferred_name = $pve_fw_preferred_macro_names->{lc($rule->{macro})}) {
 	    $rule->{macro} = $preferred_name;
 	} else {
-	    &$add_error('macro', "unknown macro '$rule->{macro}'");
+	    $add_error->('macro', "unknown macro '$rule->{macro}'");
 	}
     }
 
     my $is_icmp = 0;
     if ($rule->{proto}) {
 	eval { pve_fw_verify_protocol_spec($rule->{proto}); };
-	&$add_error('proto', $@) if $@;
+	$add_error->('proto', $@) if $@;
 	&$set_ip_version(4) if $rule->{proto} eq 'icmp';
 	&$set_ip_version(6) if $rule->{proto} eq 'icmpv6';
 	&$set_ip_version(6) if $rule->{proto} eq 'ipv6-icmp';
@@ -1817,34 +1817,34 @@ sub verify_rule {
 
     if ($rule->{dport}) {
 	eval { parse_port_name_number_or_range($rule->{dport}, $is_icmp); };
-	&$add_error('dport', $@) if $@;
+	$add_error->('dport', $@) if $@;
 	my $proto = $rule->{proto};
-	&$add_error('proto', "missing property - 'dport' requires this property")
+	$add_error->('proto', "missing property - 'dport' requires this property")
 	    if !$proto;
-	&$add_error('dport', "protocol '$proto' does not support ports")
+	$add_error->('dport', "protocol '$proto' does not support ports")
 	    if !$PROTOCOLS_WITH_PORTS->{$proto} && !$is_icmp; #special cases
     }
 
     if (my $icmp_type = $rule ->{'icmp-type'}) {
 	my $proto = $rule->{proto};
-	&$add_error('proto', "missing property - 'icmp-type' requires this property")
+	$add_error->('proto', "missing property - 'icmp-type' requires this property")
 	    if !$is_icmp;
-	&$add_error('icmp-type', "'icmp-type' cannot be specified together with 'dport'")
+	$add_error->('icmp-type', "'icmp-type' cannot be specified together with 'dport'")
 	    if $rule->{dport};
 	if ($proto eq 'icmp' && !$icmp_type_names->{$icmp_type}) {
-	    &$add_error('icmp-type', "invalid icmp-type '$icmp_type' for proto 'icmp'");
+	    $add_error->('icmp-type', "invalid icmp-type '$icmp_type' for proto 'icmp'");
 	} elsif (($proto eq 'icmpv6' || $proto eq 'ipv6-icmp') && !$icmpv6_type_names->{$icmp_type}) {
-	    &$add_error('icmp-type', "invalid icmp-type '$icmp_type' for proto '$proto'");
+	    $add_error->('icmp-type', "invalid icmp-type '$icmp_type' for proto '$proto'");
 	}
     }
 
     if ($rule->{sport}) {
 	eval { parse_port_name_number_or_range($rule->{sport}, 0); };
-	&$add_error('sport', $@) if $@;
+	$add_error->('sport', $@) if $@;
 	my $proto = $rule->{proto};
-	&$add_error('proto', "missing property - 'sport' requires this property")
+	$add_error->('proto', "missing property - 'sport' requires this property")
 	    if !$proto;
-	&$add_error('sport', "protocol '$proto' does not support ports")
+	$add_error->('sport', "protocol '$proto' does not support ports")
 	    if !$PROTOCOLS_WITH_PORTS->{$proto};
     }
 
@@ -1853,7 +1853,7 @@ sub verify_rule {
 	    my $source_ipversion = parse_address_list($rule->{source});
 	    &$set_ip_version($source_ipversion);
 	};
-	&$add_error('source', $@) if $@;
+	$add_error->('source', $@) if $@;
 	&$check_ipset_or_alias_property('source', $ipversion);
     }
 
@@ -1862,7 +1862,7 @@ sub verify_rule {
 	    my $dest_ipversion = parse_address_list($rule->{dest});
 	    &$set_ip_version($dest_ipversion);
 	};
-	&$add_error('dest', $@) if $@;
+	$add_error->('dest', $@) if $@;
 	&$check_ipset_or_alias_property('dest', $ipversion);
     }
 
@@ -1874,10 +1874,10 @@ sub verify_rule {
 	    if (ref($err) eq "PVE::Exception" && $err->{errors}) {
 		my $eh = $err->{errors};
 		foreach my $p (keys %$eh) {
-		    &$add_error($p, $eh->{$p});
+		    $add_error->($p, $eh->{$p});
 		}
 	    } else {
-		&$add_error('macro', "$err");
+		$add_error->('macro', "$err");
 	    }
 	}
     }
@@ -3514,17 +3514,17 @@ sub save_vmfw_conf {
     my $raw = '';
 
     my $options = $vmfw_conf->{options};
-    $raw .= &$format_options($options) if $options && scalar(keys %$options);
+    $raw .= $format_options->($options) if $options && scalar(keys %$options);
 
     my $aliases = $vmfw_conf->{aliases};
-    $raw .= &$format_aliases($aliases) if $aliases && scalar(keys %$aliases);
+    $raw .= $format_aliases->($aliases) if $aliases && scalar(keys %$aliases);
 
-    $raw .= &$format_ipsets($vmfw_conf) if $vmfw_conf->{ipset};
+    $raw .= $format_ipsets->($vmfw_conf) if $vmfw_conf->{ipset};
 
     my $rules = $vmfw_conf->{rules} || [];
     if ($rules && scalar(@$rules)) {
 	$raw .= "[RULES]\n\n";
-	$raw .= &$format_rules($rules, 1);
+	$raw .= $format_rules->($rules, 1);
 	$raw .= "\n";
     }
 
@@ -3780,17 +3780,17 @@ sub save_clusterfw_conf {
     my $raw = '';
 
     my $options = $cluster_conf->{options};
-    $raw .= &$format_options($options) if $options && scalar(keys %$options);
+    $raw .= $format_options->($options) if $options && scalar(keys %$options);
 
     my $aliases = $cluster_conf->{aliases};
-    $raw .= &$format_aliases($aliases) if $aliases && scalar(keys %$aliases);
+    $raw .= $format_aliases->($aliases) if $aliases && scalar(keys %$aliases);
 
-    $raw .= &$format_ipsets($cluster_conf) if $cluster_conf->{ipset};
+    $raw .= $format_ipsets->($cluster_conf) if $cluster_conf->{ipset};
 
     my $rules = $cluster_conf->{rules};
     if ($rules && scalar(@$rules)) {
 	$raw .= "[RULES]\n\n";
-	$raw .= &$format_rules($rules, 1);
+	$raw .= $format_rules->($rules, 1);
 	$raw .= "\n";
     }
 
@@ -3804,7 +3804,7 @@ sub save_clusterfw_conf {
 		$raw .= "[group $group]\n\n";
 	    }
 
-	    $raw .= &$format_rules($rules, 0);
+	    $raw .= $format_rules->($rules, 0);
 	    $raw .= "\n";
 	}
     }
@@ -3845,12 +3845,12 @@ sub save_hostfw_conf {
     my $raw = '';
 
     my $options = $hostfw_conf->{options};
-    $raw .= &$format_options($options) if $options && scalar(keys %$options);
+    $raw .= $format_options->($options) if $options && scalar(keys %$options);
 
     my $rules = $hostfw_conf->{rules};
     if ($rules && scalar(@$rules)) {
 	$raw .= "[RULES]\n\n";
-	$raw .= &$format_rules($rules, 1);
+	$raw .= $format_rules->($rules, 1);
 	$raw .= "\n";
     }
 
@@ -3887,12 +3887,12 @@ sub save_vnetfw_conf {
     my $raw = '';
 
     my $options = $conf->{options};
-    $raw .= &$format_options($options) if $options && scalar(keys %$options);
+    $raw .= $format_options->($options) if $options && scalar(keys %$options);
 
     my $rules = $conf->{rules};
     if ($rules && scalar(@$rules)) {
 	$raw .= "[RULES]\n\n";
-	$raw .= &$format_rules($rules, 1);
+	$raw .= $format_rules->($rules, 1);
 	$raw .= "\n";
     }
 
