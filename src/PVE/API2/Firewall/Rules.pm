@@ -7,6 +7,7 @@ use PVE::JSONSchema qw(get_standard_option);
 use PVE::Exception qw(raise raise_param_exc);
 
 use PVE::Firewall;
+use PVE::API2::Firewall::Helpers;
 
 use base qw(PVE::RESTHandler);
 
@@ -237,6 +238,18 @@ sub register_create_rule {
 
 		my $rule = {};
 
+		# reloading the scoped SDN config for verification, so users can
+		# only use IPSets they have permissions for
+		my $allowed_vms = PVE::API2::Firewall::Helpers::get_allowed_vms();
+		my $allowed_vnets = PVE::API2::Firewall::Helpers::get_allowed_vnets();
+		my $sdn_conf = PVE::Firewall::load_sdn_conf($allowed_vms, $allowed_vnets);
+
+		if ($cluster_conf) {
+		    $cluster_conf->{sdn} = $sdn_conf;
+		} else {
+		    $fw_conf->{sdn} = $sdn_conf;
+		}
+
 		PVE::Firewall::copy_rule_data($rule, $param);
 		PVE::Firewall::verify_rule($rule, $cluster_conf, $fw_conf, $class->rule_env());
 
@@ -319,6 +332,18 @@ sub register_update_rule {
 		    PVE::Firewall::copy_rule_data($rule, $param);
 
 		    PVE::Firewall::delete_rule_properties($rule, $param->{'delete'}) if $param->{'delete'};
+
+		    # reloading the scoped SDN config for verification, so users can
+		    # only use IPSets they have permissions for
+		    my $allowed_vms = PVE::API2::Firewall::Helpers::get_allowed_vms();
+		    my $allowed_vnets = PVE::API2::Firewall::Helpers::get_allowed_vnets();
+		    my $sdn_conf = PVE::Firewall::load_sdn_conf($allowed_vms, $allowed_vnets);
+
+		    if ($cluster_conf) {
+			$cluster_conf->{sdn} = $sdn_conf;
+		    } else {
+			$fw_conf->{sdn} = $sdn_conf;
+		    }
 
 		    PVE::Firewall::verify_rule($rule, $cluster_conf, $fw_conf, $class->rule_env());
 		}

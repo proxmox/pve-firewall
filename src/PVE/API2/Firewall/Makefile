@@ -4,6 +4,7 @@ PERLDIR=$(DESTDIR)/$(PREFIX)/share/perl5
 
 LIB_SOURCES=			\
 	Aliases.pm		\
+	Helpers.pm		\
 	IPSet.pm		\
 	Rules.pm		\
 	Cluster.pm		\

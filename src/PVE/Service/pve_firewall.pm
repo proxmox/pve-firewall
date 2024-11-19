@@ -158,7 +158,7 @@ __PACKAGE__->register_method ({
 
 	    PVE::Firewall::set_verbose(1); # show syntax errors
 
-	    my $cluster_conf = PVE::Firewall::load_clusterfw_conf(undef);
+	    my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
 	    $res->{enable} = $cluster_conf->{options}->{enable} ? 1 : 0;
 
 	    if ($status eq 'running') {
@@ -202,7 +202,7 @@ __PACKAGE__->register_method ({
 
 	    PVE::Firewall::set_verbose(1);
 
-	    my $cluster_conf = PVE::Firewall::load_clusterfw_conf(undef);
+	    my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
 	    my ($ruleset, $ipset_ruleset, $rulesetv6, $ebtables_ruleset) = PVE::Firewall::compile($cluster_conf, undef, undef);
 
 	    print "ipset cmdlist:\n";

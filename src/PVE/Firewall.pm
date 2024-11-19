@@ -25,6 +25,7 @@ use PVE::Tools qw($IPV4RE $IPV6RE);
 use PVE::Tools qw(run_command lock_file dir_glob_foreach);
 
 use PVE::Firewall::Helpers;
+use PVE::RS::Firewall::SDN;
 
 my $pvefw_conf_dir = "/etc/pve/firewall";
 my $clusterfw_conf_filename = "$pvefw_conf_dir/cluster.fw";
@@ -1689,10 +1690,15 @@ sub verify_rule {
 
 	if (my $value = $rule->{$name}) {
 	    if ($value =~ m/^\+/) {
-		if ($value =~ m@^\+(guest/|dc/)?(${ipset_name_pattern})$@) {
-		    &$add_error($name, "no such ipset '$2'")
-			if !($cluster_conf->{ipset}->{$2} || ($fw_conf && $fw_conf->{ipset}->{$2}));
-
+		if ($value =~ m@^\+(guest/|dc/|sdn/)?(${ipset_name_pattern})$@) {
+		    if (
+			!($cluster_conf->{ipset}->{$2})
+			&& !($fw_conf && $fw_conf->{ipset}->{$2})
+			&& !($cluster_conf->{sdn} && $cluster_conf->{sdn}->{ipset}->{$2})
+			&& !($fw_conf->{sdn} && $fw_conf->{sdn}->{ipset}->{$2})
+		    ) {
+			$add_error->($name, "no such ipset '$2'")
+		    }
 		} else {
 		    &$add_error($name, "invalid ipset name '$value'");
 		}
@@ -2108,13 +2114,18 @@ sub ipt_gen_src_or_dst_match {
 
     my $match;
     if ($adr =~ m/^\+/) {
-	if ($adr =~ m@^\+(guest/|dc/)?(${ipset_name_pattern})$@) {
+	if ($adr =~ m@^\+(guest/|dc/|sdn/)?(${ipset_name_pattern})$@) {
 	    my $scope = $1 // "";
 	    my $name = $2;
 	    my $ipset_chain;
-	    if ($scope ne 'dc/' && $fw_conf && $fw_conf->{ipset}->{$name}) {
+
+	    my $is_scope = sub { return !$scope || $scope eq "$_[0]/" };
+
+	    if ($is_scope->('guest') && $fw_conf && $fw_conf->{ipset}->{$name}) {
 		$ipset_chain = compute_ipset_chain_name($fw_conf->{vmid}, $name, $ipversion);
-	    } elsif ($scope ne 'guest/' && $cluster_conf && $cluster_conf->{ipset}->{$name}) {
+	    } elsif ($is_scope->('dc') && $cluster_conf && $cluster_conf->{ipset}->{$name}) {
+		$ipset_chain = compute_ipset_chain_name(0, $name, $ipversion);
+	    } elsif ($is_scope->('sdn') && $cluster_conf->{sdn} && $cluster_conf->{sdn}->{ipset}->{$name}) {
 		$ipset_chain = compute_ipset_chain_name(0, $name, $ipversion);
 	    } else {
 		die "no such ipset '$name'\n";
@@ -3655,12 +3666,26 @@ sub load_clusterfw_conf {
 	group_comments => {},
 	ipset => {} ,
 	ipset_comments => {},
+	sdn => load_sdn_conf(),
     };
 
     my $cluster_conf = generic_fw_config_parser($filename, $empty_conf, $empty_conf, 'cluster');
     $set_global_log_ratelimit->($cluster_conf->{options});
 
     return $cluster_conf;
+}
+
+sub load_sdn_conf {
+    my ($allowed_vms, $allowed_vnets) = @_;
+
+    my $empty_sdn_config = { ipset => {} , ipset_comments => {} };
+
+    my $sdn_config = eval {
+	PVE::RS::Firewall::SDN::config($allowed_vnets, $allowed_vms)
+    };
+    warn $@ if $@;
+
+    return $sdn_config // $empty_sdn_config;
 }
 
 sub save_clusterfw_conf {
@@ -3768,7 +3793,7 @@ sub compile {
 
 	$vmfw_configs = read_vm_firewall_configs($cluster_conf, $vmdata, $testdir);
     } else { # normal operation
-	$cluster_conf = load_clusterfw_conf(undef) if !$cluster_conf;
+	$cluster_conf = load_clusterfw_conf() if !$cluster_conf;
 
 	$hostfw_conf = load_hostfw_conf($cluster_conf, undef) if !$hostfw_conf;
 
@@ -4043,6 +4068,7 @@ sub compile_ipsets {
     }
 
     generate_ipset_chains($ipset_ruleset, undef, $cluster_conf, undef, $cluster_conf->{ipset});
+    generate_ipset_chains($ipset_ruleset, undef, $cluster_conf, undef, $cluster_conf->{sdn}->{ipset});
 
     return $ipset_ruleset;
 }
