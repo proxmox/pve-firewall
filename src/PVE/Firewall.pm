@@ -29,6 +29,7 @@ use PVE::RS::Firewall::SDN;
 
 my $pvefw_conf_dir = "/etc/pve/firewall";
 my $clusterfw_conf_filename = "$pvefw_conf_dir/cluster.fw";
+my $vnetfw_conf_dir = "/etc/pve/sdn/firewall";
 
 # dynamically include PVE::QemuServer and PVE::LXC
 # to avoid dependency problems
@@ -1290,6 +1291,12 @@ our $cluster_option_properties = {
 	optional => 1,
 	enum => ['ACCEPT', 'REJECT', 'DROP'],
     },
+    policy_forward => {
+	description => "Forward policy.",
+	type => 'string',
+	optional => 1,
+	enum => ['ACCEPT', 'DROP'],
+    },
     log_ratelimit => {
 	description => "Log ratelimiting settings",
 	type => 'string', format => {
@@ -1329,6 +1336,8 @@ our $host_option_properties = {
 	description => "Log level for incoming traffic." }),
     log_level_out =>  get_standard_option('pve-fw-loglevel', {
 	description => "Log level for outgoing traffic." }),
+    log_level_forward =>  get_standard_option('pve-fw-loglevel', {
+	description => "Log level for forwarded traffic." }),
     tcp_flags_log_level =>  get_standard_option('pve-fw-loglevel', {
 	description => "Log level for illegal tcp flags filter." }),
     smurf_log_level =>  get_standard_option('pve-fw-loglevel', {
@@ -1476,6 +1485,23 @@ our $vm_option_properties = {
 
 };
 
+our $vnet_option_properties = {
+    enable => {
+	description => "Enable/disable firewall rules.",
+	type => 'boolean',
+	default => 0,
+	optional => 1,
+    },
+    policy_forward => {
+	description => "Forward policy.",
+	type => 'string',
+	optional => 1,
+	enum => ['ACCEPT', 'DROP'],
+    },
+    log_level_forward =>  get_standard_option('pve-fw-loglevel', {
+	description => "Log level for forwarded traffic." }),
+};
+
 
 my $addr_list_descr = "This can refer to a single IP address, an IP set ('+ipsetname') or an IP alias definition. You can also specify an address range like '20.34.101.207-201.3.9.99', or a list of IP addresses and networks (entries are separated by comma). Please do not mix IPv4 and IPv6 addresses inside such lists.";
 
@@ -1493,7 +1519,7 @@ my $rule_properties = {
 	description => "Rule type.",
 	type => 'string',
 	optional => 1,
-	enum => ['in', 'out', 'group'],
+	enum => ['in', 'out', 'forward', 'group'],
     },
     action => {
 	description => "Rule action ('ACCEPT', 'DROP', 'REJECT') or security group name.",
@@ -1651,8 +1677,18 @@ my $rule_env_iface_lookup = {
     'ct' => 1,
     'vm' => 1,
     'group' => 0,
+    'vnet' => 0,
     'cluster' => 1,
     'host' => 1,
+};
+
+my $rule_env_direction_lookup = {
+    'ct' => ['in', 'out', 'group'],
+    'vm' => ['in', 'out', 'group'],
+    'group' => ['in', 'out', 'forward'],
+    'cluster' => ['in', 'out', 'forward', 'group'],
+    'host' => ['in', 'out', 'forward', 'group'],
+    'vnet' => ['forward', 'group'],
 };
 
 sub verify_rule {
@@ -1728,8 +1764,17 @@ sub verify_rule {
     &$add_error('action', "missing property") if !$action;
 
     if ($type) {
-	if ($type eq  'in' || $type eq 'out') {
-	    &$add_error('action', "unknown action '$action'")
+	my $valid_types = $rule_env_direction_lookup->{$rule_env}
+	    or die "unknown rule_env '$rule_env'\n";
+
+	$add_error->('type', "invalid rule type '$type' for rule_env '$rule_env'")
+	    if !(grep { $_ eq $type } @$valid_types);
+
+	if ($type eq  'in' || $type eq 'out' || $type eq 'forward') {
+	    $add_error->('action', 'cannot define REJECT rules on forward chain')
+		if $type eq 'forward' && $action eq 'REJECT';
+
+	    $add_error->('action', "unknown action '$action'")
 		if $action && ($action !~ m/^(ACCEPT|DROP|REJECT)$/);
 	} elsif ($type eq 'group') {
 	    &$add_error('type', "security groups not allowed")
@@ -2835,7 +2880,7 @@ sub parse_fw_rule {
     $rule->{type} = lc($1);
     $rule->{action} = $2;
 
-    if ($rule->{type} eq  'in' || $rule->{type} eq 'out') {
+    if ($rule->{type} eq  'in' || $rule->{type} eq 'out' || $rule->{type} eq 'forward') {
 	if ($rule->{action} =~ m/^(\S+)\((ACCEPT|DROP|REJECT)\)$/) {
 	    $rule->{macro} = $1;
 	    $rule->{action} = $2;
@@ -2949,7 +2994,7 @@ sub parse_hostfw_option {
     if ($line =~ m/^(enable|nosmurfs|tcpflags|ndp|log_nf_conntrack|nf_conntrack_allow_invalid|protection_synflood|nftables):\s*(0|1)\s*$/i) {
 	$opt = lc($1);
 	$value = int($2);
-    } elsif ($line =~ m/^(log_level_in|log_level_out|tcp_flags_log_level|smurf_log_level):\s*(($loglevels)\s*)?$/i) {
+    } elsif ($line =~ m/^(log_level_(?:in|out|forward)|tcp_flags_log_level|smurf_log_level):\s*(($loglevels)\s*)?$/i) {
 	$opt = lc($1);
 	$value = $2 ? lc($3) : '';
     } elsif ($line =~ m/^(nf_conntrack_helpers):\s*(((\S+)[,]?)+)\s*$/i) {
@@ -2980,12 +3025,30 @@ sub parse_clusterfw_option {
     } elsif ($line =~ m/^(ebtables):\s*(0|1)\s*$/i) {
 	$opt = lc($1);
 	$value = int($2);
-    } elsif ($line =~ m/^(policy_(in|out)):\s*(ACCEPT|DROP|REJECT)\s*$/i) {
+    } elsif ($line =~ m/^(policy_(in|out|forward)):\s*(ACCEPT|DROP|REJECT)\s*$/i) {
 	$opt = lc($1);
 	$value = uc($3);
     } elsif ($line =~ m/^(log_ratelimit):\s*(\S+)\s*$/) {
 	$opt = lc($1);
 	$value = $2;
+    } else {
+	die "can't parse option '$line'\n"
+    }
+
+    return ($opt, $value);
+}
+
+sub parse_vnetfw_option {
+    my ($line) = @_;
+
+    my ($opt, $value);
+
+    if ($line =~ m/^(enable):\s*(\d+)\s*$/i) {
+	$opt = lc($1);
+	$value = int($2);
+    } elsif ($line =~ m/^(policy_forward):\s*(ACCEPT|DROP)\s*$/i) {
+	$opt = lc($1);
+	$value = uc($2);
     } else {
 	die "can't parse option '$line'\n"
     }
@@ -3159,6 +3222,8 @@ sub generic_fw_config_parser {
 		    ($opt, $value) = parse_clusterfw_option($line);
 		} elsif ($rule_env eq 'host') {
 		    ($opt, $value) = parse_hostfw_option($line);
+		} elsif ($rule_env eq 'vnet') {
+		    ($opt, $value) = parse_vnetfw_option($line);
 		} else {
 		    ($opt, $value) = parse_vmfw_option($line);
 		}
@@ -3298,6 +3363,10 @@ sub lock_vmfw_conf {
     return PVE::Firewall::Helpers::lock_vmfw_conf(@_);
 }
 
+sub lock_vnetfw_conf {
+    return PVE::Firewall::Helpers::lock_vnetfw_conf(@_);
+}
+
 sub load_vmfw_conf {
     my ($cluster_conf, $rule_env, $vmid, $dir) = @_;
 
@@ -3324,7 +3393,7 @@ my $format_rules = sub {
     my $raw = '';
 
     foreach my $rule (@$rules) {
-	if ($rule->{type} eq  'in' || $rule->{type} eq 'out' || $rule->{type} eq 'group') {
+	if (grep { $_ eq $rule->{type} } qw(in out forward group)) {
 	    $raw .= '|' if defined($rule->{enable}) && !$rule->{enable};
 	    $raw .= uc($rule->{type});
 	    if ($rule->{macro}) {
@@ -3774,6 +3843,50 @@ sub save_hostfw_conf {
 	$raw .= &$format_rules($rules, 1);
 	$raw .= "\n";
     }
+
+    if ($raw) {
+	PVE::Tools::file_set_contents($filename, $raw);
+    } else {
+	unlink $filename;
+    }
+}
+
+sub load_vnetfw_conf {
+    my ($cluster_conf, $rule_env, $vnet, $dir) = @_;
+
+    $rule_env = 'vnet' if !defined($rule_env);
+
+    my $filename = "$vnetfw_conf_dir/$vnet.fw";
+
+    my $empty_conf = {
+	rules => [],
+	options => {},
+    };
+
+    my $vnetfw_conf = generic_fw_config_parser($filename, $cluster_conf, $empty_conf, $rule_env);
+    $vnetfw_conf->{vnet} = $vnet;
+
+    return $vnetfw_conf;
+}
+
+sub save_vnetfw_conf {
+    my ($vnet, $conf) = @_;
+
+    my $filename = "$vnetfw_conf_dir/$vnet.fw";
+
+    my $raw = '';
+
+    my $options = $conf->{options};
+    $raw .= &$format_options($options) if $options && scalar(keys %$options);
+
+    my $rules = $conf->{rules};
+    if ($rules && scalar(@$rules)) {
+	$raw .= "[RULES]\n\n";
+	$raw .= &$format_rules($rules, 1);
+	$raw .= "\n";
+    }
+
+    mkdir($vnetfw_conf_dir, 0755) if !-d $vnetfw_conf_dir;
 
     if ($raw) {
 	PVE::Tools::file_set_contents($filename, $raw);

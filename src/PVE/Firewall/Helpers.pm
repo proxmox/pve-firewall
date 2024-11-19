@@ -32,6 +32,18 @@ sub lock_vmfw_conf {
     return $res;
 }
 
+sub lock_vnetfw_conf {
+    my ($vnet, $timeout, $code, @param) = @_;
+
+    die "can't lock vnet firewall config for undefined vnet\n"
+	if !defined($vnet);
+
+    my $res = PVE::Cluster::cfs_lock_firewall("vnet-$vnet", $timeout, $code, @param);
+    die $@ if $@;
+
+    return $res;
+}
+
 sub remove_vmfw_conf {
     my ($vmid) = @_;
 
