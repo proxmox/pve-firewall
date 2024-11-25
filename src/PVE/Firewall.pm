@@ -3053,12 +3053,17 @@ sub parse_vnetfw_option {
 
     my ($opt, $value);
 
+    my $loglevels = "emerg|alert|crit|err|warning|notice|info|debug|nolog";
+
     if ($line =~ m/^(enable):\s*(\d+)\s*$/i) {
 	$opt = lc($1);
 	$value = int($2);
     } elsif ($line =~ m/^(policy_forward):\s*(ACCEPT|DROP)\s*$/i) {
 	$opt = lc($1);
 	$value = uc($2);
+    } elsif ($line =~ m/^(log_level_forward):\s*($loglevels)\s*$/i) {
+	$opt = lc($1);
+	$value = lc($2);
     } else {
 	die "can't parse option '$line'\n"
     }
