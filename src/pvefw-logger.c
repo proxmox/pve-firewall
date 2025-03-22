@@ -77,8 +77,8 @@ Example:
 
 #define LOGFILE "/var/log/pve-firewall.log"
 
-#define LOCKFILE "/var/lock/pvefw-logger.lck"
-#define PIDFILE "/var/run/pvefw-logger.pid"
+#define LOCKFILE "/run/lock/pvefw-logger.lck"
+#define PIDFILE "/run/pvefw-logger.pid"
 #define LOG_CONNTRACK_FILE "/var/lib/pve-firewall/log_nf_conntrack"
 
 #define LQ_LEN 512

@@ -171,7 +171,7 @@ eval {
 my $nodename = PVE::INotify::nodename();
 my $hostfw_conf_filename = "/etc/pve/nodes/$nodename/host.fw";
 
-my $pve_fw_lock_filename = "/var/lock/pvefw.lck";
+my $pve_fw_lock_filename = "/run/lock/pvefw.lck";
 
 my $default_log_level = 'nolog'; # avoid logs by default
 my $global_log_ratelimit = '--limit 1/sec';
