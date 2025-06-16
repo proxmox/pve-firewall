@@ -1,3 +1,9 @@
+pve-firewall (6.0.0) trixie; urgency=medium
+
+  * re-build for Debian 13 Trixie based Proxmox releases.
+
+ -- Proxmox Support Team <support@proxmox.com>  Mon, 16 Jun 2025 21:51:13 +0200
+
 pve-firewall (5.1.1) bookworm; urgency=medium
 
   * fix #5925: vnet: add parsing logic for log_level_forward
