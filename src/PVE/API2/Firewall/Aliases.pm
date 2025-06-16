@@ -11,17 +11,21 @@ use base qw(PVE::RESTHandler);
 
 my $api_properties = {
     cidr => {
-	description => "Network/IP specification in CIDR format.",
-	type => 'string', format => 'IPorCIDR',
+        description => "Network/IP specification in CIDR format.",
+        type => 'string',
+        format => 'IPorCIDR',
     },
     name => get_standard_option('pve-fw-alias'),
-    rename => get_standard_option('pve-fw-alias', {
-	description => "Rename an existing alias.",
-	optional => 1,
-    }),
+    rename => get_standard_option(
+        'pve-fw-alias',
+        {
+            description => "Rename an existing alias.",
+            optional => 1,
+        },
+    ),
     comment => {
-	type => 'string',
-	optional => 1,
+        type => 'string',
+        optional => 1,
     },
 };
 
@@ -57,7 +61,7 @@ sub additional_parameters {
     my ($class, $new_value) = @_;
 
     if (defined($new_value)) {
-	$additional_param_hash->{$class} = $new_value;
+        $additional_param_hash->{$class} = $new_value;
     }
 
     # return a copy
@@ -72,7 +76,7 @@ my $aliases_to_list = sub {
 
     my $list = [];
     foreach my $k (sort keys %$aliases) {
-	push @$list, $aliases->{$k};
+        push @$list, $aliases->{$k};
     }
     return $list;
 };
@@ -83,40 +87,41 @@ sub register_get_aliases {
     my $properties = $class->additional_parameters();
 
     $class->register_method({
-	name => 'get_aliases',
-	path => '',
-	method => 'GET',
-	description => "List aliases",
-	permissions => PVE::Firewall::rules_audit_permissions($class->rule_env()),
-	parameters => {
-	    additionalProperties => 0,
-	    properties => $properties,
-	},
-	returns => {
-	    type => 'array',
-	    items => {
-		type => "object",
-		properties => {
-		    name => { type => 'string' },
-		    cidr => { type => 'string' },
-		    comment => {
-			type => 'string',
-			optional => 1,
-		    },
-		    digest => get_standard_option('pve-config-digest', { optional => 0} ),
-		},
-	    },
-	    links => [ { rel => 'child', href => "{name}" } ],
-	},
-	code => sub {
-	    my ($param) = @_;
+        name => 'get_aliases',
+        path => '',
+        method => 'GET',
+        description => "List aliases",
+        permissions => PVE::Firewall::rules_audit_permissions($class->rule_env()),
+        parameters => {
+            additionalProperties => 0,
+            properties => $properties,
+        },
+        returns => {
+            type => 'array',
+            items => {
+                type => "object",
+                properties => {
+                    name => { type => 'string' },
+                    cidr => { type => 'string' },
+                    comment => {
+                        type => 'string',
+                        optional => 1,
+                    },
+                    digest => get_standard_option('pve-config-digest', { optional => 0 }),
+                },
+            },
+            links => [{ rel => 'child', href => "{name}" }],
+        },
+        code => sub {
+            my ($param) = @_;
 
-	    my ($fw_conf, $aliases) = $class->load_config($param);
+            my ($fw_conf, $aliases) = $class->load_config($param);
 
-	    my $list = &$aliases_to_list($aliases);
+            my $list = &$aliases_to_list($aliases);
 
-	    return PVE::Firewall::copy_list_with_digest($list);
-	}});
+            return PVE::Firewall::copy_list_with_digest($list);
+        },
+    });
 }
 
 sub register_create_alias {
@@ -129,40 +134,44 @@ sub register_create_alias {
     $properties->{comment} = $api_properties->{comment};
 
     $class->register_method({
-	name => 'create_alias',
-	path => '',
-	method => 'POST',
-	description => "Create IP or Network Alias.",
-	permissions => PVE::Firewall::rules_modify_permissions($class->rule_env()),
-	protected => 1,
-	parameters => {
-	    additionalProperties => 0,
-	    properties => $properties,
-	},
-	returns => { type => "null" },
-	code => sub {
-	    my ($param) = @_;
+        name => 'create_alias',
+        path => '',
+        method => 'POST',
+        description => "Create IP or Network Alias.",
+        permissions => PVE::Firewall::rules_modify_permissions($class->rule_env()),
+        protected => 1,
+        parameters => {
+            additionalProperties => 0,
+            properties => $properties,
+        },
+        returns => { type => "null" },
+        code => sub {
+            my ($param) = @_;
 
-	    $class->lock_config($param, sub {
-		my ($param) = @_;
+            $class->lock_config(
+                $param,
+                sub {
+                    my ($param) = @_;
 
-		my ($fw_conf, $aliases) = $class->load_config($param);
+                    my ($fw_conf, $aliases) = $class->load_config($param);
 
-		my $name = lc($param->{name});
+                    my $name = lc($param->{name});
 
-		raise_param_exc({ name => "alias '$param->{name}' already exists" })
-		    if defined($aliases->{$name});
+                    raise_param_exc({ name => "alias '$param->{name}' already exists" })
+                        if defined($aliases->{$name});
 
-		my $data = { name => $param->{name}, cidr => $param->{cidr} };
-		$data->{comment} = $param->{comment} if $param->{comment};
+                    my $data = { name => $param->{name}, cidr => $param->{cidr} };
+                    $data->{comment} = $param->{comment} if $param->{comment};
 
-		$aliases->{$name} = $data;
+                    $aliases->{$name} = $data;
 
-		$class->save_aliases($param, $fw_conf, $aliases);
-	    });
+                    $class->save_aliases($param, $fw_conf, $aliases);
+                },
+            );
 
-	    return undef;
-	}});
+            return undef;
+        },
+    });
 }
 
 sub register_read_alias {
@@ -173,28 +182,29 @@ sub register_read_alias {
     $properties->{name} = $api_properties->{name};
 
     $class->register_method({
-	name => 'read_alias',
-	path => '{name}',
-	method => 'GET',
-	description => "Read alias.",
-	permissions => PVE::Firewall::rules_audit_permissions($class->rule_env()),
-	parameters => {
-	    additionalProperties => 0,
-	    properties => $properties,
-	},
-	returns => { type => "object" },
-	code => sub {
-	    my ($param) = @_;
+        name => 'read_alias',
+        path => '{name}',
+        method => 'GET',
+        description => "Read alias.",
+        permissions => PVE::Firewall::rules_audit_permissions($class->rule_env()),
+        parameters => {
+            additionalProperties => 0,
+            properties => $properties,
+        },
+        returns => { type => "object" },
+        code => sub {
+            my ($param) = @_;
 
-	    my ($fw_conf, $aliases) = $class->load_config($param);
+            my ($fw_conf, $aliases) = $class->load_config($param);
 
-	    my $name = lc($param->{name});
+            my $name = lc($param->{name});
 
-	    raise_param_exc({ name => "no such alias" })
-		if !defined($aliases->{$name});
+            raise_param_exc({ name => "no such alias" })
+                if !defined($aliases->{$name});
 
-	    return $aliases->{$name};
-	}});
+            return $aliases->{$name};
+        },
+    });
 }
 
 sub register_update_alias {
@@ -209,56 +219,60 @@ sub register_update_alias {
     $properties->{digest} = get_standard_option('pve-config-digest');
 
     $class->register_method({
-	name => 'update_alias',
-	path => '{name}',
-	method => 'PUT',
-	description => "Update IP or Network alias.",
-	permissions => PVE::Firewall::rules_modify_permissions($class->rule_env()),
-	protected => 1,
-	parameters => {
-	    additionalProperties => 0,
-	    properties => $properties,
-	},
-	returns => { type => "null" },
-	code => sub {
-	    my ($param) = @_;
+        name => 'update_alias',
+        path => '{name}',
+        method => 'PUT',
+        description => "Update IP or Network alias.",
+        permissions => PVE::Firewall::rules_modify_permissions($class->rule_env()),
+        protected => 1,
+        parameters => {
+            additionalProperties => 0,
+            properties => $properties,
+        },
+        returns => { type => "null" },
+        code => sub {
+            my ($param) = @_;
 
-	    $class->lock_config($param, sub {
-		my ($param) = @_;
+            $class->lock_config(
+                $param,
+                sub {
+                    my ($param) = @_;
 
-		my ($fw_conf, $aliases) = $class->load_config($param);
+                    my ($fw_conf, $aliases) = $class->load_config($param);
 
-		my $list = &$aliases_to_list($aliases);
+                    my $list = &$aliases_to_list($aliases);
 
-		my (undef, $digest) = PVE::Firewall::copy_list_with_digest($list);
+                    my (undef, $digest) = PVE::Firewall::copy_list_with_digest($list);
 
-		PVE::Tools::assert_if_modified($digest, $param->{digest});
+                    PVE::Tools::assert_if_modified($digest, $param->{digest});
 
-		my $name = lc($param->{name});
+                    my $name = lc($param->{name});
 
-		raise_param_exc({ name => "no such alias" }) if !$aliases->{$name};
+                    raise_param_exc({ name => "no such alias" }) if !$aliases->{$name};
 
-		my $data = { name => $param->{name}, cidr => $param->{cidr} };
-		$data->{comment} = $param->{comment} if $param->{comment};
+                    my $data = { name => $param->{name}, cidr => $param->{cidr} };
+                    $data->{comment} = $param->{comment} if $param->{comment};
 
-		$aliases->{$name} = $data;
+                    $aliases->{$name} = $data;
 
-		my $rename = $param->{rename};
-		$rename = lc($rename) if $rename;
+                    my $rename = $param->{rename};
+                    $rename = lc($rename) if $rename;
 
-		if ($rename && ($name ne $rename)) {
-		    raise_param_exc({ name => "alias '$param->{rename}' already exists" })
-			if defined($aliases->{$rename});
-		    $aliases->{$name}->{name} = $param->{rename};
-		    $aliases->{$rename} = $aliases->{$name};
-		    delete $aliases->{$name};
-		}
+                    if ($rename && ($name ne $rename)) {
+                        raise_param_exc({ name => "alias '$param->{rename}' already exists" })
+                            if defined($aliases->{$rename});
+                        $aliases->{$name}->{name} = $param->{rename};
+                        $aliases->{$rename} = $aliases->{$name};
+                        delete $aliases->{$name};
+                    }
 
-		$class->save_aliases($param, $fw_conf, $aliases);
-	    });
+                    $class->save_aliases($param, $fw_conf, $aliases);
+                },
+            );
 
-	    return undef;
-	}});
+            return undef;
+        },
+    });
 }
 
 sub register_delete_alias {
@@ -270,37 +284,41 @@ sub register_delete_alias {
     $properties->{digest} = get_standard_option('pve-config-digest');
 
     $class->register_method({
-	name => 'remove_alias',
-	path => '{name}',
-	method => 'DELETE',
-	description => "Remove IP or Network alias.",
-	permissions => PVE::Firewall::rules_modify_permissions($class->rule_env()),
-	protected => 1,
-	parameters => {
-	    additionalProperties => 0,
-	    properties => $properties,
-	},
-	returns => { type => "null" },
-	code => sub {
-	    my ($param) = @_;
+        name => 'remove_alias',
+        path => '{name}',
+        method => 'DELETE',
+        description => "Remove IP or Network alias.",
+        permissions => PVE::Firewall::rules_modify_permissions($class->rule_env()),
+        protected => 1,
+        parameters => {
+            additionalProperties => 0,
+            properties => $properties,
+        },
+        returns => { type => "null" },
+        code => sub {
+            my ($param) = @_;
 
-	    $class->lock_config($param, sub {
-		my ($param) = @_;
+            $class->lock_config(
+                $param,
+                sub {
+                    my ($param) = @_;
 
-		my ($fw_conf, $aliases) = $class->load_config($param);
+                    my ($fw_conf, $aliases) = $class->load_config($param);
 
-		my $list = &$aliases_to_list($aliases);
-		my (undef, $digest) = PVE::Firewall::copy_list_with_digest($list);
-		PVE::Tools::assert_if_modified($digest, $param->{digest});
+                    my $list = &$aliases_to_list($aliases);
+                    my (undef, $digest) = PVE::Firewall::copy_list_with_digest($list);
+                    PVE::Tools::assert_if_modified($digest, $param->{digest});
 
-		my $name = lc($param->{name});
-		delete $aliases->{$name};
+                    my $name = lc($param->{name});
+                    delete $aliases->{$name};
 
-		$class->save_aliases($param, $fw_conf, $aliases);
-	    });
+                    $class->save_aliases($param, $fw_conf, $aliases);
+                },
+            );
 
-	    return undef;
-	}});
+            return undef;
+        },
+    });
 }
 
 sub register_handlers {

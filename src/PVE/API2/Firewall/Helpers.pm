@@ -11,20 +11,20 @@ sub get_allowed_vnets {
     my $rpcenv = eval { PVE::RPCEnvironment::get() };
 
     if ($@) {
-	warn "could not initialize RPCEnvironment";
-	return {};
+        warn "could not initialize RPCEnvironment";
+        return {};
     }
 
     my $authuser = $rpcenv->get_user();
 
     my $vnets = PVE::Network::SDN::Vnets::config(1);
-    my $privs = [ 'SDN.Audit', 'SDN.Allocate' ];
+    my $privs = ['SDN.Audit', 'SDN.Allocate'];
 
     my $allowed_vnets = [];
-    foreach my $vnet (sort keys %{$vnets->{ids}}) {
-	my $zone = $vnets->{ids}->{$vnet}->{zone};
-	next if !$rpcenv->check_any($authuser, "/sdn/zones/$zone/$vnet", $privs, 1);
-	push @$allowed_vnets, $vnet;
+    foreach my $vnet (sort keys %{ $vnets->{ids} }) {
+        my $zone = $vnets->{ids}->{$vnet}->{zone};
+        next if !$rpcenv->check_any($authuser, "/sdn/zones/$zone/$vnet", $privs, 1);
+        push @$allowed_vnets, $vnet;
     }
 
     return $allowed_vnets;
@@ -34,8 +34,8 @@ sub get_allowed_vms {
     my $rpcenv = eval { PVE::RPCEnvironment::get() };
 
     if ($@) {
-	warn "could not initialize RPCEnvironment";
-	return {};
+        warn "could not initialize RPCEnvironment";
+        return {};
     }
 
     my $authuser = $rpcenv->get_user();
@@ -43,7 +43,8 @@ sub get_allowed_vms {
     my $guests = PVE::Cluster::get_vmlist();
 
     return [
-	grep { $rpcenv->check($authuser, "/vms/$_", [ 'VM.Audit' ], 1) } sort keys $guests->{ids}->%*
+        grep { $rpcenv->check($authuser, "/vms/$_", ['VM.Audit'], 1) }
+        sort keys $guests->{ids}->%*
     ];
 }
 
@@ -51,7 +52,7 @@ sub check_vnet_access {
     my ($vnetid, $privileges) = @_;
 
     my $vnet = PVE::Network::SDN::Vnets::get_vnet($vnetid, 1)
-	or die "invalid vnet specified";
+        or die "invalid vnet specified";
 
     my $zoneid = $vnet->{zone};
 
@@ -59,6 +60,6 @@ sub check_vnet_access {
     my $authuser = $rpcenv->get_user();
 
     $rpcenv->check_any($authuser, "/sdn/zones/$zoneid/$vnetid", $privileges);
-};
+}
 
 1;

@@ -13,9 +13,9 @@ use base qw(PVE::RESTHandler);
 
 my $api_properties = {
     pos => {
-	description => "Rule position.",
-	type => 'integer',
-	minimum => 0,
+        description => "Rule position.",
+        type => 'integer',
+        minimum => 0,
     },
 };
 
@@ -70,7 +70,7 @@ sub additional_parameters {
     my ($class, $new_value) = @_;
 
     if (defined($new_value)) {
-	$additional_param_hash->{$class} = $new_value;
+        $additional_param_hash->{$class} = $new_value;
     }
 
     # return a copy
@@ -88,44 +88,45 @@ sub register_get_rules {
     my $rule_env = $class->rule_env();
 
     $class->register_method({
-	name => 'get_rules',
-	path => '',
-	method => 'GET',
-	description => "List rules.",
-	permissions => PVE::Firewall::rules_audit_permissions($rule_env),
-	parameters => {
-	    additionalProperties => 0,
-	    properties => $properties,
-	},
-	proxyto => $rule_env eq 'host' ? 'node' : undef,
-	returns => {
-	    type => 'array',
-	    items => {
-		type => "object",
-		properties => {
-		    pos => {
-			type => 'integer',
-		    }
-		},
-	    },
-	    links => [ { rel => 'child', href => "{pos}" } ],
-	},
-	code => sub {
-	    my ($param) = @_;
+        name => 'get_rules',
+        path => '',
+        method => 'GET',
+        description => "List rules.",
+        permissions => PVE::Firewall::rules_audit_permissions($rule_env),
+        parameters => {
+            additionalProperties => 0,
+            properties => $properties,
+        },
+        proxyto => $rule_env eq 'host' ? 'node' : undef,
+        returns => {
+            type => 'array',
+            items => {
+                type => "object",
+                properties => {
+                    pos => {
+                        type => 'integer',
+                    },
+                },
+            },
+            links => [{ rel => 'child', href => "{pos}" }],
+        },
+        code => sub {
+            my ($param) = @_;
 
-	    $class->check_privileges_for_method('get_rules', $param);
+            $class->check_privileges_for_method('get_rules', $param);
 
-	    my ($cluster_conf, $fw_conf, $rules) = $class->load_config($param);
+            my ($cluster_conf, $fw_conf, $rules) = $class->load_config($param);
 
-	    my ($list, $digest) = PVE::Firewall::copy_list_with_digest($rules);
+            my ($list, $digest) = PVE::Firewall::copy_list_with_digest($rules);
 
-	    my $ind = 0;
-	    foreach my $rule (@$list) {
-		$rule->{pos} = $ind++;
-	    }
+            my $ind = 0;
+            foreach my $rule (@$list) {
+                $rule->{pos} = $ind++;
+            }
 
-	    return $list;
-	}});
+            return $list;
+        },
+    });
 }
 
 sub register_get_rule {
@@ -138,93 +139,97 @@ sub register_get_rule {
     my $rule_env = $class->rule_env();
 
     $class->register_method({
-	name => 'get_rule',
-	path => '{pos}',
-	method => 'GET',
-	description => "Get single rule data.",
-	permissions => PVE::Firewall::rules_audit_permissions($rule_env),
-	parameters => {
-	    additionalProperties => 0,
-	    properties => $properties,
-	},
-	proxyto => $rule_env eq 'host' ? 'node' : undef,
-	returns => {
-	    type => "object",
-	    properties => {
-		action => {
-		    type => 'string',
-		},
-		comment => {
-		    type => 'string',
-		    optional => 1,
-		},
-		dest => {
-		    type => 'string',
-		    optional => 1,
-		},
-		dport => {
-		    type => 'string',
-		    optional => 1,
-		},
-		enable => {
-		    type => 'integer',
-		    optional => 1,
-		},
-		log => PVE::Firewall::get_standard_option('pve-fw-loglevel', {
-		    description => 'Log level for firewall rule',
-		}),
-		'icmp-type' => {
-		    type => 'string',
-		    optional => 1,
-		},
-		iface => {
-		    type => 'string',
-		    optional => 1,
-		},
-		ipversion => {
-		    type => 'integer',
-		    optional => 1,
-		},
-		macro => {
-		    type => 'string',
-		    optional => 1,
-		},
-		pos => {
-		    type => 'integer',
-		},
-		proto => {
-		    type => 'string',
-		    optional => 1,
-		},
-		source => {
-		    type => 'string',
-		    optional => 1,
-		},
-		sport => {
-		    type => 'string',
-		    optional => 1,
-		},
-		type => {
-		    type => 'string',
-		},
-	    },
-	},
-	code => sub {
-	    my ($param) = @_;
+        name => 'get_rule',
+        path => '{pos}',
+        method => 'GET',
+        description => "Get single rule data.",
+        permissions => PVE::Firewall::rules_audit_permissions($rule_env),
+        parameters => {
+            additionalProperties => 0,
+            properties => $properties,
+        },
+        proxyto => $rule_env eq 'host' ? 'node' : undef,
+        returns => {
+            type => "object",
+            properties => {
+                action => {
+                    type => 'string',
+                },
+                comment => {
+                    type => 'string',
+                    optional => 1,
+                },
+                dest => {
+                    type => 'string',
+                    optional => 1,
+                },
+                dport => {
+                    type => 'string',
+                    optional => 1,
+                },
+                enable => {
+                    type => 'integer',
+                    optional => 1,
+                },
+                log => PVE::Firewall::get_standard_option(
+                    'pve-fw-loglevel',
+                    {
+                        description => 'Log level for firewall rule',
+                    },
+                ),
+                'icmp-type' => {
+                    type => 'string',
+                    optional => 1,
+                },
+                iface => {
+                    type => 'string',
+                    optional => 1,
+                },
+                ipversion => {
+                    type => 'integer',
+                    optional => 1,
+                },
+                macro => {
+                    type => 'string',
+                    optional => 1,
+                },
+                pos => {
+                    type => 'integer',
+                },
+                proto => {
+                    type => 'string',
+                    optional => 1,
+                },
+                source => {
+                    type => 'string',
+                    optional => 1,
+                },
+                sport => {
+                    type => 'string',
+                    optional => 1,
+                },
+                type => {
+                    type => 'string',
+                },
+            },
+        },
+        code => sub {
+            my ($param) = @_;
 
-	    $class->check_privileges_for_method('get_rule', $param);
+            $class->check_privileges_for_method('get_rule', $param);
 
-	    my ($cluster_conf, $fw_conf, $rules) = $class->load_config($param);
+            my ($cluster_conf, $fw_conf, $rules) = $class->load_config($param);
 
-	    my ($list, $digest) = PVE::Firewall::copy_list_with_digest($rules);
+            my ($list, $digest) = PVE::Firewall::copy_list_with_digest($rules);
 
-	    die "no rule at position $param->{pos}\n" if $param->{pos} >= scalar(@$list);
+            die "no rule at position $param->{pos}\n" if $param->{pos} >= scalar(@$list);
 
-	    my $rule = $list->[$param->{pos}];
-	    $rule->{pos} = $param->{pos};
+            my $rule = $list->[$param->{pos}];
+            $rule->{pos} = $param->{pos};
 
-	    return $rule;
-	}});
+            return $rule;
+        },
+    });
 }
 
 sub register_create_rule {
@@ -239,54 +244,60 @@ sub register_create_rule {
     my $rule_env = $class->rule_env();
 
     $class->register_method({
-	name => 'create_rule',
-	path => '',
-	method => 'POST',
-	description => "Create new rule.",
-	protected => 1,
-	permissions => PVE::Firewall::rules_modify_permissions($rule_env),
-	parameters => {
-	    additionalProperties => 0,
-	    properties => $create_rule_properties,
-	},
-	proxyto => $rule_env eq 'host' ? 'node' : undef,
-	returns => { type => "null" },
-	code => sub {
-	    my ($param) = @_;
+        name => 'create_rule',
+        path => '',
+        method => 'POST',
+        description => "Create new rule.",
+        protected => 1,
+        permissions => PVE::Firewall::rules_modify_permissions($rule_env),
+        parameters => {
+            additionalProperties => 0,
+            properties => $create_rule_properties,
+        },
+        proxyto => $rule_env eq 'host' ? 'node' : undef,
+        returns => { type => "null" },
+        code => sub {
+            my ($param) = @_;
 
-	    $class->check_privileges_for_method('create_rule', $param);
+            $class->check_privileges_for_method('create_rule', $param);
 
-	    $class->lock_config($param, sub {
-		my ($param) = @_;
+            $class->lock_config(
+                $param,
+                sub {
+                    my ($param) = @_;
 
-		my ($cluster_conf, $fw_conf, $rules) = $class->load_config($param);
+                    my ($cluster_conf, $fw_conf, $rules) = $class->load_config($param);
 
-		my $rule = {};
+                    my $rule = {};
 
-		# reloading the scoped SDN config for verification, so users can
-		# only use IPSets they have permissions for
-		my $allowed_vms = PVE::API2::Firewall::Helpers::get_allowed_vms();
-		my $allowed_vnets = PVE::API2::Firewall::Helpers::get_allowed_vnets();
-		my $sdn_conf = PVE::Firewall::load_sdn_conf($allowed_vms, $allowed_vnets);
+                    # reloading the scoped SDN config for verification, so users can
+                    # only use IPSets they have permissions for
+                    my $allowed_vms = PVE::API2::Firewall::Helpers::get_allowed_vms();
+                    my $allowed_vnets = PVE::API2::Firewall::Helpers::get_allowed_vnets();
+                    my $sdn_conf = PVE::Firewall::load_sdn_conf($allowed_vms, $allowed_vnets);
 
-		if ($cluster_conf) {
-		    $cluster_conf->{sdn} = $sdn_conf;
-		} else {
-		    $fw_conf->{sdn} = $sdn_conf;
-		}
+                    if ($cluster_conf) {
+                        $cluster_conf->{sdn} = $sdn_conf;
+                    } else {
+                        $fw_conf->{sdn} = $sdn_conf;
+                    }
 
-		PVE::Firewall::copy_rule_data($rule, $param);
-		PVE::Firewall::verify_rule($rule, $cluster_conf, $fw_conf, $class->rule_env());
+                    PVE::Firewall::copy_rule_data($rule, $param);
+                    PVE::Firewall::verify_rule(
+                        $rule, $cluster_conf, $fw_conf, $class->rule_env(),
+                    );
 
-		$rule->{enable} = 0 if !defined($param->{enable});
+                    $rule->{enable} = 0 if !defined($param->{enable});
 
-		unshift @$rules, $rule;
+                    unshift @$rules, $rule;
 
-		$class->save_rules($param, $fw_conf, $rules);
-	    });
+                    $class->save_rules($param, $fw_conf, $rules);
+                },
+            );
 
-	    return undef;
-	}});
+            return undef;
+        },
+    });
 }
 
 sub register_update_rule {
@@ -299,87 +310,97 @@ sub register_update_rule {
     my $rule_env = $class->rule_env();
 
     $properties->{moveto} = {
-	description => "Move rule to new position <moveto>. Other arguments are ignored.",
-	type => 'integer',
-	minimum => 0,
-	optional => 1,
+        description => "Move rule to new position <moveto>. Other arguments are ignored.",
+        type => 'integer',
+        minimum => 0,
+        optional => 1,
     };
 
     $properties->{delete} = {
-	type => 'string', format => 'pve-configid-list',
-	description => "A list of settings you want to delete.",
-	optional => 1,
+        type => 'string',
+        format => 'pve-configid-list',
+        description => "A list of settings you want to delete.",
+        optional => 1,
     };
 
     my $update_rule_properties = PVE::Firewall::add_rule_properties($properties);
 
     $class->register_method({
-	name => 'update_rule',
-	path => '{pos}',
-	method => 'PUT',
-	description => "Modify rule data.",
-	protected => 1,
-	permissions => PVE::Firewall::rules_modify_permissions($rule_env),
-	parameters => {
-	    additionalProperties => 0,
-	    properties => $update_rule_properties,
-	},
-	proxyto => $rule_env eq 'host' ? 'node' : undef,
-	returns => { type => "null" },
-	code => sub {
-	    my ($param) = @_;
+        name => 'update_rule',
+        path => '{pos}',
+        method => 'PUT',
+        description => "Modify rule data.",
+        protected => 1,
+        permissions => PVE::Firewall::rules_modify_permissions($rule_env),
+        parameters => {
+            additionalProperties => 0,
+            properties => $update_rule_properties,
+        },
+        proxyto => $rule_env eq 'host' ? 'node' : undef,
+        returns => { type => "null" },
+        code => sub {
+            my ($param) = @_;
 
-	    $class->check_privileges_for_method('update_rule', $param);
+            $class->check_privileges_for_method('update_rule', $param);
 
-	    $class->lock_config($param, sub {
-		my ($param) = @_;
+            $class->lock_config(
+                $param,
+                sub {
+                    my ($param) = @_;
 
-		my ($cluster_conf, $fw_conf, $rules) = $class->load_config($param);
+                    my ($cluster_conf, $fw_conf, $rules) = $class->load_config($param);
 
-		my (undef, $digest) = PVE::Firewall::copy_list_with_digest($rules);
-		PVE::Tools::assert_if_modified($digest, $param->{digest});
+                    my (undef, $digest) = PVE::Firewall::copy_list_with_digest($rules);
+                    PVE::Tools::assert_if_modified($digest, $param->{digest});
 
-		die "no rule at position $param->{pos}\n" if $param->{pos} >= scalar(@$rules);
+                    die "no rule at position $param->{pos}\n"
+                        if $param->{pos} >= scalar(@$rules);
 
-		my $rule = $rules->[$param->{pos}];
+                    my $rule = $rules->[$param->{pos}];
 
-		my $moveto = $param->{moveto};
-		if (defined($moveto) && $moveto != $param->{pos}) {
-		    my $newrules = [];
-		    for (my $i = 0; $i < scalar(@$rules); $i++) {
-			next if $i == $param->{pos};
-			if ($i == $moveto) {
-			    push @$newrules, $rule;
-			}
-			push @$newrules, $rules->[$i];
-		    }
-		    push @$newrules, $rule if $moveto >= scalar(@$rules);
-		    $rules = $newrules;
-		} else {
-		    PVE::Firewall::copy_rule_data($rule, $param);
+                    my $moveto = $param->{moveto};
+                    if (defined($moveto) && $moveto != $param->{pos}) {
+                        my $newrules = [];
+                        for (my $i = 0; $i < scalar(@$rules); $i++) {
+                            next if $i == $param->{pos};
+                            if ($i == $moveto) {
+                                push @$newrules, $rule;
+                            }
+                            push @$newrules, $rules->[$i];
+                        }
+                        push @$newrules, $rule if $moveto >= scalar(@$rules);
+                        $rules = $newrules;
+                    } else {
+                        PVE::Firewall::copy_rule_data($rule, $param);
 
-		    PVE::Firewall::delete_rule_properties($rule, $param->{'delete'}) if $param->{'delete'};
+                        PVE::Firewall::delete_rule_properties($rule, $param->{'delete'})
+                            if $param->{'delete'};
 
-		    # reloading the scoped SDN config for verification, so users can
-		    # only use IPSets they have permissions for
-		    my $allowed_vms = PVE::API2::Firewall::Helpers::get_allowed_vms();
-		    my $allowed_vnets = PVE::API2::Firewall::Helpers::get_allowed_vnets();
-		    my $sdn_conf = PVE::Firewall::load_sdn_conf($allowed_vms, $allowed_vnets);
+                        # reloading the scoped SDN config for verification, so users can
+                        # only use IPSets they have permissions for
+                        my $allowed_vms = PVE::API2::Firewall::Helpers::get_allowed_vms();
+                        my $allowed_vnets = PVE::API2::Firewall::Helpers::get_allowed_vnets();
+                        my $sdn_conf =
+                            PVE::Firewall::load_sdn_conf($allowed_vms, $allowed_vnets);
 
-		    if ($cluster_conf) {
-			$cluster_conf->{sdn} = $sdn_conf;
-		    } else {
-			$fw_conf->{sdn} = $sdn_conf;
-		    }
+                        if ($cluster_conf) {
+                            $cluster_conf->{sdn} = $sdn_conf;
+                        } else {
+                            $fw_conf->{sdn} = $sdn_conf;
+                        }
 
-		    PVE::Firewall::verify_rule($rule, $cluster_conf, $fw_conf, $class->rule_env());
-		}
+                        PVE::Firewall::verify_rule(
+                            $rule, $cluster_conf, $fw_conf, $class->rule_env(),
+                        );
+                    }
 
-		$class->save_rules($param, $fw_conf, $rules);
-	    });
+                    $class->save_rules($param, $fw_conf, $rules);
+                },
+            );
 
-	    return undef;
-	}});
+            return undef;
+        },
+    });
 }
 
 sub register_delete_rule {
@@ -394,40 +415,45 @@ sub register_delete_rule {
     my $rule_env = $class->rule_env();
 
     $class->register_method({
-	name => 'delete_rule',
-	path => '{pos}',
-	method => 'DELETE',
-	description => "Delete rule.",
-	protected => 1,
-	permissions => PVE::Firewall::rules_modify_permissions($rule_env),
-	parameters => {
-	    additionalProperties => 0,
-	    properties => $properties,
-	},
-	proxyto => $rule_env eq 'host' ? 'node' : undef,
-	returns => { type => "null" },
-	code => sub {
-	    my ($param) = @_;
+        name => 'delete_rule',
+        path => '{pos}',
+        method => 'DELETE',
+        description => "Delete rule.",
+        protected => 1,
+        permissions => PVE::Firewall::rules_modify_permissions($rule_env),
+        parameters => {
+            additionalProperties => 0,
+            properties => $properties,
+        },
+        proxyto => $rule_env eq 'host' ? 'node' : undef,
+        returns => { type => "null" },
+        code => sub {
+            my ($param) = @_;
 
-	    $class->check_privileges_for_method('delete_rule', $param);
+            $class->check_privileges_for_method('delete_rule', $param);
 
-	    $class->lock_config($param, sub {
-		my ($param) = @_;
+            $class->lock_config(
+                $param,
+                sub {
+                    my ($param) = @_;
 
-		my ($cluster_conf, $fw_conf, $rules) = $class->load_config($param);
+                    my ($cluster_conf, $fw_conf, $rules) = $class->load_config($param);
 
-		my (undef, $digest) = PVE::Firewall::copy_list_with_digest($rules);
-		PVE::Tools::assert_if_modified($digest, $param->{digest});
+                    my (undef, $digest) = PVE::Firewall::copy_list_with_digest($rules);
+                    PVE::Tools::assert_if_modified($digest, $param->{digest});
 
-		die "no rule at position $param->{pos}\n" if $param->{pos} >= scalar(@$rules);
+                    die "no rule at position $param->{pos}\n"
+                        if $param->{pos} >= scalar(@$rules);
 
-		splice(@$rules, $param->{pos}, 1);
+                    splice(@$rules, $param->{pos}, 1);
 
-		$class->save_rules($param, $fw_conf, $rules);
-	    });
+                    $class->save_rules($param, $fw_conf, $rules);
+                },
+            );
 
-	    return undef;
-	}});
+            return undef;
+        },
+    });
 }
 
 sub register_handlers {
@@ -450,7 +476,6 @@ use base qw(PVE::API2::Firewall::RulesBase);
 
 __PACKAGE__->additional_parameters({ group => get_standard_option('pve-security-group-name') });
 
-
 sub rule_env {
     my ($class, $param) = @_;
 
@@ -467,7 +492,7 @@ sub load_config {
     my ($class, $param) = @_;
 
     my $fw_conf = PVE::Firewall::load_clusterfw_conf();
-    my $rules = $fw_conf->{groups}->{$param->{group}};
+    my $rules = $fw_conf->{groups}->{ $param->{group} };
     die "no such security group '$param->{group}'\n" if !defined($rules);
 
     return (undef, $fw_conf, $rules);
@@ -477,9 +502,9 @@ sub save_rules {
     my ($class, $param, $fw_conf, $rules) = @_;
 
     if (!defined($rules)) {
-	delete $fw_conf->{groups}->{$param->{group}};
+        delete $fw_conf->{groups}->{ $param->{group} };
     } else {
-	$fw_conf->{groups}->{$param->{group}} = $rules;
+        $fw_conf->{groups}->{ $param->{group} } = $rules;
     }
 
     PVE::Firewall::save_clusterfw_conf($fw_conf);
@@ -492,31 +517,35 @@ __PACKAGE__->register_method({
     description => "Delete security group.",
     protected => 1,
     permissions => {
-	check => ['perm', '/', [ 'Sys.Modify' ]],
+        check => ['perm', '/', ['Sys.Modify']],
     },
     parameters => {
-	additionalProperties => 0,
-	properties => {
-	    group => get_standard_option('pve-security-group-name'),
-	},
+        additionalProperties => 0,
+        properties => {
+            group => get_standard_option('pve-security-group-name'),
+        },
     },
     returns => { type => 'null' },
     code => sub {
-	my ($param) = @_;
+        my ($param) = @_;
 
-	__PACKAGE__->lock_config($param, sub {
-	    my ($param) = @_;
+        __PACKAGE__->lock_config(
+            $param,
+            sub {
+                my ($param) = @_;
 
-	    my (undef, $cluster_conf, $rules) = __PACKAGE__->load_config($param);
+                my (undef, $cluster_conf, $rules) = __PACKAGE__->load_config($param);
 
-	    die "Security group '$param->{group}' is not empty\n"
-		if scalar(@$rules);
+                die "Security group '$param->{group}' is not empty\n"
+                    if scalar(@$rules);
 
-	    __PACKAGE__->save_rules($param, $cluster_conf, undef);
-	});
+                __PACKAGE__->save_rules($param, $cluster_conf, undef);
+            },
+        );
 
-	return undef;
-    }});
+        return undef;
+    },
+});
 
 __PACKAGE__->register_handlers();
 
@@ -565,7 +594,7 @@ use PVE::JSONSchema qw(get_standard_option);
 
 use base qw(PVE::API2::Firewall::RulesBase);
 
-__PACKAGE__->additional_parameters({ node => get_standard_option('pve-node')});
+__PACKAGE__->additional_parameters({ node => get_standard_option('pve-node') });
 
 sub rule_env {
     my ($class, $param) = @_;
@@ -702,11 +731,14 @@ sub check_privileges_for_method {
     my ($class, $method_name, $param) = @_;
 
     if ($method_name eq 'get_rule' || $method_name eq 'get_rules') {
-	PVE::API2::Firewall::Helpers::check_vnet_access($param->{vnet}, ['SDN.Audit', 'SDN.Allocate']);
+        PVE::API2::Firewall::Helpers::check_vnet_access(
+            $param->{vnet},
+            ['SDN.Audit', 'SDN.Allocate'],
+        );
     } elsif ($method_name =~ '(update|create|delete)_rule') {
-	PVE::API2::Firewall::Helpers::check_vnet_access($param->{vnet}, ['SDN.Allocate']);
+        PVE::API2::Firewall::Helpers::check_vnet_access($param->{vnet}, ['SDN.Allocate']);
     } else {
-	die "unknown method: $method_name";
+        die "unknown method: $method_name";
     }
 }
 

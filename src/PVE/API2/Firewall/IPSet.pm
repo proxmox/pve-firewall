@@ -11,17 +11,18 @@ use base qw(PVE::RESTHandler);
 
 my $api_properties = {
     cidr => {
-	description => "Network/IP specification in CIDR format.",
-	type => 'string', format => 'IPorCIDRorAlias',
+        description => "Network/IP specification in CIDR format.",
+        type => 'string',
+        format => 'IPorCIDRorAlias',
     },
     name => get_standard_option('ipset-name'),
     comment => {
-	type => 'string',
-	optional => 1,
+        type => 'string',
+        optional => 1,
     },
     nomatch => {
-	type => 'boolean',
-	optional => 1,
+        type => 'boolean',
+        optional => 1,
     },
 };
 
@@ -55,9 +56,9 @@ sub save_ipset {
     my ($class, $param, $fw_conf, $ipset) = @_;
 
     if (!defined($ipset)) {
-	delete $fw_conf->{ipset}->{$param->{name}};
+        delete $fw_conf->{ipset}->{ $param->{name} };
     } else {
-	$fw_conf->{ipset}->{$param->{name}} = $ipset;
+        $fw_conf->{ipset}->{ $param->{name} } = $ipset;
     }
 
     $class->save_config($param, $fw_conf);
@@ -69,7 +70,7 @@ sub additional_parameters {
     my ($class, $new_value) = @_;
 
     if (defined($new_value)) {
-	$additional_param_hash->{$class} = $new_value;
+        $additional_param_hash->{$class} = $new_value;
     }
 
     # return a copy
@@ -87,43 +88,44 @@ sub register_get_ipset {
     $properties->{name} = $api_properties->{name};
 
     $class->register_method({
-	name => 'get_ipset',
-	path => '',
-	method => 'GET',
-	description => "List IPSet content",
-	permissions => PVE::Firewall::rules_audit_permissions($class->rule_env()),
-	parameters => {
-	    additionalProperties => 0,
-	    properties => $properties,
-	},
-	returns => {
-	    type => 'array',
-	    items => {
-		type => "object",
-		properties => {
-		    cidr => {
-			type => 'string',
-		    },
-		    comment => {
-			type => 'string',
-			optional => 1,
-		    },
-		    nomatch => {
-			type => 'boolean',
-			optional => 1,
-		    },
-		    digest => get_standard_option('pve-config-digest', { optional => 0} ),
-		},
-	    },
-	    links => [ { rel => 'child', href => "{cidr}" } ],
-	},
-	code => sub {
-	    my ($param) = @_;
+        name => 'get_ipset',
+        path => '',
+        method => 'GET',
+        description => "List IPSet content",
+        permissions => PVE::Firewall::rules_audit_permissions($class->rule_env()),
+        parameters => {
+            additionalProperties => 0,
+            properties => $properties,
+        },
+        returns => {
+            type => 'array',
+            items => {
+                type => "object",
+                properties => {
+                    cidr => {
+                        type => 'string',
+                    },
+                    comment => {
+                        type => 'string',
+                        optional => 1,
+                    },
+                    nomatch => {
+                        type => 'boolean',
+                        optional => 1,
+                    },
+                    digest => get_standard_option('pve-config-digest', { optional => 0 }),
+                },
+            },
+            links => [{ rel => 'child', href => "{cidr}" }],
+        },
+        code => sub {
+            my ($param) = @_;
 
-	    my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
+            my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
 
-	    return PVE::Firewall::copy_list_with_digest($ipset);
-	}});
+            return PVE::Firewall::copy_list_with_digest($ipset);
+        },
+    });
 }
 
 sub register_delete_ipset {
@@ -133,40 +135,44 @@ sub register_delete_ipset {
 
     $properties->{name} = get_standard_option('ipset-name');
     $properties->{force} = {
-	type => 'boolean',
-	optional => 1,
-	description => 'Delete all members of the IPSet, if there are any.',
+        type => 'boolean',
+        optional => 1,
+        description => 'Delete all members of the IPSet, if there are any.',
     };
 
     $class->register_method({
-	name => 'delete_ipset',
-	path => '',
-	method => 'DELETE',
-	description => "Delete IPSet",
-	protected => 1,
-	permissions => PVE::Firewall::rules_modify_permissions($class->rule_env()),
-	parameters => {
-	    additionalProperties => 0,
-	    properties => $properties,
-	},
-	returns => { type => 'null' },
-	code => sub {
-	    my ($param) = @_;
+        name => 'delete_ipset',
+        path => '',
+        method => 'DELETE',
+        description => "Delete IPSet",
+        protected => 1,
+        permissions => PVE::Firewall::rules_modify_permissions($class->rule_env()),
+        parameters => {
+            additionalProperties => 0,
+            properties => $properties,
+        },
+        returns => { type => 'null' },
+        code => sub {
+            my ($param) = @_;
 
-	    $class->lock_config($param, sub {
-		my ($param) = @_;
+            $class->lock_config(
+                $param,
+                sub {
+                    my ($param) = @_;
 
-		my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
+                    my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
 
-		die "IPSet '$param->{name}' is not empty\n"
-		    if scalar(@$ipset) && !$param->{force};
+                    die "IPSet '$param->{name}' is not empty\n"
+                        if scalar(@$ipset) && !$param->{force};
 
-		$class->save_ipset($param, $fw_conf, undef);
+                    $class->save_ipset($param, $fw_conf, undef);
 
-	    });
+                },
+            );
 
-	    return undef;
-	}});
+            return undef;
+        },
+    });
 }
 
 sub register_create_ip {
@@ -180,59 +186,62 @@ sub register_create_ip {
     $properties->{comment} = $api_properties->{comment};
 
     $class->register_method({
-	name => 'create_ip',
-	path => '',
-	method => 'POST',
-	description => "Add IP or Network to IPSet.",
-	protected => 1,
-	permissions => PVE::Firewall::rules_modify_permissions($class->rule_env()),
-	parameters => {
-	    additionalProperties => 0,
-	    properties => $properties,
-	},
-	returns => { type => "null" },
-	code => sub {
-	    my ($param) = @_;
+        name => 'create_ip',
+        path => '',
+        method => 'POST',
+        description => "Add IP or Network to IPSet.",
+        protected => 1,
+        permissions => PVE::Firewall::rules_modify_permissions($class->rule_env()),
+        parameters => {
+            additionalProperties => 0,
+            properties => $properties,
+        },
+        returns => { type => "null" },
+        code => sub {
+            my ($param) = @_;
 
-	    $class->lock_config($param, sub {
-		my ($param) = @_;
+            $class->lock_config(
+                $param,
+                sub {
+                    my ($param) = @_;
 
-		my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
+                    my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
 
-		my $cidr = $param->{cidr};
-		if ($cidr =~ m@^(dc/|guest/)?(${PVE::Firewall::ip_alias_pattern})$@) {
-		    my $scope = $1 // "";
-		    my $alias = $2;
-		    # make sure alias exists (if $cidr is an alias)
-		    PVE::Firewall::resolve_alias($cluster_conf, $fw_conf, $alias, $scope);
-		} else {
-		    $cidr = PVE::Firewall::clean_cidr($cidr);
-		    # normalize like config parser, otherwise duplicates might slip through
-		    $cidr = PVE::Firewall::parse_ip_or_cidr($cidr);
-		}
+                    my $cidr = $param->{cidr};
+                    if ($cidr =~ m@^(dc/|guest/)?(${PVE::Firewall::ip_alias_pattern})$@) {
+                        my $scope = $1 // "";
+                        my $alias = $2;
+                        # make sure alias exists (if $cidr is an alias)
+                        PVE::Firewall::resolve_alias($cluster_conf, $fw_conf, $alias, $scope);
+                    } else {
+                        $cidr = PVE::Firewall::clean_cidr($cidr);
+                        # normalize like config parser, otherwise duplicates might slip through
+                        $cidr = PVE::Firewall::parse_ip_or_cidr($cidr);
+                    }
 
-		foreach my $entry (@$ipset) {
-		    raise_param_exc({ cidr => "address '$cidr' already exists" })
-			if $entry->{cidr} eq $cidr;
-		}
+                    foreach my $entry (@$ipset) {
+                        raise_param_exc({ cidr => "address '$cidr' already exists" })
+                            if $entry->{cidr} eq $cidr;
+                    }
 
-		raise_param_exc({ cidr => "a zero prefix is not allowed in ipset entries" })
-		    if $cidr =~ m!/0+$!;
+                    raise_param_exc({ cidr => "a zero prefix is not allowed in ipset entries" })
+                        if $cidr =~ m!/0+$!;
 
+                    my $data = { cidr => $cidr };
 
-		my $data = { cidr => $cidr };
+                    $data->{nomatch} = 1 if $param->{nomatch};
+                    $data->{comment} = $param->{comment} if $param->{comment};
 
-		$data->{nomatch} = 1 if $param->{nomatch};
-		$data->{comment} = $param->{comment} if $param->{comment};
+                    unshift @$ipset, $data;
 
-		unshift @$ipset, $data;
+                    $class->save_ipset($param, $fw_conf, $ipset);
 
-		$class->save_ipset($param, $fw_conf, $ipset);
+                },
+            );
 
-	    });
-
-	    return undef;
-	}});
+            return undef;
+        },
+    });
 }
 
 sub register_read_ip {
@@ -244,32 +253,33 @@ sub register_read_ip {
     $properties->{cidr} = $api_properties->{cidr};
 
     $class->register_method({
-	name => 'read_ip',
-	path => '{cidr}',
-	method => 'GET',
-	description => "Read IP or Network settings from IPSet.",
-	permissions => PVE::Firewall::rules_audit_permissions($class->rule_env()),
-	protected => 1,
-	parameters => {
-	    additionalProperties => 0,
-	    properties => $properties,
-	},
-	returns => { type => "object" },
-	code => sub {
-	    my ($param) = @_;
+        name => 'read_ip',
+        path => '{cidr}',
+        method => 'GET',
+        description => "Read IP or Network settings from IPSet.",
+        permissions => PVE::Firewall::rules_audit_permissions($class->rule_env()),
+        protected => 1,
+        parameters => {
+            additionalProperties => 0,
+            properties => $properties,
+        },
+        returns => { type => "object" },
+        code => sub {
+            my ($param) = @_;
 
-	    my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
+            my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
 
-	    my $list = PVE::Firewall::copy_list_with_digest($ipset);
+            my $list = PVE::Firewall::copy_list_with_digest($ipset);
 
-	    foreach my $entry (@$list) {
-		if ($entry->{cidr} eq $param->{cidr}) {
-		    return $entry;
-		}
-	    }
+            foreach my $entry (@$list) {
+                if ($entry->{cidr} eq $param->{cidr}) {
+                    return $entry;
+                }
+            }
 
-	    raise_param_exc({ cidr => "no such IP/Network" });
-	}});
+            raise_param_exc({ cidr => "no such IP/Network" });
+        },
+    });
 }
 
 sub register_update_ip {
@@ -284,44 +294,48 @@ sub register_update_ip {
     $properties->{digest} = get_standard_option('pve-config-digest');
 
     $class->register_method({
-	name => 'update_ip',
-	path => '{cidr}',
-	method => 'PUT',
-	description => "Update IP or Network settings",
-	protected => 1,
-	permissions => PVE::Firewall::rules_modify_permissions($class->rule_env()),
-	parameters => {
-	    additionalProperties => 0,
-	    properties => $properties,
-	},
-	returns => { type => "null" },
-	code => sub {
-	    my ($param) = @_;
+        name => 'update_ip',
+        path => '{cidr}',
+        method => 'PUT',
+        description => "Update IP or Network settings",
+        protected => 1,
+        permissions => PVE::Firewall::rules_modify_permissions($class->rule_env()),
+        parameters => {
+            additionalProperties => 0,
+            properties => $properties,
+        },
+        returns => { type => "null" },
+        code => sub {
+            my ($param) = @_;
 
-	    my $found = $class->lock_config($param, sub {
-		my ($param) = @_;
+            my $found = $class->lock_config(
+                $param,
+                sub {
+                    my ($param) = @_;
 
-		my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
+                    my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
 
-		my (undef, $digest) = PVE::Firewall::copy_list_with_digest($ipset);
-		PVE::Tools::assert_if_modified($digest, $param->{digest});
+                    my (undef, $digest) = PVE::Firewall::copy_list_with_digest($ipset);
+                    PVE::Tools::assert_if_modified($digest, $param->{digest});
 
-		foreach my $entry (@$ipset) {
-		    if($entry->{cidr} eq $param->{cidr}) {
-			$entry->{nomatch} = $param->{nomatch};
-			$entry->{comment} = $param->{comment};
-			$class->save_ipset($param, $fw_conf, $ipset);
-			return 1;
-		    }
-		}
+                    foreach my $entry (@$ipset) {
+                        if ($entry->{cidr} eq $param->{cidr}) {
+                            $entry->{nomatch} = $param->{nomatch};
+                            $entry->{comment} = $param->{comment};
+                            $class->save_ipset($param, $fw_conf, $ipset);
+                            return 1;
+                        }
+                    }
 
-		return 0;
-	    });
+                    return 0;
+                },
+            );
 
-	    return if $found;
+            return if $found;
 
-	    raise_param_exc({ cidr => "no such IP/Network" });
-	}});
+            raise_param_exc({ cidr => "no such IP/Network" });
+        },
+    });
 }
 
 sub register_delete_ip {
@@ -334,39 +348,43 @@ sub register_delete_ip {
     $properties->{digest} = get_standard_option('pve-config-digest');
 
     $class->register_method({
-	name => 'remove_ip',
-	path => '{cidr}',
-	method => 'DELETE',
-	description => "Remove IP or Network from IPSet.",
-	protected => 1,
-	permissions => PVE::Firewall::rules_modify_permissions($class->rule_env()),
-	parameters => {
-	    additionalProperties => 0,
-	    properties => $properties,
-	},
-	returns => { type => "null" },
-	code => sub {
-	    my ($param) = @_;
+        name => 'remove_ip',
+        path => '{cidr}',
+        method => 'DELETE',
+        description => "Remove IP or Network from IPSet.",
+        protected => 1,
+        permissions => PVE::Firewall::rules_modify_permissions($class->rule_env()),
+        parameters => {
+            additionalProperties => 0,
+            properties => $properties,
+        },
+        returns => { type => "null" },
+        code => sub {
+            my ($param) = @_;
 
-	    $class->lock_config($param, sub {
-		my ($param) = @_;
+            $class->lock_config(
+                $param,
+                sub {
+                    my ($param) = @_;
 
-		my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
+                    my ($cluster_conf, $fw_conf, $ipset) = $class->load_config($param);
 
-		my (undef, $digest) = PVE::Firewall::copy_list_with_digest($ipset);
-		PVE::Tools::assert_if_modified($digest, $param->{digest});
+                    my (undef, $digest) = PVE::Firewall::copy_list_with_digest($ipset);
+                    PVE::Tools::assert_if_modified($digest, $param->{digest});
 
-		my $new = [];
+                    my $new = [];
 
-		foreach my $entry (@$ipset) {
-		    push @$new, $entry if $entry->{cidr} ne $param->{cidr};
-		}
+                    foreach my $entry (@$ipset) {
+                        push @$new, $entry if $entry->{cidr} ne $param->{cidr};
+                    }
 
-		$class->save_ipset($param, $fw_conf, $new);
-	    });
+                    $class->save_ipset($param, $fw_conf, $new);
+                },
+            );
 
-	    return undef;
-	}});
+            return undef;
+        },
+    });
 }
 
 sub register_handlers {
@@ -403,7 +421,7 @@ sub load_config {
     my ($class, $param) = @_;
 
     my $fw_conf = PVE::Firewall::load_clusterfw_conf();
-    my $ipset = $fw_conf->{ipset}->{$param->{name}};
+    my $ipset = $fw_conf->{ipset}->{ $param->{name} };
     die "no such IPSet '$param->{name}'\n" if !defined($ipset);
 
     return (undef, $fw_conf, $ipset);
@@ -447,7 +465,7 @@ sub load_config {
 
     my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
     my $fw_conf = PVE::Firewall::load_vmfw_conf($cluster_conf, 'vm', $param->{vmid});
-    my $ipset = $fw_conf->{ipset}->{$param->{name}};
+    my $ipset = $fw_conf->{ipset}->{ $param->{name} };
     die "no such IPSet '$param->{name}'\n" if !defined($ipset);
 
     return ($cluster_conf, $fw_conf, $ipset);
@@ -491,7 +509,7 @@ sub load_config {
 
     my $cluster_conf = PVE::Firewall::load_clusterfw_conf();
     my $fw_conf = PVE::Firewall::load_vmfw_conf($cluster_conf, 'ct', $param->{vmid});
-    my $ipset = $fw_conf->{ipset}->{$param->{name}};
+    my $ipset = $fw_conf->{ipset}->{ $param->{name} };
     die "no such IPSet '$param->{name}'\n" if !defined($ipset);
 
     return ($cluster_conf, $fw_conf, $ipset);
@@ -547,7 +565,7 @@ sub additional_parameters {
     my ($class, $new_value) = @_;
 
     if (defined($new_value)) {
-	$additional_param_hash_list->{$class} = $new_value;
+        $additional_param_hash_list->{$class} = $new_value;
     }
 
     # return a copy
@@ -561,14 +579,14 @@ my $get_ipset_list = sub {
     my ($fw_conf) = @_;
 
     my $res = [];
-    foreach my $name (sort keys %{$fw_conf->{ipset}}) {
-	my $data = {
-	    name => $name,
-	};
-	if (my $comment = $fw_conf->{ipset_comments}->{$name}) {
-	    $data->{comment} = $comment;
-	}
-	push @$res, $data;
+    foreach my $name (sort keys %{ $fw_conf->{ipset} }) {
+        my $data = {
+            name => $name,
+        };
+        if (my $comment = $fw_conf->{ipset_comments}->{$name}) {
+            $data->{comment} = $comment;
+        }
+        push @$res, $data;
     }
 
     my ($list, $digest) = PVE::Firewall::copy_list_with_digest($res);
@@ -582,37 +600,38 @@ sub register_index {
     my $properties = $class->additional_parameters();
 
     $class->register_method({
-	name => 'ipset_index',
-	path => '',
-	method => 'GET',
-	description => "List IPSets",
-	permissions => PVE::Firewall::rules_audit_permissions($class->rule_env()),
-	parameters => {
-	    additionalProperties => 0,
-	    properties => $properties,
-	},
-	returns => {
-	    type => 'array',
-	    items => {
-		type => "object",
-		properties => {
-		    name => get_standard_option('ipset-name'),
-		    digest => get_standard_option('pve-config-digest', { optional => 0} ),
-		    comment => {
-			type => 'string',
-			optional => 1,
-		    }
-		},
-	    },
-	    links => [ { rel => 'child', href => "{name}" } ],
-	},
-	code => sub {
-	    my ($param) = @_;
+        name => 'ipset_index',
+        path => '',
+        method => 'GET',
+        description => "List IPSets",
+        permissions => PVE::Firewall::rules_audit_permissions($class->rule_env()),
+        parameters => {
+            additionalProperties => 0,
+            properties => $properties,
+        },
+        returns => {
+            type => 'array',
+            items => {
+                type => "object",
+                properties => {
+                    name => get_standard_option('ipset-name'),
+                    digest => get_standard_option('pve-config-digest', { optional => 0 }),
+                    comment => {
+                        type => 'string',
+                        optional => 1,
+                    },
+                },
+            },
+            links => [{ rel => 'child', href => "{name}" }],
+        },
+        code => sub {
+            my ($param) = @_;
 
-	    my ($cluster_conf, $fw_conf) = $class->load_config($param);
+            my ($cluster_conf, $fw_conf) = $class->load_config($param);
 
-	    return &$get_ipset_list($fw_conf);
-	}});
+            return &$get_ipset_list($fw_conf);
+        },
+    });
 }
 
 sub register_create {
@@ -626,63 +645,77 @@ sub register_create {
 
     $properties->{digest} = get_standard_option('pve-config-digest');
 
-    $properties->{rename} = get_standard_option('ipset-name', {
-	description => "Rename an existing IPSet. You can set 'rename' to the same value as 'name' to update the 'comment' of an existing IPSet.",
-	optional => 1 });
+    $properties->{rename} = get_standard_option(
+        'ipset-name',
+        {
+            description =>
+                "Rename an existing IPSet. You can set 'rename' to the same value as 'name' to update the 'comment' of an existing IPSet.",
+            optional => 1,
+        },
+    );
 
     $class->register_method({
-	name => 'create_ipset',
-	path => '',
-	method => 'POST',
-	description => "Create new IPSet",
-	protected => 1,
-	permissions => PVE::Firewall::rules_modify_permissions($class->rule_env()),
-	parameters => {
-	    additionalProperties => 0,
-	    properties => $properties,
-	},
-	returns => { type => 'null' },
-	code => sub {
-	    my ($param) = @_;
+        name => 'create_ipset',
+        path => '',
+        method => 'POST',
+        description => "Create new IPSet",
+        protected => 1,
+        permissions => PVE::Firewall::rules_modify_permissions($class->rule_env()),
+        parameters => {
+            additionalProperties => 0,
+            properties => $properties,
+        },
+        returns => { type => 'null' },
+        code => sub {
+            my ($param) = @_;
 
-	    $class->lock_config($param, sub {
-		my ($param) = @_;
+            $class->lock_config(
+                $param,
+                sub {
+                    my ($param) = @_;
 
-		my ($cluster_conf, $fw_conf) = $class->load_config($param);
+                    my ($cluster_conf, $fw_conf) = $class->load_config($param);
 
-		if ($param->{rename}) {
-		    my (undef, $digest) = &$get_ipset_list($fw_conf);
-		    PVE::Tools::assert_if_modified($digest, $param->{digest});
+                    if ($param->{rename}) {
+                        my (undef, $digest) = &$get_ipset_list($fw_conf);
+                        PVE::Tools::assert_if_modified($digest, $param->{digest});
 
-		    raise_param_exc({ name => "IPSet '$param->{rename}' does not exist" })
-			if !$fw_conf->{ipset}->{$param->{rename}};
+                        raise_param_exc({ name => "IPSet '$param->{rename}' does not exist" })
+                            if !$fw_conf->{ipset}->{ $param->{rename} };
 
-		    # prevent overwriting existing ipset
-		    raise_param_exc({ name => "IPSet '$param->{name}' does already exist"})
-			if $fw_conf->{ipset}->{$param->{name}} &&
-			$param->{name} ne $param->{rename};
+                        # prevent overwriting existing ipset
+                        raise_param_exc({ name => "IPSet '$param->{name}' does already exist" })
+                            if $fw_conf->{ipset}->{ $param->{name} }
+                            && $param->{name} ne $param->{rename};
 
-		    my $data = delete $fw_conf->{ipset}->{$param->{rename}};
-		    $fw_conf->{ipset}->{$param->{name}} = $data;
-		    if (my $comment = delete $fw_conf->{ipset_comments}->{$param->{rename}}) {
-			$fw_conf->{ipset_comments}->{$param->{name}} = $comment;
-		    }
-		    $fw_conf->{ipset_comments}->{$param->{name}} = $param->{comment} if defined($param->{comment});
-		} else {
-		    foreach my $name (keys %{$fw_conf->{ipset}}) {
-			raise_param_exc({ name => "IPSet '$name' already exists" })
-			    if $name eq $param->{name};
-		    }
+                        my $data = delete $fw_conf->{ipset}->{ $param->{rename} };
+                        $fw_conf->{ipset}->{ $param->{name} } = $data;
+                        if (
+                            my $comment =
+                            delete $fw_conf->{ipset_comments}->{ $param->{rename} }
+                        ) {
+                            $fw_conf->{ipset_comments}->{ $param->{name} } = $comment;
+                        }
+                        $fw_conf->{ipset_comments}->{ $param->{name} } = $param->{comment}
+                            if defined($param->{comment});
+                    } else {
+                        foreach my $name (keys %{ $fw_conf->{ipset} }) {
+                            raise_param_exc({ name => "IPSet '$name' already exists" })
+                                if $name eq $param->{name};
+                        }
 
-		    $fw_conf->{ipset}->{$param->{name}} = [];
-		    $fw_conf->{ipset_comments}->{$param->{name}} = $param->{comment} if defined($param->{comment});
-		}
+                        $fw_conf->{ipset}->{ $param->{name} } = [];
+                        $fw_conf->{ipset_comments}->{ $param->{name} } = $param->{comment}
+                            if defined($param->{comment});
+                    }
 
-		$class->save_config($param, $fw_conf);
-	    });
+                    $class->save_config($param, $fw_conf);
+                },
+            );
 
-	    return undef;
-	}});
+            return undef;
+        },
+    });
 }
 
 sub register_handlers {
@@ -727,7 +760,7 @@ sub save_config {
 
 __PACKAGE__->register_handlers();
 
-__PACKAGE__->register_method ({
+__PACKAGE__->register_method({
     subclass => "PVE::API2::Firewall::ClusterIPset",
     path => '{name}',
     # set fragment delimiter (no subdirs) - we need that, because CIDR address contain a slash '/'
@@ -776,7 +809,7 @@ sub save_config {
 
 __PACKAGE__->register_handlers();
 
-__PACKAGE__->register_method ({
+__PACKAGE__->register_method({
     subclass => "PVE::API2::Firewall::VMIPset",
     path => '{name}',
     # set fragment delimiter (no subdirs) - we need that, because CIDR address contain a slash '/'
@@ -825,7 +858,7 @@ sub save_config {
 
 __PACKAGE__->register_handlers();
 
-__PACKAGE__->register_method ({
+__PACKAGE__->register_method({
     subclass => "PVE::API2::Firewall::CTIPset",
     path => '{name}',
     # set fragment delimiter (no subdirs) - we need that, because CIDR address contain a slash '/'

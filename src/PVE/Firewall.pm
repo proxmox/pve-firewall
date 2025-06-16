@@ -59,31 +59,38 @@ my $max_ipset_name_length = 64;
 my $max_group_name_length = 18;
 
 my $PROTOCOLS_WITH_PORTS = {
-    udp => 1,     17 => 1,
-    udplite => 1, 136 => 1,
-    tcp => 1,     6 => 1,
-    dccp => 1,    33 => 1,
-    sctp => 1,    132 => 1,
+    udp => 1,
+    17 => 1,
+    udplite => 1,
+    136 => 1,
+    tcp => 1,
+    6 => 1,
+    dccp => 1,
+    33 => 1,
+    sctp => 1,
+    132 => 1,
 };
 
 PVE::JSONSchema::register_format('IPorCIDR', \&pve_verify_ip_or_cidr);
+
 sub pve_verify_ip_or_cidr {
     my ($cidr, $noerr) = @_;
 
     if ($cidr =~ m!^(?:$IPV6RE|$IPV4RE)(?:/\d+)?$!) {
         # Net::IP throws an error if the masked CIDR part isn't zero, e.g., `192.168.1.155/24`
         # fails but `192.168.1.0/24` succeeds. clean_cidr removes the non zero bits from the CIDR.
-	my $clean_cidr = clean_cidr($cidr);
-	return $cidr if Net::IP->new($clean_cidr);
-	return undef if $noerr;
+        my $clean_cidr = clean_cidr($cidr);
+        return $cidr if Net::IP->new($clean_cidr);
+        return undef if $noerr;
 
-	die Net::IP::Error() . "\n";
+        die Net::IP::Error() . "\n";
     }
     return undef if $noerr;
     die "value does not look like a valid IP address or CIDR network\n";
 }
 
 PVE::JSONSchema::register_format('IPorCIDRorAlias', \&pve_verify_ip_or_cidr_or_alias);
+
 sub pve_verify_ip_or_cidr_or_alias {
     my ($cidr, $noerr) = @_;
 
@@ -98,51 +105,65 @@ sub clean_cidr {
     return $cidr if !$len;
     my $ver = ($ip =~ m!^$IPV4RE$!) ? 4 : 6;
 
-    my $bin_ip = Net::IP::ip_iptobin( Net::IP::ip_expand_address($ip, $ver), $ver);
+    my $bin_ip = Net::IP::ip_iptobin(Net::IP::ip_expand_address($ip, $ver), $ver);
     my $bin_mask = Net::IP::ip_get_mask($len, $ver);
-    my $clean_ip = Net::IP::ip_compress_address( Net::IP::ip_bintoip($bin_ip & $bin_mask, $ver), $ver);
+    my $clean_ip =
+        Net::IP::ip_compress_address(Net::IP::ip_bintoip($bin_ip & $bin_mask, $ver), $ver);
 
     return "${clean_ip}/$len";
 }
 
-PVE::JSONSchema::register_standard_option('ipset-name', {
-    description => "IP set name.",
-    type => 'string',
-    pattern => $ipset_name_pattern,
-    minLength => 2,
-    maxLength => $max_ipset_name_length,
-});
+PVE::JSONSchema::register_standard_option(
+    'ipset-name',
+    {
+        description => "IP set name.",
+        type => 'string',
+        pattern => $ipset_name_pattern,
+        minLength => 2,
+        maxLength => $max_ipset_name_length,
+    },
+);
 
-PVE::JSONSchema::register_standard_option('pve-fw-alias', {
-    description => "Alias name.",
-    type => 'string',
-    pattern => $ip_alias_pattern,
-    minLength => 2,
-    maxLength => $max_alias_name_length,
-});
+PVE::JSONSchema::register_standard_option(
+    'pve-fw-alias',
+    {
+        description => "Alias name.",
+        type => 'string',
+        pattern => $ip_alias_pattern,
+        minLength => 2,
+        maxLength => $max_alias_name_length,
+    },
+);
 
-PVE::JSONSchema::register_standard_option('pve-fw-loglevel' => {
-    description => "Log level.",
-    type => 'string',
-    enum => ['emerg', 'alert', 'crit', 'err', 'warning', 'notice', 'info', 'debug', 'nolog'],
-    optional => 1,
-});
+PVE::JSONSchema::register_standard_option(
+    'pve-fw-loglevel' => {
+        description => "Log level.",
+        type => 'string',
+        enum =>
+            ['emerg', 'alert', 'crit', 'err', 'warning', 'notice', 'info', 'debug', 'nolog'],
+        optional => 1,
+    },
+);
 
-PVE::JSONSchema::register_standard_option('pve-security-group-name', {
-    description => "Security Group name.",
-    type => 'string',
-    pattern => $security_group_name_pattern,
-    minLength => 2,
-    maxLength => $max_group_name_length,
-});
+PVE::JSONSchema::register_standard_option(
+    'pve-security-group-name',
+    {
+        description => "Security Group name.",
+        type => 'string',
+        pattern => $security_group_name_pattern,
+        minLength => 2,
+        maxLength => $max_group_name_length,
+    },
+);
 
 my $feature_ipset_nomatch = 0;
-eval  {
+eval {
     my (undef, undef, $release) = POSIX::uname();
     if ($release =~ m/^(\d+)\.(\d+)\.\d+-/) {
-	my ($major, $minor) = ($1, $2);
-	$feature_ipset_nomatch = 1 if ($major > 3) ||
-	    ($major == 3 && $minor >= 7);
+        my ($major, $minor) = ($1, $2);
+        $feature_ipset_nomatch = 1
+            if ($major > 3)
+            || ($major == 3 && $minor >= 7);
     }
 
 };
@@ -167,6 +188,7 @@ my $log_level_hash = {
 };
 
 my $verbose = 0;
+
 sub set_verbose {
     $verbose = shift;
 }
@@ -189,407 +211,373 @@ sub set_verbose {
 # we need to overwrite some macros for ipv6
 my $pve_ipv6fw_macros = {
     'Ping' => [
-	{ action => 'PARAM', proto => 'icmpv6', dport => 'echo-request' },
+        { action => 'PARAM', proto => 'icmpv6', dport => 'echo-request' },
     ],
     'NeighborDiscovery' => [
-	"IPv6 neighbor solicitation, neighbor and router advertisement",
-	{ action => 'PARAM', proto => 'icmpv6', dport => 'router-solicitation' },
-	{ action => 'PARAM', proto => 'icmpv6', dport => 'router-advertisement' },
-	{ action => 'PARAM', proto => 'icmpv6', dport => 'neighbor-solicitation' },
-	{ action => 'PARAM', proto => 'icmpv6', dport => 'neighbor-advertisement' },
+        "IPv6 neighbor solicitation, neighbor and router advertisement",
+        { action => 'PARAM', proto => 'icmpv6', dport => 'router-solicitation' },
+        { action => 'PARAM', proto => 'icmpv6', dport => 'router-advertisement' },
+        { action => 'PARAM', proto => 'icmpv6', dport => 'neighbor-solicitation' },
+        { action => 'PARAM', proto => 'icmpv6', dport => 'neighbor-advertisement' },
     ],
     'DHCPv6' => [
-	"DHCPv6 traffic",
-	{ action => 'PARAM', proto => 'udp', dport => '546:547', sport => '546:547' },
+        "DHCPv6 traffic",
+        { action => 'PARAM', proto => 'udp', dport => '546:547', sport => '546:547' },
     ],
     'Trcrt' => [
-	{ action => 'PARAM', proto => 'udp', dport => '33434:33524' },
-	{ action => 'PARAM', proto => 'icmpv6', dport => 'echo-request' },
+        { action => 'PARAM', proto => 'udp', dport => '33434:33524' },
+        { action => 'PARAM', proto => 'icmpv6', dport => 'echo-request' },
     ],
- };
+};
 
 # imported/converted from: /usr/share/shorewall/macro.*
 my $pve_fw_macros = {
     'Amanda' => [
-	"Amanda Backup",
-	{ action => 'PARAM', proto => 'udp', dport => '10080' },
-	{ action => 'PARAM', proto => 'tcp', dport => '10080' },
+        "Amanda Backup",
+        { action => 'PARAM', proto => 'udp', dport => '10080' },
+        { action => 'PARAM', proto => 'tcp', dport => '10080' },
     ],
     'Auth' => [
-	"Auth (identd) traffic",
-	{ action => 'PARAM', proto => 'tcp', dport => '113' },
+        "Auth (identd) traffic", { action => 'PARAM', proto => 'tcp', dport => '113' },
     ],
     'BGP' => [
-	"Border Gateway Protocol traffic",
-	{ action => 'PARAM', proto => 'tcp', dport => '179' },
+        "Border Gateway Protocol traffic",
+        { action => 'PARAM', proto => 'tcp', dport => '179' },
     ],
     'BitTorrent' => [
-	"BitTorrent traffic for BitTorrent 3.1 and earlier",
-	{ action => 'PARAM', proto => 'tcp', dport => '6881:6889' },
-	{ action => 'PARAM', proto => 'udp', dport => '6881' },
+        "BitTorrent traffic for BitTorrent 3.1 and earlier",
+        { action => 'PARAM', proto => 'tcp', dport => '6881:6889' },
+        { action => 'PARAM', proto => 'udp', dport => '6881' },
     ],
     'BitTorrent32' => [
-	"BitTorrent traffic for BitTorrent 3.2 and later",
-	{ action => 'PARAM', proto => 'tcp', dport => '6881:6999' },
-	{ action => 'PARAM', proto => 'udp', dport => '6881' },
+        "BitTorrent traffic for BitTorrent 3.2 and later",
+        { action => 'PARAM', proto => 'tcp', dport => '6881:6999' },
+        { action => 'PARAM', proto => 'udp', dport => '6881' },
     ],
     'Ceph' => [
         "Ceph Storage Cluster traffic (Ceph Monitors, OSD & MDS Daemons)",
-	# Legacy port for protocol v1
+        # Legacy port for protocol v1
         { action => 'PARAM', proto => 'tcp', dport => '6789' },
-	# New port for protocol v2
+        # New port for protocol v2
         { action => 'PARAM', proto => 'tcp', dport => '3300' },
         { action => 'PARAM', proto => 'tcp', dport => '6800:7300' },
     ],
     'CVS' => [
-	"Concurrent Versions System pserver traffic",
-	{ action => 'PARAM', proto => 'tcp', dport => '2401' },
+        "Concurrent Versions System pserver traffic",
+        { action => 'PARAM', proto => 'tcp', dport => '2401' },
     ],
     'Citrix' => [
-	"Citrix/ICA traffic (ICA, ICA Browser, CGP)",
-	{ action => 'PARAM', proto => 'tcp', dport => '1494' },
-	{ action => 'PARAM', proto => 'udp', dport => '1604' },
-	{ action => 'PARAM', proto => 'tcp', dport => '2598' },
+        "Citrix/ICA traffic (ICA, ICA Browser, CGP)",
+        { action => 'PARAM', proto => 'tcp', dport => '1494' },
+        { action => 'PARAM', proto => 'udp', dport => '1604' },
+        { action => 'PARAM', proto => 'tcp', dport => '2598' },
     ],
     'DAAP' => [
-	"Digital Audio Access Protocol traffic (iTunes, Rythmbox daemons)",
-	{ action => 'PARAM', proto => 'tcp', dport => '3689' },
-	{ action => 'PARAM', proto => 'udp', dport => '3689' },
+        "Digital Audio Access Protocol traffic (iTunes, Rythmbox daemons)",
+        { action => 'PARAM', proto => 'tcp', dport => '3689' },
+        { action => 'PARAM', proto => 'udp', dport => '3689' },
     ],
     'DCC' => [
-	"Distributed Checksum Clearinghouse spam filtering mechanism",
-	{ action => 'PARAM', proto => 'tcp', dport => '6277' },
+        "Distributed Checksum Clearinghouse spam filtering mechanism",
+        { action => 'PARAM', proto => 'tcp', dport => '6277' },
     ],
     'DHCPfwd' => [
-	"Forwarded DHCP traffic",
-	{ action => 'PARAM', proto => 'udp', dport => '67:68', sport => '67:68' },
+        "Forwarded DHCP traffic",
+        { action => 'PARAM', proto => 'udp', dport => '67:68', sport => '67:68' },
     ],
     'DNS' => [
-	"Domain Name System traffic (upd and tcp)",
-	{ action => 'PARAM', proto => 'udp', dport => '53' },
-	{ action => 'PARAM', proto => 'tcp', dport => '53' },
+        "Domain Name System traffic (upd and tcp)",
+        { action => 'PARAM', proto => 'udp', dport => '53' },
+        { action => 'PARAM', proto => 'tcp', dport => '53' },
     ],
     'Distcc' => [
-	"Distributed Compiler service",
-	{ action => 'PARAM', proto => 'tcp', dport => '3632' },
+        "Distributed Compiler service", { action => 'PARAM', proto => 'tcp', dport => '3632' },
     ],
     'FTP' => [
-	"File Transfer Protocol",
-	{ action => 'PARAM', proto => 'tcp', dport => '21' },
+        "File Transfer Protocol", { action => 'PARAM', proto => 'tcp', dport => '21' },
     ],
     'Finger' => [
-	"Finger protocol (RFC 742)",
-	{ action => 'PARAM', proto => 'tcp', dport => '79' },
+        "Finger protocol (RFC 742)", { action => 'PARAM', proto => 'tcp', dport => '79' },
     ],
     'GNUnet' => [
-	"GNUnet secure peer-to-peer networking traffic",
-	{ action => 'PARAM', proto => 'tcp', dport => '2086' },
-	{ action => 'PARAM', proto => 'udp', dport => '2086' },
-	{ action => 'PARAM', proto => 'tcp', dport => '1080' },
-	{ action => 'PARAM', proto => 'udp', dport => '1080' },
+        "GNUnet secure peer-to-peer networking traffic",
+        { action => 'PARAM', proto => 'tcp', dport => '2086' },
+        { action => 'PARAM', proto => 'udp', dport => '2086' },
+        { action => 'PARAM', proto => 'tcp', dport => '1080' },
+        { action => 'PARAM', proto => 'udp', dport => '1080' },
     ],
     'GRE' => [
-	"Generic Routing Encapsulation tunneling protocol",
-	{ action => 'PARAM', proto => '47' },
+        "Generic Routing Encapsulation tunneling protocol",
+        { action => 'PARAM', proto => '47' },
     ],
     'Git' => [
-	"Git distributed revision control traffic",
-	{ action => 'PARAM', proto => 'tcp', dport => '9418' },
+        "Git distributed revision control traffic",
+        { action => 'PARAM', proto => 'tcp', dport => '9418' },
     ],
     'HKP' => [
-	"OpenPGP HTTP key server protocol traffic",
-	{ action => 'PARAM', proto => 'tcp', dport => '11371' },
+        "OpenPGP HTTP key server protocol traffic",
+        { action => 'PARAM', proto => 'tcp', dport => '11371' },
     ],
     'HTTP' => [
-	"Hypertext Transfer Protocol (WWW)",
-	{ action => 'PARAM', proto => 'tcp', dport => '80' },
+        "Hypertext Transfer Protocol (WWW)",
+        { action => 'PARAM', proto => 'tcp', dport => '80' },
     ],
     'HTTPS' => [
-	"Hypertext Transfer Protocol (WWW) over SSL",
-	{ action => 'PARAM', proto => 'tcp', dport => '443' },
+        "Hypertext Transfer Protocol (WWW) over SSL",
+        { action => 'PARAM', proto => 'tcp', dport => '443' },
     ],
     'ICPV2' => [
-	"Internet Cache Protocol V2 (Squid) traffic",
-	{ action => 'PARAM', proto => 'udp', dport => '3130' },
+        "Internet Cache Protocol V2 (Squid) traffic",
+        { action => 'PARAM', proto => 'udp', dport => '3130' },
     ],
     'ICQ' => [
-	"AOL Instant Messenger traffic",
-	{ action => 'PARAM', proto => 'tcp', dport => '5190' },
+        "AOL Instant Messenger traffic", { action => 'PARAM', proto => 'tcp', dport => '5190' },
     ],
     'IMAP' => [
-	"Internet Message Access Protocol",
-	{ action => 'PARAM', proto => 'tcp', dport => '143' },
+        "Internet Message Access Protocol",
+        { action => 'PARAM', proto => 'tcp', dport => '143' },
     ],
     'IMAPS' => [
-	"Internet Message Access Protocol over SSL",
-	{ action => 'PARAM', proto => 'tcp', dport => '993' },
+        "Internet Message Access Protocol over SSL",
+        { action => 'PARAM', proto => 'tcp', dport => '993' },
     ],
     'IPIP' => [
-	"IPIP capsulation traffic",
-	{ action => 'PARAM', proto => '94' },
+        "IPIP capsulation traffic", { action => 'PARAM', proto => '94' },
     ],
     'IPsec' => [
-	"IPsec traffic",
-	{ action => 'PARAM', proto => 'udp', dport => '500', sport => '500' },
-	{ action => 'PARAM', proto => '50' },
+        "IPsec traffic",
+        { action => 'PARAM', proto => 'udp', dport => '500', sport => '500' },
+        { action => 'PARAM', proto => '50' },
     ],
     'IPsecah' => [
-	"IPsec authentication (AH) traffic",
-	{ action => 'PARAM', proto => 'udp', dport => '500', sport => '500' },
-	{ action => 'PARAM', proto => '51' },
+        "IPsec authentication (AH) traffic",
+        { action => 'PARAM', proto => 'udp', dport => '500', sport => '500' },
+        { action => 'PARAM', proto => '51' },
     ],
     'IPsecnat' => [
-	"IPsec traffic and Nat-Traversal",
-	{ action => 'PARAM', proto => 'udp', dport => '500' },
-	{ action => 'PARAM', proto => 'udp', dport => '4500' },
-	{ action => 'PARAM', proto => '50' },
+        "IPsec traffic and Nat-Traversal",
+        { action => 'PARAM', proto => 'udp', dport => '500' },
+        { action => 'PARAM', proto => 'udp', dport => '4500' },
+        { action => 'PARAM', proto => '50' },
     ],
     'IRC' => [
-	"Internet Relay Chat traffic",
-	{ action => 'PARAM', proto => 'tcp', dport => '6667' },
+        "Internet Relay Chat traffic", { action => 'PARAM', proto => 'tcp', dport => '6667' },
     ],
     'Jetdirect' => [
-	"HP Jetdirect printing",
-	{ action => 'PARAM', proto => 'tcp', dport => '9100' },
+        "HP Jetdirect printing", { action => 'PARAM', proto => 'tcp', dport => '9100' },
     ],
     'L2TP' => [
-	"Layer 2 Tunneling Protocol traffic",
-	{ action => 'PARAM', proto => 'udp', dport => '1701' },
+        "Layer 2 Tunneling Protocol traffic",
+        { action => 'PARAM', proto => 'udp', dport => '1701' },
     ],
     'LDAP' => [
-	"Lightweight Directory Access Protocol traffic",
-	{ action => 'PARAM', proto => 'tcp', dport => '389' },
+        "Lightweight Directory Access Protocol traffic",
+        { action => 'PARAM', proto => 'tcp', dport => '389' },
     ],
     'LDAPS' => [
-	"Secure Lightweight Directory Access Protocol traffic",
-	{ action => 'PARAM', proto => 'tcp', dport => '636' },
+        "Secure Lightweight Directory Access Protocol traffic",
+        { action => 'PARAM', proto => 'tcp', dport => '636' },
     ],
     'MSNP' => [
-	"Microsoft Notification Protocol",
-	{ action => 'PARAM', proto => 'tcp', dport => '1863' },
+        "Microsoft Notification Protocol",
+        { action => 'PARAM', proto => 'tcp', dport => '1863' },
     ],
     'MSSQL' => [
-	"Microsoft SQL Server",
-	{ action => 'PARAM', proto => 'tcp', dport => '1433' },
+        "Microsoft SQL Server", { action => 'PARAM', proto => 'tcp', dport => '1433' },
     ],
     'Mail' => [
-	"Mail traffic (SMTP, SMTPS, Submission)",
-	{ action => 'PARAM', proto => 'tcp', dport => '25' },
-	{ action => 'PARAM', proto => 'tcp', dport => '465' },
-	{ action => 'PARAM', proto => 'tcp', dport => '587' },
+        "Mail traffic (SMTP, SMTPS, Submission)",
+        { action => 'PARAM', proto => 'tcp', dport => '25' },
+        { action => 'PARAM', proto => 'tcp', dport => '465' },
+        { action => 'PARAM', proto => 'tcp', dport => '587' },
     ],
     'MDNS' => [
-	"Multicast DNS",
-	{ action => 'PARAM', proto => 'udp', dport => '5353' },
+        "Multicast DNS", { action => 'PARAM', proto => 'udp', dport => '5353' },
     ],
     'Munin' => [
-	"Munin networked resource monitoring traffic",
-	{ action => 'PARAM', proto => 'tcp', dport => '4949' },
+        "Munin networked resource monitoring traffic",
+        { action => 'PARAM', proto => 'tcp', dport => '4949' },
     ],
     'MySQL' => [
-	"MySQL server",
-	{ action => 'PARAM', proto => 'tcp', dport => '3306' },
+        "MySQL server", { action => 'PARAM', proto => 'tcp', dport => '3306' },
     ],
     'NNTP' => [
-	"NNTP traffic (Usenet).",
-	{ action => 'PARAM', proto => 'tcp', dport => '119' },
+        "NNTP traffic (Usenet).", { action => 'PARAM', proto => 'tcp', dport => '119' },
     ],
     'NNTPS' => [
-	"Encrypted NNTP traffic (Usenet)",
-	{ action => 'PARAM', proto => 'tcp', dport => '563' },
+        "Encrypted NNTP traffic (Usenet)",
+        { action => 'PARAM', proto => 'tcp', dport => '563' },
     ],
     'NTP' => [
-	"Network Time Protocol (ntpd)",
-	{ action => 'PARAM', proto => 'udp', dport => '123' },
+        "Network Time Protocol (ntpd)", { action => 'PARAM', proto => 'udp', dport => '123' },
     ],
     'OSPF' => [
-	"OSPF multicast traffic",
-	{ action => 'PARAM', proto => '89' },
+        "OSPF multicast traffic", { action => 'PARAM', proto => '89' },
     ],
     'OpenVPN' => [
-	"OpenVPN traffic",
-	{ action => 'PARAM', proto => 'udp', dport => '1194' },
+        "OpenVPN traffic", { action => 'PARAM', proto => 'udp', dport => '1194' },
     ],
     'PCA' => [
-	"Symantec PCAnywere (tm)",
-	{ action => 'PARAM', proto => 'udp', dport => '5632' },
-	{ action => 'PARAM', proto => 'tcp', dport => '5631' },
+        "Symantec PCAnywere (tm)",
+        { action => 'PARAM', proto => 'udp', dport => '5632' },
+        { action => 'PARAM', proto => 'tcp', dport => '5631' },
     ],
     'PMG' => [
-	"Proxmox Mail Gateway web interface",
-	{ action => 'PARAM', proto => 'tcp', dport => '8006' },
+        "Proxmox Mail Gateway web interface",
+        { action => 'PARAM', proto => 'tcp', dport => '8006' },
     ],
     'POP3' => [
-	"POP3 traffic",
-	{ action => 'PARAM', proto => 'tcp', dport => '110' },
+        "POP3 traffic", { action => 'PARAM', proto => 'tcp', dport => '110' },
     ],
     'POP3S' => [
-	"Encrypted POP3 traffic",
-	{ action => 'PARAM', proto => 'tcp', dport => '995' },
+        "Encrypted POP3 traffic", { action => 'PARAM', proto => 'tcp', dport => '995' },
     ],
     'PPtP' => [
-	"Point-to-Point Tunneling Protocol",
-	{ action => 'PARAM', proto => '47' },
-	{ action => 'PARAM', proto => 'tcp', dport => '1723' },
+        "Point-to-Point Tunneling Protocol",
+        { action => 'PARAM', proto => '47' },
+        { action => 'PARAM', proto => 'tcp', dport => '1723' },
     ],
     'Ping' => [
-	"ICMP echo request",
-	{ action => 'PARAM', proto => 'icmp', dport => 'echo-request' },
+        "ICMP echo request", { action => 'PARAM', proto => 'icmp', dport => 'echo-request' },
     ],
     'PostgreSQL' => [
-	"PostgreSQL server",
-	{ action => 'PARAM', proto => 'tcp', dport => '5432' },
+        "PostgreSQL server", { action => 'PARAM', proto => 'tcp', dport => '5432' },
     ],
     'Printer' => [
-	"Line Printer protocol printing",
-	{ action => 'PARAM', proto => 'tcp', dport => '515' },
+        "Line Printer protocol printing", { action => 'PARAM', proto => 'tcp', dport => '515' },
     ],
     'RDP' => [
-	"Microsoft Remote Desktop Protocol traffic",
-	{ action => 'PARAM', proto => 'tcp', dport => '3389' },
+        "Microsoft Remote Desktop Protocol traffic",
+        { action => 'PARAM', proto => 'tcp', dport => '3389' },
     ],
     'RIP' => [
-	"Routing Information Protocol (bidirectional)",
-	{ action => 'PARAM', proto => 'udp', dport => '520' },
+        "Routing Information Protocol (bidirectional)",
+        { action => 'PARAM', proto => 'udp', dport => '520' },
     ],
     'RNDC' => [
-	"BIND remote management protocol",
-	{ action => 'PARAM', proto => 'tcp', dport => '953' },
+        "BIND remote management protocol",
+        { action => 'PARAM', proto => 'tcp', dport => '953' },
     ],
     'Razor' => [
-	"Razor Antispam System",
-	{ action => 'PARAM', proto => 'tcp', dport => '2703' },
+        "Razor Antispam System", { action => 'PARAM', proto => 'tcp', dport => '2703' },
     ],
     'Rdate' => [
-	"Remote time retrieval (rdate)",
-	{ action => 'PARAM', proto => 'tcp', dport => '37' },
+        "Remote time retrieval (rdate)", { action => 'PARAM', proto => 'tcp', dport => '37' },
     ],
     'Rsync' => [
-	"Rsync server",
-	{ action => 'PARAM', proto => 'tcp', dport => '873' },
+        "Rsync server", { action => 'PARAM', proto => 'tcp', dport => '873' },
     ],
     'SANE' => [
-	"SANE network scanning",
-	{ action => 'PARAM', proto => 'tcp', dport => '6566' },
+        "SANE network scanning", { action => 'PARAM', proto => 'tcp', dport => '6566' },
     ],
     'SMB' => [
-	"Microsoft SMB traffic",
-	{ action => 'PARAM', proto => 'udp', dport => '135,445' },
-	{ action => 'PARAM', proto => 'udp', dport => '137:139' },
-	{ action => 'PARAM', proto => 'udp', dport => '1024:65535', sport => '137' },
-	{ action => 'PARAM', proto => 'tcp', dport => '135,139,445' },
+        "Microsoft SMB traffic",
+        { action => 'PARAM', proto => 'udp', dport => '135,445' },
+        { action => 'PARAM', proto => 'udp', dport => '137:139' },
+        { action => 'PARAM', proto => 'udp', dport => '1024:65535', sport => '137' },
+        { action => 'PARAM', proto => 'tcp', dport => '135,139,445' },
     ],
     'SMBswat' => [
-	"Samba Web Administration Tool",
-	{ action => 'PARAM', proto => 'tcp', dport => '901' },
+        "Samba Web Administration Tool", { action => 'PARAM', proto => 'tcp', dport => '901' },
     ],
     'SMTP' => [
-	"Simple Mail Transfer Protocol",
-	{ action => 'PARAM', proto => 'tcp', dport => '25' },
+        "Simple Mail Transfer Protocol", { action => 'PARAM', proto => 'tcp', dport => '25' },
     ],
     'SMTPS' => [
-	"Encrypted Simple Mail Transfer Protocol",
-	{ action => 'PARAM', proto => 'tcp', dport => '465' },
+        "Encrypted Simple Mail Transfer Protocol",
+        { action => 'PARAM', proto => 'tcp', dport => '465' },
     ],
     'SNMP' => [
-	"Simple Network Management Protocol",
-	{ action => 'PARAM', proto => 'udp', dport => '161:162' },
-	{ action => 'PARAM', proto => 'tcp', dport => '161' },
+        "Simple Network Management Protocol",
+        { action => 'PARAM', proto => 'udp', dport => '161:162' },
+        { action => 'PARAM', proto => 'tcp', dport => '161' },
     ],
     'SPAMD' => [
-	"Spam Assassin SPAMD traffic",
-	{ action => 'PARAM', proto => 'tcp', dport => '783' },
+        "Spam Assassin SPAMD traffic", { action => 'PARAM', proto => 'tcp', dport => '783' },
     ],
     'SSH' => [
-	"Secure shell traffic",
-	{ action => 'PARAM', proto => 'tcp', dport => '22' },
+        "Secure shell traffic", { action => 'PARAM', proto => 'tcp', dport => '22' },
     ],
     'SVN' => [
-	"Subversion server (svnserve)",
-	{ action => 'PARAM', proto => 'tcp', dport => '3690' },
+        "Subversion server (svnserve)", { action => 'PARAM', proto => 'tcp', dport => '3690' },
     ],
     'SixXS' => [
-	"SixXS IPv6 Deployment and Tunnel Broker",
-	{ action => 'PARAM', proto => 'tcp', dport => '3874' },
-	{ action => 'PARAM', proto => 'udp', dport => '3740' },
-	{ action => 'PARAM', proto => '41' },
-	{ action => 'PARAM', proto => 'udp', dport => '5072,8374' },
+        "SixXS IPv6 Deployment and Tunnel Broker",
+        { action => 'PARAM', proto => 'tcp', dport => '3874' },
+        { action => 'PARAM', proto => 'udp', dport => '3740' },
+        { action => 'PARAM', proto => '41' },
+        { action => 'PARAM', proto => 'udp', dport => '5072,8374' },
     ],
     'SPICEproxy' => [
-	"Proxmox VE SPICE display proxy traffic",
-	{ action => 'PARAM', proto => 'tcp', dport => '3128' },
+        "Proxmox VE SPICE display proxy traffic",
+        { action => 'PARAM', proto => 'tcp', dport => '3128' },
     ],
     'Squid' => [
-	"Squid web proxy traffic",
-	{ action => 'PARAM', proto => 'tcp', dport => '3128' },
+        "Squid web proxy traffic", { action => 'PARAM', proto => 'tcp', dport => '3128' },
     ],
     'Submission' => [
-	"Mail message submission traffic",
-	{ action => 'PARAM', proto => 'tcp', dport => '587' },
+        "Mail message submission traffic",
+        { action => 'PARAM', proto => 'tcp', dport => '587' },
     ],
     'Syslog' => [
-	"Syslog protocol (RFC 5424) traffic",
-	{ action => 'PARAM', proto => 'udp', dport => '514' },
-	{ action => 'PARAM', proto => 'tcp', dport => '514' },
+        "Syslog protocol (RFC 5424) traffic",
+        { action => 'PARAM', proto => 'udp', dport => '514' },
+        { action => 'PARAM', proto => 'tcp', dport => '514' },
     ],
     'TFTP' => [
-	"Trivial File Transfer Protocol traffic",
-	{ action => 'PARAM', proto => 'udp', dport => '69' },
+        "Trivial File Transfer Protocol traffic",
+        { action => 'PARAM', proto => 'udp', dport => '69' },
     ],
     'Telnet' => [
-	"Telnet traffic",
-	{ action => 'PARAM', proto => 'tcp', dport => '23' },
+        "Telnet traffic", { action => 'PARAM', proto => 'tcp', dport => '23' },
     ],
     'Telnets' => [
-	"Telnet over SSL",
-	{ action => 'PARAM', proto => 'tcp', dport => '992' },
+        "Telnet over SSL", { action => 'PARAM', proto => 'tcp', dport => '992' },
     ],
     'Time' => [
-	"RFC 868 Time protocol",
-	{ action => 'PARAM', proto => 'tcp', dport => '37' },
+        "RFC 868 Time protocol", { action => 'PARAM', proto => 'tcp', dport => '37' },
     ],
     'Trcrt' => [
-	"Traceroute (for up to 30 hops) traffic",
-	{ action => 'PARAM', proto => 'udp', dport => '33434:33524' },
-	{ action => 'PARAM', proto => 'icmp', dport => 'echo-request' },
+        "Traceroute (for up to 30 hops) traffic",
+        { action => 'PARAM', proto => 'udp', dport => '33434:33524' },
+        { action => 'PARAM', proto => 'icmp', dport => 'echo-request' },
     ],
     'VNC' => [
-	"VNC traffic for VNC display's 0 - 99",
-	{ action => 'PARAM', proto => 'tcp', dport => '5900:5999' },
+        "VNC traffic for VNC display's 0 - 99",
+        { action => 'PARAM', proto => 'tcp', dport => '5900:5999' },
     ],
     'VNCL' => [
-	"VNC traffic from Vncservers to Vncviewers in listen mode",
-	{ action => 'PARAM', proto => 'tcp', dport => '5500' },
+        "VNC traffic from Vncservers to Vncviewers in listen mode",
+        { action => 'PARAM', proto => 'tcp', dport => '5500' },
     ],
     'Web' => [
-	"WWW traffic (HTTP and HTTPS)",
-	{ action => 'PARAM', proto => 'tcp', dport => '80' },
-	{ action => 'PARAM', proto => 'tcp', dport => '443' },
+        "WWW traffic (HTTP and HTTPS)",
+        { action => 'PARAM', proto => 'tcp', dport => '80' },
+        { action => 'PARAM', proto => 'tcp', dport => '443' },
     ],
     'Webcache' => [
-	"Web Cache/Proxy traffic (port 8080)",
-	{ action => 'PARAM', proto => 'tcp', dport => '8080' },
+        "Web Cache/Proxy traffic (port 8080)",
+        { action => 'PARAM', proto => 'tcp', dport => '8080' },
     ],
     'Webmin' => [
-	"Webmin traffic",
-	{ action => 'PARAM', proto => 'tcp', dport => '10000' },
+        "Webmin traffic", { action => 'PARAM', proto => 'tcp', dport => '10000' },
     ],
     'Whois' => [
-	"Whois (nicname, RFC 3912) traffic",
-	{ action => 'PARAM', proto => 'tcp', dport => '43' },
+        "Whois (nicname, RFC 3912) traffic",
+        { action => 'PARAM', proto => 'tcp', dport => '43' },
     ],
 };
 
 my $pve_fw_helpers = {
     'amanda' => { proto => 'udp', dport => '10080', 'v4' => 1, 'v6' => 1 },
-    'ftp' => { proto => 'tcp', dport => '21', 'v4' => 1, 'v6' => 1},
+    'ftp' => { proto => 'tcp', dport => '21', 'v4' => 1, 'v6' => 1 },
     'irc' => { proto => 'tcp', dport => '6667', 'v4' => 1 },
     'netbios-ns' => { proto => 'udp', dport => '137', 'v4' => 1 },
-    'pptp' => { proto => 'tcp', dport => '1723', 'v4' => 1, },
+    'pptp' => { proto => 'tcp', dport => '1723', 'v4' => 1 },
     'sane' => { proto => 'tcp', dport => '6566', 'v4' => 1, 'v6' => 1 },
     'sip' => { proto => 'udp', dport => '5060', 'v4' => 1, 'v6' => 1 },
     'snmp' => { proto => 'udp', dport => '161', 'v4' => 1 },
-    'tftp' => { proto => 'udp', dport => '69', 'v4' => 1, 'v6' => 1},
+    'tftp' => { proto => 'udp', dport => '69', 'v4' => 1, 'v6' => 1 },
 };
 
 my $pve_fw_parsed_macros;
@@ -597,182 +585,200 @@ my $pve_fw_macro_descr;
 my $pve_fw_macro_ipversion = {};
 my $pve_fw_preferred_macro_names = {};
 
-my $FWACCEPTMARK_ON  = "0x80000000/0x80000000";
+my $FWACCEPTMARK_ON = "0x80000000/0x80000000";
 my $FWACCEPTMARK_OFF = "0x00000000/0x80000000";
 
 my $pve_std_chains = {};
 my $pve_std_chains_conf = {};
 $pve_std_chains_conf->{4} = {
     'PVEFW-SET-ACCEPT-MARK' => [
-	{ target => "-j MARK --set-mark $FWACCEPTMARK_ON" },
+        { target => "-j MARK --set-mark $FWACCEPTMARK_ON" },
     ],
     'PVEFW-DropBroadcast' => [
-	# same as shorewall 'Broadcast'
-	# simply DROP BROADCAST/MULTICAST/ANYCAST
-	# we can use this to reduce logging
-	{ action => 'DROP', dsttype => 'BROADCAST' },
-	{ action => 'DROP', dsttype => 'MULTICAST' },
-	{ action => 'DROP', dsttype => 'ANYCAST' },
-	{ action => 'DROP', dest => '224.0.0.0/4' },
+        # same as shorewall 'Broadcast'
+        # simply DROP BROADCAST/MULTICAST/ANYCAST
+        # we can use this to reduce logging
+        { action => 'DROP', dsttype => 'BROADCAST' },
+        { action => 'DROP', dsttype => 'MULTICAST' },
+        { action => 'DROP', dsttype => 'ANYCAST' },
+        { action => 'DROP', dest => '224.0.0.0/4' },
     ],
     'PVEFW-reject' => [
-	# same as shorewall 'reject'
-	{ action => 'DROP', dsttype => 'BROADCAST' },
-	{ action => 'DROP', source => '224.0.0.0/4' },
-	{ action => 'DROP', proto => 'icmp' },
-	{ match => '-p tcp', target => '-j REJECT --reject-with tcp-reset' },
-	{ match => '-p udp', target => '-j REJECT --reject-with icmp-port-unreachable' },
-	{ match => '-p icmp', target => '-j REJECT --reject-with icmp-host-unreachable' },
-	{ target => '-j REJECT --reject-with icmp-host-prohibited' },
+        # same as shorewall 'reject'
+        { action => 'DROP', dsttype => 'BROADCAST' },
+        { action => 'DROP', source => '224.0.0.0/4' },
+        { action => 'DROP', proto => 'icmp' },
+        { match => '-p tcp', target => '-j REJECT --reject-with tcp-reset' },
+        { match => '-p udp', target => '-j REJECT --reject-with icmp-port-unreachable' },
+        { match => '-p icmp', target => '-j REJECT --reject-with icmp-host-unreachable' },
+        { target => '-j REJECT --reject-with icmp-host-prohibited' },
     ],
     'PVEFW-Drop' => [
-	# same as shorewall 'Drop', which is equal to DROP,
-	# but REJECT/DROP some packages to reduce logging,
-	# and ACCEPT critical ICMP types
-	# we are not interested in BROADCAST/MULTICAST/ANYCAST
-	{ action => 'PVEFW-DropBroadcast' },
-	# ACCEPT critical ICMP types
-	{ action => 'ACCEPT', proto => 'icmp', dport => 'fragmentation-needed' },
-	{ action => 'ACCEPT', proto => 'icmp', dport => 'time-exceeded' },
-	# Drop packets with INVALID state
-	{ action => 'DROP', match => '-m conntrack --ctstate INVALID', },
-	# Drop Microsoft SMB noise
-	{ action => 'DROP', proto => 'udp', dport => '135,445' },
-	{ action => 'DROP', proto => 'udp', dport => '137:139' },
-	{ action => 'DROP', proto => 'udp', dport => '1024:65535', sport => 137 },
-	{ action => 'DROP', proto => 'tcp', dport => '135,139,445' },
-	{ action => 'DROP', proto => 'udp', dport => 1900 }, # UPnP
-	# Drop new/NotSyn traffic so that it doesn't get logged
-	{ action => 'DROP', match => '-p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN' },
-	# Drop DNS replies
-	{ action => 'DROP', proto => 'udp', sport => 53 },
+        # same as shorewall 'Drop', which is equal to DROP,
+        # but REJECT/DROP some packages to reduce logging,
+        # and ACCEPT critical ICMP types
+        # we are not interested in BROADCAST/MULTICAST/ANYCAST
+        { action => 'PVEFW-DropBroadcast' },
+        # ACCEPT critical ICMP types
+        { action => 'ACCEPT', proto => 'icmp', dport => 'fragmentation-needed' },
+        { action => 'ACCEPT', proto => 'icmp', dport => 'time-exceeded' },
+        # Drop packets with INVALID state
+        { action => 'DROP', match => '-m conntrack --ctstate INVALID' },
+        # Drop Microsoft SMB noise
+        { action => 'DROP', proto => 'udp', dport => '135,445' },
+        { action => 'DROP', proto => 'udp', dport => '137:139' },
+        { action => 'DROP', proto => 'udp', dport => '1024:65535', sport => 137 },
+        { action => 'DROP', proto => 'tcp', dport => '135,139,445' },
+        { action => 'DROP', proto => 'udp', dport => 1900 }, # UPnP
+        # Drop new/NotSyn traffic so that it doesn't get logged
+        { action => 'DROP', match => '-p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN' },
+        # Drop DNS replies
+        { action => 'DROP', proto => 'udp', sport => 53 },
     ],
     'PVEFW-Reject' => [
-	# same as shorewall 'Reject', which is equal to Reject,
-	# but REJECT/DROP some packages to reduce logging,
-	# and ACCEPT critical ICMP types
-	# we are not interested in BROADCAST/MULTICAST/ANYCAST
-	{ action => 'PVEFW-DropBroadcast' },
-	# ACCEPT critical ICMP types
-	{ action => 'ACCEPT', proto => 'icmp', dport => 'fragmentation-needed' },
-	{ action => 'ACCEPT', proto => 'icmp', dport => 'time-exceeded' },
-	# Drop packets with INVALID state
-	{ action => 'DROP', match => '-m conntrack --ctstate INVALID', },
-	# Drop Microsoft SMB noise
-	{ action => 'PVEFW-reject', proto => 'udp', dport => '135,445' },
-	{ action => 'PVEFW-reject', proto => 'udp', dport => '137:139'},
-	{ action => 'PVEFW-reject', proto => 'udp', dport => '1024:65535', sport => 137 },
-	{ action => 'PVEFW-reject', proto => 'tcp', dport => '135,139,445' },
-	{ action => 'DROP', proto => 'udp', dport => 1900 }, # UPnP
-	# Drop new/NotSyn traffic so that it doesn't get logged
-	{ action => 'DROP', match => '-p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN' },
-	# Drop DNS replies
-	{ action => 'DROP', proto => 'udp', sport => 53 },
+        # same as shorewall 'Reject', which is equal to Reject,
+        # but REJECT/DROP some packages to reduce logging,
+        # and ACCEPT critical ICMP types
+        # we are not interested in BROADCAST/MULTICAST/ANYCAST
+        { action => 'PVEFW-DropBroadcast' },
+        # ACCEPT critical ICMP types
+        { action => 'ACCEPT', proto => 'icmp', dport => 'fragmentation-needed' },
+        { action => 'ACCEPT', proto => 'icmp', dport => 'time-exceeded' },
+        # Drop packets with INVALID state
+        { action => 'DROP', match => '-m conntrack --ctstate INVALID' },
+        # Drop Microsoft SMB noise
+        { action => 'PVEFW-reject', proto => 'udp', dport => '135,445' },
+        { action => 'PVEFW-reject', proto => 'udp', dport => '137:139' },
+        { action => 'PVEFW-reject', proto => 'udp', dport => '1024:65535', sport => 137 },
+        { action => 'PVEFW-reject', proto => 'tcp', dport => '135,139,445' },
+        { action => 'DROP', proto => 'udp', dport => 1900 }, # UPnP
+        # Drop new/NotSyn traffic so that it doesn't get logged
+        { action => 'DROP', match => '-p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN' },
+        # Drop DNS replies
+        { action => 'DROP', proto => 'udp', sport => 53 },
     ],
     'PVEFW-tcpflags' => [
-	# same as shorewall tcpflags action.
-	# Packets arriving on this interface are checked for some illegal combinations of TCP flags
-	{ match => '-p tcp -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG FIN,PSH,URG', target => '-g PVEFW-logflags' },
-	{ match => '-p tcp -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG NONE', target => '-g PVEFW-logflags' },
-	{ match => '-p tcp -m tcp --tcp-flags SYN,RST SYN,RST', target => '-g PVEFW-logflags' },
-	{ match => '-p tcp -m tcp --tcp-flags FIN,SYN FIN,SYN', target => '-g PVEFW-logflags' },
-	{ match => '-p tcp -m tcp --sport 0 --tcp-flags FIN,SYN,RST,ACK SYN', target => '-g PVEFW-logflags' },
+        # same as shorewall tcpflags action.
+        # Packets arriving on this interface are checked for some illegal combinations of TCP flags
+        {
+            match => '-p tcp -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG FIN,PSH,URG',
+            target => '-g PVEFW-logflags',
+        },
+        {
+            match => '-p tcp -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG NONE',
+            target => '-g PVEFW-logflags',
+        },
+        { match => '-p tcp -m tcp --tcp-flags SYN,RST SYN,RST', target => '-g PVEFW-logflags' },
+        { match => '-p tcp -m tcp --tcp-flags FIN,SYN FIN,SYN', target => '-g PVEFW-logflags' },
+        {
+            match => '-p tcp -m tcp --sport 0 --tcp-flags FIN,SYN,RST,ACK SYN',
+            target => '-g PVEFW-logflags',
+        },
     ],
     'PVEFW-smurfs' => [
-	# same as shorewall smurfs action
-	# Filter packets for smurfs (packets with a broadcast address as the source).
-	{ match => '-s 0.0.0.0/32', target => '-j RETURN' }, # allow DHCP
-	{ match => '-m addrtype --src-type BROADCAST', target => '-g PVEFW-smurflog' },
-	{ match => '-s 224.0.0.0/4', target => '-g PVEFW-smurflog' },
+        # same as shorewall smurfs action
+        # Filter packets for smurfs (packets with a broadcast address as the source).
+        { match => '-s 0.0.0.0/32', target => '-j RETURN' }, # allow DHCP
+        { match => '-m addrtype --src-type BROADCAST', target => '-g PVEFW-smurflog' },
+        { match => '-s 224.0.0.0/4', target => '-g PVEFW-smurflog' },
     ],
     'PVEFW-smurflog' => [
-	{ action => 'DROP', logmsg => 'DROP: ' },
+        { action => 'DROP', logmsg => 'DROP: ' },
     ],
     'PVEFW-logflags' => [
-	{ action => 'DROP', logmsg => 'DROP: ' },
+        { action => 'DROP', logmsg => 'DROP: ' },
     ],
 };
 
 $pve_std_chains_conf->{6} = {
     'PVEFW-SET-ACCEPT-MARK' => [
-	{ target => "-j MARK --set-mark $FWACCEPTMARK_ON" },
+        { target => "-j MARK --set-mark $FWACCEPTMARK_ON" },
     ],
     'PVEFW-DropBroadcast' => [
-	# same as shorewall 'Broadcast'
-	# simply DROP BROADCAST/MULTICAST/ANYCAST
-	# we can use this to reduce logging
-	#{ action => 'DROP', dsttype => 'BROADCAST' }, #no broadcast in ipv6
-	# ipv6 addrtype does not work with kernel 2.6.32
-	#{ action => 'DROP', dsttype => 'MULTICAST' },
-	#{ action => 'DROP', dsttype => 'ANYCAST' },
-	{ action => 'DROP', dest => 'ff00::/8' },
-	#{ action => 'DROP', dest => '224.0.0.0/4' },
+        # same as shorewall 'Broadcast'
+        # simply DROP BROADCAST/MULTICAST/ANYCAST
+        # we can use this to reduce logging
+        #{ action => 'DROP', dsttype => 'BROADCAST' }, #no broadcast in ipv6
+        # ipv6 addrtype does not work with kernel 2.6.32
+        #{ action => 'DROP', dsttype => 'MULTICAST' },
+        #{ action => 'DROP', dsttype => 'ANYCAST' },
+        { action => 'DROP', dest => 'ff00::/8' },
+        #{ action => 'DROP', dest => '224.0.0.0/4' },
     ],
     'PVEFW-reject' => [
-	{ action => 'DROP', proto => 'icmpv6' },
-	{ match => '-p tcp', target => '-j REJECT --reject-with tcp-reset' },
-	{ match => '-p udp', target => '-j REJECT --reject-with icmp6-port-unreachable' },
-	{ target => '-j REJECT --reject-with icmp6-adm-prohibited' },
+        { action => 'DROP', proto => 'icmpv6' },
+        { match => '-p tcp', target => '-j REJECT --reject-with tcp-reset' },
+        { match => '-p udp', target => '-j REJECT --reject-with icmp6-port-unreachable' },
+        { target => '-j REJECT --reject-with icmp6-adm-prohibited' },
     ],
     'PVEFW-Drop' => [
-	# same as shorewall 'Drop', which is equal to DROP,
-	# but REJECT/DROP some packages to reduce logging,
-	# and ACCEPT critical ICMP types
-	{ action => 'PVEFW-reject', proto => 'tcp', dport => '43' }, # REJECT 'auth'
-	# we are not interested in BROADCAST/MULTICAST/ANYCAST
-	{ action => 'PVEFW-DropBroadcast' },
-	# ACCEPT critical ICMP types
-	{ action => 'ACCEPT', proto => 'icmpv6', dport => 'destination-unreachable' },
-	{ action => 'ACCEPT', proto => 'icmpv6', dport => 'time-exceeded' },
-	{ action => 'ACCEPT', proto => 'icmpv6', dport => 'packet-too-big' },
-	# Drop packets with INVALID state
-	{ action => 'DROP', match => '-m conntrack --ctstate INVALID', },
-	# Drop Microsoft SMB noise
-	{ action => 'DROP', proto => 'udp', dport => '135,445' },
-	{ action => 'DROP', proto => 'udp', dport => '137:139'},
-	{ action => 'DROP', proto => 'udp', dport => '1024:65535', sport => 137 },
-	{ action => 'DROP', proto => 'tcp', dport => '135,139,445' },
-	{ action => 'DROP', proto => 'udp', dport => 1900 }, # UPnP
-	# Drop new/NotSyn traffic so that it doesn't get logged
-	{ action => 'DROP', match => '-p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN' },
-	# Drop DNS replies
-	{ action => 'DROP', proto => 'udp', sport => 53 },
+        # same as shorewall 'Drop', which is equal to DROP,
+        # but REJECT/DROP some packages to reduce logging,
+        # and ACCEPT critical ICMP types
+        { action => 'PVEFW-reject', proto => 'tcp', dport => '43' }, # REJECT 'auth'
+        # we are not interested in BROADCAST/MULTICAST/ANYCAST
+        { action => 'PVEFW-DropBroadcast' },
+        # ACCEPT critical ICMP types
+        { action => 'ACCEPT', proto => 'icmpv6', dport => 'destination-unreachable' },
+        { action => 'ACCEPT', proto => 'icmpv6', dport => 'time-exceeded' },
+        { action => 'ACCEPT', proto => 'icmpv6', dport => 'packet-too-big' },
+        # Drop packets with INVALID state
+        { action => 'DROP', match => '-m conntrack --ctstate INVALID' },
+        # Drop Microsoft SMB noise
+        { action => 'DROP', proto => 'udp', dport => '135,445' },
+        { action => 'DROP', proto => 'udp', dport => '137:139' },
+        { action => 'DROP', proto => 'udp', dport => '1024:65535', sport => 137 },
+        { action => 'DROP', proto => 'tcp', dport => '135,139,445' },
+        { action => 'DROP', proto => 'udp', dport => 1900 }, # UPnP
+        # Drop new/NotSyn traffic so that it doesn't get logged
+        { action => 'DROP', match => '-p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN' },
+        # Drop DNS replies
+        { action => 'DROP', proto => 'udp', sport => 53 },
     ],
     'PVEFW-Reject' => [
-	# same as shorewall 'Reject', which is equal to Reject,
-	# but REJECT/DROP some packages to reduce logging,
-	# and ACCEPT critical ICMP types
-	{ action => 'PVEFW-reject',  proto => 'tcp', dport => '43' }, # REJECT 'auth'
-	# we are not interested in BROADCAST/MULTICAST/ANYCAST
-	{ action => 'PVEFW-DropBroadcast' },
-	# ACCEPT critical ICMP types
-	{ action => 'ACCEPT', proto => 'icmpv6', dport => 'destination-unreachable' },
-	{ action => 'ACCEPT', proto => 'icmpv6', dport => 'time-exceeded' },
-	{ action => 'ACCEPT', proto => 'icmpv6', dport => 'packet-too-big' },
-	# Drop packets with INVALID state
-	{ action => 'DROP', match => '-m conntrack --ctstate INVALID', },
-	# Drop Microsoft SMB noise
-	{ action => 'PVEFW-reject', proto => 'udp', dport => '135,445' },
-	{ action => 'PVEFW-reject', proto => 'udp', dport => '137:139' },
-	{ action => 'PVEFW-reject', proto => 'udp', dport => '1024:65535', sport => 137 },
-	{ action => 'PVEFW-reject', proto => 'tcp', dport => '135,139,445' },
-	{ action => 'DROP', proto => 'udp', dport => 1900 }, # UPnP
-	# Drop new/NotSyn traffic so that it doesn't get logged
-	{ action => 'DROP', match => '-p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN' },
-	# Drop DNS replies
-	{ action => 'DROP', proto => 'udp', sport => 53 },
+        # same as shorewall 'Reject', which is equal to Reject,
+        # but REJECT/DROP some packages to reduce logging,
+        # and ACCEPT critical ICMP types
+        { action => 'PVEFW-reject', proto => 'tcp', dport => '43' }, # REJECT 'auth'
+        # we are not interested in BROADCAST/MULTICAST/ANYCAST
+        { action => 'PVEFW-DropBroadcast' },
+        # ACCEPT critical ICMP types
+        { action => 'ACCEPT', proto => 'icmpv6', dport => 'destination-unreachable' },
+        { action => 'ACCEPT', proto => 'icmpv6', dport => 'time-exceeded' },
+        { action => 'ACCEPT', proto => 'icmpv6', dport => 'packet-too-big' },
+        # Drop packets with INVALID state
+        { action => 'DROP', match => '-m conntrack --ctstate INVALID' },
+        # Drop Microsoft SMB noise
+        { action => 'PVEFW-reject', proto => 'udp', dport => '135,445' },
+        { action => 'PVEFW-reject', proto => 'udp', dport => '137:139' },
+        { action => 'PVEFW-reject', proto => 'udp', dport => '1024:65535', sport => 137 },
+        { action => 'PVEFW-reject', proto => 'tcp', dport => '135,139,445' },
+        { action => 'DROP', proto => 'udp', dport => 1900 }, # UPnP
+        # Drop new/NotSyn traffic so that it doesn't get logged
+        { action => 'DROP', match => '-p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN' },
+        # Drop DNS replies
+        { action => 'DROP', proto => 'udp', sport => 53 },
     ],
     'PVEFW-tcpflags' => [
-	# same as shorewall tcpflags action.
-	# Packets arriving on this interface are checked for some illegal combinations of TCP flags
-	{ match => '-p tcp -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG FIN,PSH,URG', target => '-g PVEFW-logflags' },
-	{ match => '-p tcp -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG NONE', target => '-g PVEFW-logflags' },
-	{ match => '-p tcp -m tcp --tcp-flags SYN,RST SYN,RST', target => '-g PVEFW-logflags' },
-	{ match => '-p tcp -m tcp --tcp-flags FIN,SYN FIN,SYN', target => '-g PVEFW-logflags' },
-	{ match => '-p tcp -m tcp --sport 0 --tcp-flags FIN,SYN,RST,ACK SYN', target => '-g PVEFW-logflags' },
+        # same as shorewall tcpflags action.
+        # Packets arriving on this interface are checked for some illegal combinations of TCP flags
+        {
+            match => '-p tcp -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG FIN,PSH,URG',
+            target => '-g PVEFW-logflags',
+        },
+        {
+            match => '-p tcp -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG NONE',
+            target => '-g PVEFW-logflags',
+        },
+        { match => '-p tcp -m tcp --tcp-flags SYN,RST SYN,RST', target => '-g PVEFW-logflags' },
+        { match => '-p tcp -m tcp --tcp-flags FIN,SYN FIN,SYN', target => '-g PVEFW-logflags' },
+        {
+            match => '-p tcp -m tcp --sport 0 --tcp-flags FIN,SYN,RST,ACK SYN',
+            target => '-g PVEFW-logflags',
+        },
     ],
     'PVEFW-logflags' => [
-	{ action => 'DROP', logmsg => 'DROP: ' },
+        { action => 'DROP', logmsg => 'DROP: ' },
     ],
 };
 
@@ -851,10 +857,10 @@ my $is_valid_icmp_type = sub {
     my ($type, $valid_types) = @_;
 
     if ($type =~ m/^\d+$/) {
-	# values for icmp-type range between 0 and 255 (8 bit field)
-	die "invalid icmp-type '$type'\n" if $type > 255;
+        # values for icmp-type range between 0 and 255 (8 bit field)
+        die "invalid icmp-type '$type'\n" if $type > 255;
     } else {
-	die "unknown icmp-type '$type'\n" if !defined($valid_types->{$type});
+        die "unknown icmp-type '$type'\n" if !defined($valid_types->{$type});
     }
 };
 
@@ -868,38 +874,38 @@ sub init_firewall_macros {
     $pve_fw_parsed_macros = {};
 
     my $parse = sub {
-	my ($k, $macro) = @_;
-	my $lc_name = lc($k);
-	$pve_fw_macro_ipversion->{$k} = 0;
-	while (!ref($macro->[0])) {
-	    my $desc = shift @$macro;
-	    if ($desc eq 'ipv4only') {
-		$pve_fw_macro_ipversion->{$k} = 4;
-	    } elsif ($desc eq 'ipv6only') {
-		$pve_fw_macro_ipversion->{$k} = 6;
-	    } else {
-		$pve_fw_macro_descr->{$k} = $desc;
-	    }
-	}
-	$pve_fw_preferred_macro_names->{$lc_name} = $k;
-	$pve_fw_parsed_macros->{$k} = $macro;
+        my ($k, $macro) = @_;
+        my $lc_name = lc($k);
+        $pve_fw_macro_ipversion->{$k} = 0;
+        while (!ref($macro->[0])) {
+            my $desc = shift @$macro;
+            if ($desc eq 'ipv4only') {
+                $pve_fw_macro_ipversion->{$k} = 4;
+            } elsif ($desc eq 'ipv6only') {
+                $pve_fw_macro_ipversion->{$k} = 6;
+            } else {
+                $pve_fw_macro_descr->{$k} = $desc;
+            }
+        }
+        $pve_fw_preferred_macro_names->{$lc_name} = $k;
+        $pve_fw_parsed_macros->{$k} = $macro;
     };
 
     foreach my $k (keys %$pve_fw_macros) {
-	&$parse($k, $pve_fw_macros->{$k});
+        &$parse($k, $pve_fw_macros->{$k});
     }
 
     foreach my $k (keys %$pve_ipv6fw_macros) {
-	next if $pve_fw_parsed_macros->{$k};
-	&$parse($k, $pve_ipv6fw_macros->{$k});
-	$pve_fw_macro_ipversion->{$k} = 6;
+        next if $pve_fw_parsed_macros->{$k};
+        &$parse($k, $pve_ipv6fw_macros->{$k});
+        $pve_fw_macro_ipversion->{$k} = 6;
     }
 }
 
 init_firewall_macros();
 
 sub get_macros {
-    return wantarray ? ($pve_fw_parsed_macros, $pve_fw_macro_descr): $pve_fw_parsed_macros;
+    return wantarray ? ($pve_fw_parsed_macros, $pve_fw_macro_descr) : $pve_fw_parsed_macros;
 }
 
 my $etc_services;
@@ -912,29 +918,28 @@ sub get_etc_services {
 
     my $fh = IO::File->new($filename, O_RDONLY);
     if (!$fh) {
-	warn "unable to read '$filename' - $!\n";
-	return {};
+        warn "unable to read '$filename' - $!\n";
+        return {};
     }
 
     my $services = {};
 
     while (my $line = <$fh>) {
-	chomp ($line);
-	next if $line =~m/^#/;
-	next if ($line =~m/^\s*$/);
+        chomp($line);
+        next if $line =~ m/^#/;
+        next if ($line =~ m/^\s*$/);
 
-	if ($line =~ m!^(\S+)\s+(\S+)/(tcp|udp|sctp).*$!) {
-	    $services->{byid}->{$2}->{name} = $1;
-	    $services->{byid}->{$2}->{port} = $2;
-	    $services->{byid}->{$2}->{$3} = 1;
-	    $services->{byname}->{$1} = $services->{byid}->{$2};
-	}
+        if ($line =~ m!^(\S+)\s+(\S+)/(tcp|udp|sctp).*$!) {
+            $services->{byid}->{$2}->{name} = $1;
+            $services->{byid}->{$2}->{port} = $2;
+            $services->{byid}->{$2}->{$3} = 1;
+            $services->{byname}->{$1} = $services->{byid}->{$2};
+        }
     }
 
     close($fh);
 
     $etc_services = $services;
-
 
     return $etc_services;
 }
@@ -944,21 +949,21 @@ sub parse_protocol_file {
 
     my $fh = IO::File->new($filename, O_RDONLY);
     if (!$fh) {
-	warn "unable to read '$filename' - $!\n";
-	return {};
+        warn "unable to read '$filename' - $!\n";
+        return {};
     }
 
     my $protocols = {};
 
     while (my $line = <$fh>) {
-	chomp ($line);
-	next if $line =~m/^#/;
-	next if ($line =~m/^\s*$/);
+        chomp($line);
+        next if $line =~ m/^#/;
+        next if ($line =~ m/^\s*$/);
 
-	if ($line =~ m!^(\S+)\s+(\d+)(?:\s+.*)?$!) {
-	    $protocols->{byid}->{$2}->{name} = $1;
-	    $protocols->{byname}->{$1} = $protocols->{byid}->{$2};
-	}
+        if ($line =~ m!^(\S+)\s+(\d+)(?:\s+.*)?$!) {
+            $protocols->{byid}->{$2}->{name} = $1;
+            $protocols->{byname}->{$1} = $protocols->{byid}->{$2};
+        }
     }
 
     close($fh);
@@ -986,7 +991,7 @@ my $etc_ethertypes;
 
 sub get_etc_ethertypes {
     $etc_ethertypes = parse_protocol_file('/etc/ethertypes')
-	if !$etc_ethertypes;
+        if !$etc_ethertypes;
     return $etc_ethertypes;
 }
 
@@ -1000,34 +1005,37 @@ sub local_network {
     return $__local_network if defined($__local_network);
 
     eval {
-	my $nodename = PVE::INotify::nodename();
+        my $nodename = PVE::INotify::nodename();
 
-	my $ip = PVE::Cluster::remote_node_ip($nodename);
+        my $ip = PVE::Cluster::remote_node_ip($nodename);
 
-	my $testip = Net::IP->new($ip);
+        my $testip = Net::IP->new($ip);
 
-	my $isv6 = $testip->version == 6;
-	my $routes = $isv6 ? PVE::ProcFSTools::read_proc_net_ipv6_route()
-	                   : PVE::ProcFSTools::read_proc_net_route();
-	foreach my $entry (@$routes) {
-	    my $mask;
-	    if ($isv6) {
-		$mask = $entry->{prefix};
-		next if !$mask; # skip the default route...
-	    } else {
-		$mask = $PVE::Network::ipv4_mask_hash_localnet->{$entry->{mask}};
-		next if !defined($mask);
-	    }
-	    my $cidr = "$entry->{dest}/$mask";
-	    my $testnet = Net::IP->new($cidr);
-	    my $overlap = $testnet->overlaps($testip);
-	    if ($overlap == $Net::IP::IP_B_IN_A_OVERLAP ||
-	        $overlap == $Net::IP::IP_IDENTICAL)
-	    {
-		$__local_network = $cidr;
-		return;
-	    }
-	}
+        my $isv6 = $testip->version == 6;
+        my $routes =
+            $isv6
+            ? PVE::ProcFSTools::read_proc_net_ipv6_route()
+            : PVE::ProcFSTools::read_proc_net_route();
+        foreach my $entry (@$routes) {
+            my $mask;
+            if ($isv6) {
+                $mask = $entry->{prefix};
+                next if !$mask; # skip the default route...
+            } else {
+                $mask = $PVE::Network::ipv4_mask_hash_localnet->{ $entry->{mask} };
+                next if !defined($mask);
+            }
+            my $cidr = "$entry->{dest}/$mask";
+            my $testnet = Net::IP->new($cidr);
+            my $overlap = $testnet->overlaps($testip);
+            if (
+                $overlap == $Net::IP::IP_B_IN_A_OVERLAP
+                || $overlap == $Net::IP::IP_IDENTICAL
+            ) {
+                $__local_network = $cidr;
+                return;
+            }
+        }
     };
     warn $@ if $@;
 
@@ -1049,7 +1057,7 @@ sub compute_ipset_chain_name {
     my $id = "$vmid-${ipset_name}-v$ipversion";
 
     if (length($id) > $max_iptables_ipset_name_length) {
-	$id = PVE::Tools::fnv31a_hex($id);
+        $id = PVE::Tools::fnv31a_hex($id);
     }
 
     return "PVEFW-$id";
@@ -1065,13 +1073,13 @@ sub parse_address_list {
     my ($str) = @_;
 
     if ($str =~ m/^(\+)(\S+)$/) { # ipset ref
-	die "ipset name too long\n" if length($str) > ($max_ipset_name_length + 1);
-	return;
+        die "ipset name too long\n" if length($str) > ($max_ipset_name_length + 1);
+        return;
     }
 
     if ($str =~ m@^(dc/|guest/)?${ip_alias_pattern}$@) {
-	die "alias name too long\n" if length($str) > $max_alias_name_length;
-	return;
+        die "alias name too long\n" if length($str) > $max_alias_name_length;
+        return;
     }
 
     my $count = 0;
@@ -1081,20 +1089,20 @@ sub parse_address_list {
     my @elements = split(/,/, $str);
     die "extraneous commas in list\n" if $str ne join(',', @elements);
     foreach my $elem (@elements) {
-	$count++;
-	my $ip = Net::IP->new($elem);
-	if (!$ip) {
-	    my $err = Net::IP::Error();
-	    die "invalid IP address: $err\n";
-	}
-	$iprange = 1 if $elem =~ m/-/;
+        $count++;
+        my $ip = Net::IP->new($elem);
+        if (!$ip) {
+            my $err = Net::IP::Error();
+            die "invalid IP address: $err\n";
+        }
+        $iprange = 1 if $elem =~ m/-/;
 
-	my $new_ipversion = Net::IP::ip_is_ipv6($ip->ip()) ? 6 : 4;
+        my $new_ipversion = Net::IP::ip_is_ipv6($ip->ip()) ? 6 : 4;
 
-	die "detected mixed ipv4/ipv6 addresses in address list '$str'\n"
-	    if $ipversion && ($new_ipversion != $ipversion);
+        die "detected mixed ipv4/ipv6 addresses in address list '$str'\n"
+            if $ipversion && ($new_ipversion != $ipversion);
 
-	$ipversion = $new_ipversion;
+        $ipversion = $new_ipversion;
     }
 
     die "you can't use a range in a list\n" if $iprange && $count > 1;
@@ -1115,25 +1123,26 @@ sub parse_port_name_number_or_range {
     my @elements = split(/,/, $str);
     die "extraneous commas in list\n" if $str ne join(',', @elements);
     foreach my $item (@elements) {
-	if ($item =~ m/^([0-9]+):([0-9]+)$/) {
-	    $count += 2;
-	    my ($port1, $port2) = ($1, $2);
-	    die "invalid port '$port1'\n" if $port1 > 65535;
-	    die "invalid port '$port2'\n" if $port2 > 65535;
-	    die "backwards range '$port1:$port2' not allowed, did you mean '$port2:$port1'?\n" if $port1 > $port2;
-	} elsif ($item =~ m/^([0-9]+)$/) {
-	    $count += 1;
-	    my $port = $1;
-	    die "invalid port '$port'\n" if $port > 65535;
-	} else {
-	    if ($dport && $icmp_type_names->{$item}) {
-		$icmp_port = 1;
-	    } elsif ($dport && $icmpv6_type_names->{$item}) {
-		$icmp_port = 1;
-	    } else {
-		die "invalid port '$item'\n" if !$services->{byname}->{$item};
-	    }
-	}
+        if ($item =~ m/^([0-9]+):([0-9]+)$/) {
+            $count += 2;
+            my ($port1, $port2) = ($1, $2);
+            die "invalid port '$port1'\n" if $port1 > 65535;
+            die "invalid port '$port2'\n" if $port2 > 65535;
+            die "backwards range '$port1:$port2' not allowed, did you mean '$port2:$port1'?\n"
+                if $port1 > $port2;
+        } elsif ($item =~ m/^([0-9]+)$/) {
+            $count += 1;
+            my $port = $1;
+            die "invalid port '$port'\n" if $port > 65535;
+        } else {
+            if ($dport && $icmp_type_names->{$item}) {
+                $icmp_port = 1;
+            } elsif ($dport && $icmpv6_type_names->{$item}) {
+                $icmp_port = 1;
+            } else {
+                die "invalid port '$item'\n" if !$services->{byname}->{$item};
+            }
+        }
     }
 
     die "ICMP ports not allowed in port range\n" if $icmp_port && $count > 0;
@@ -1142,77 +1151,82 @@ sub parse_port_name_number_or_range {
     # that makes sense in a literal way. The range 1:100 counts as 2, not as
     # one and not as 100...
     die "too many entries in port list (> 15 numbers)\n"
-	if $count > 15;
+        if $count > 15;
 
     return (scalar(@elements) > 1);
 }
 
 PVE::JSONSchema::register_format('pve-fw-conntrack-helper', \&pve_fw_verify_conntrack_helper);
+
 sub pve_fw_verify_conntrack_helper {
-   my ($list) = @_;
+    my ($list) = @_;
 
-   my @helpers = split(/,/, $list);
-   die "extraneous commas in list\n" if $list ne join(',', @helpers);
-   foreach my $helper (@helpers) {
-	die "unknown helper $helper" if !$pve_fw_helpers->{$helper};
-   }
+    my @helpers = split(/,/, $list);
+    die "extraneous commas in list\n" if $list ne join(',', @helpers);
+    foreach my $helper (@helpers) {
+        die "unknown helper $helper" if !$pve_fw_helpers->{$helper};
+    }
 
-   return $list;
+    return $list;
 }
 
 PVE::JSONSchema::register_format('pve-fw-sport-spec', \&pve_fw_verify_sport_spec);
+
 sub pve_fw_verify_sport_spec {
-   my ($portstr) = @_;
+    my ($portstr) = @_;
 
-   parse_port_name_number_or_range($portstr, 0);
+    parse_port_name_number_or_range($portstr, 0);
 
-   return $portstr;
+    return $portstr;
 }
 
 PVE::JSONSchema::register_format('pve-fw-dport-spec', \&pve_fw_verify_dport_spec);
+
 sub pve_fw_verify_dport_spec {
-   my ($portstr) = @_;
+    my ($portstr) = @_;
 
-   parse_port_name_number_or_range($portstr, 1);
+    parse_port_name_number_or_range($portstr, 1);
 
-   return $portstr;
+    return $portstr;
 }
 
 PVE::JSONSchema::register_format('pve-fw-addr-spec', \&pve_fw_verify_addr_spec);
+
 sub pve_fw_verify_addr_spec {
-   my ($list) = @_;
+    my ($list) = @_;
 
-   parse_address_list($list);
+    parse_address_list($list);
 
-   return $list;
+    return $list;
 }
 
 PVE::JSONSchema::register_format('pve-fw-protocol-spec', \&pve_fw_verify_protocol_spec);
+
 sub pve_fw_verify_protocol_spec {
-   my ($proto) = @_;
+    my ($proto) = @_;
 
-   my $protocols = get_etc_protocols();
+    my $protocols = get_etc_protocols();
 
-   die "unknown protocol '$proto'\n" if $proto &&
-       !(defined($protocols->{byname}->{$proto}) ||
-	 defined($protocols->{byid}->{$proto}));
+    die "unknown protocol '$proto'\n"
+        if $proto
+        && !(defined($protocols->{byname}->{$proto}) || defined($protocols->{byid}->{$proto}));
 
-   return $proto;
+    return $proto;
 }
 
 PVE::JSONSchema::register_format('pve-fw-icmp-type-spec', \&pve_fw_verify_icmp_type_spec);
+
 sub pve_fw_verify_icmp_type_spec {
     my ($icmp_type) = @_;
 
-    if ($icmp_type_names->{$icmp_type} ||  $icmpv6_type_names->{$icmp_type}) {
-	return $icmp_type;
+    if ($icmp_type_names->{$icmp_type} || $icmpv6_type_names->{$icmp_type}) {
+        return $icmp_type;
     }
 
     die "invalid icmp-type value '$icmp_type'\n" if $icmp_type ne '';
 
     return $icmp_type;
 }
-
 
 # helper function for API
 
@@ -1223,10 +1237,10 @@ sub copy_opject_with_digest {
 
     my $res = {};
     foreach my $k (sort keys %$object) {
-	my $v = $object->{$k};
-	next if !defined($v);
-	$res->{$k} = $v;
-	$sha->add($k, ':', $v, "\n");
+        my $v = $object->{$k};
+        next if !defined($v);
+        $res->{$k} = $v;
+        $sha->add($k, ':', $v, "\n");
     }
 
     my $digest = $sha->hexdigest;
@@ -1243,24 +1257,24 @@ sub copy_list_with_digest {
 
     my $res = [];
     foreach my $entry (@$list) {
-	my $data = {};
-	foreach my $k (sort keys %$entry) {
-	    my $v = $entry->{$k};
-	    next if !defined($v);
-	    $data->{$k} = $v;
-	    # Note: digest ignores refs ($rule->{errors})
-	    # since Digest::SHA expects a series of bytes,
-	    #  we have to encode the value here to prevent errors when
-	    #  using utf8 characters (eg. in comments)
-	    $sha->add($k, ':', encode_utf8($v), "\n") if !ref($v); ;
-	}
-	push @$res, $data;
+        my $data = {};
+        foreach my $k (sort keys %$entry) {
+            my $v = $entry->{$k};
+            next if !defined($v);
+            $data->{$k} = $v;
+            # Note: digest ignores refs ($rule->{errors})
+            # since Digest::SHA expects a series of bytes,
+            #  we have to encode the value here to prevent errors when
+            #  using utf8 characters (eg. in comments)
+            $sha->add($k, ':', encode_utf8($v), "\n") if !ref($v);
+        }
+        push @$res, $data;
     }
 
     my $digest = $sha->hexdigest;
 
     foreach my $entry (@$res) {
-	$entry->{digest} = $digest;
+        $entry->{digest} = $digest;
     }
 
     return wantarray ? ($res, $digest) : $res;
@@ -1268,322 +1282,352 @@ sub copy_list_with_digest {
 
 our $cluster_option_properties = {
     enable => {
-	description => "Enable or disable the firewall cluster wide.",
-	type => 'integer',
-	minimum => 0,
-	optional => 1,
+        description => "Enable or disable the firewall cluster wide.",
+        type => 'integer',
+        minimum => 0,
+        optional => 1,
     },
     ebtables => {
-	description => "Enable ebtables rules cluster wide.",
-	type => 'boolean',
-	default => 1,
-	optional => 1,
+        description => "Enable ebtables rules cluster wide.",
+        type => 'boolean',
+        default => 1,
+        optional => 1,
     },
     policy_in => {
-	description => "Input policy.",
-	type => 'string',
-	optional => 1,
-	enum => ['ACCEPT', 'REJECT', 'DROP'],
+        description => "Input policy.",
+        type => 'string',
+        optional => 1,
+        enum => ['ACCEPT', 'REJECT', 'DROP'],
     },
     policy_out => {
-	description => "Output policy.",
-	type => 'string',
-	optional => 1,
-	enum => ['ACCEPT', 'REJECT', 'DROP'],
+        description => "Output policy.",
+        type => 'string',
+        optional => 1,
+        enum => ['ACCEPT', 'REJECT', 'DROP'],
     },
     policy_forward => {
-	description => "Forward policy.",
-	type => 'string',
-	optional => 1,
-	enum => ['ACCEPT', 'DROP'],
+        description => "Forward policy.",
+        type => 'string',
+        optional => 1,
+        enum => ['ACCEPT', 'DROP'],
     },
     log_ratelimit => {
-	description => "Log ratelimiting settings",
-	type => 'string', format => {
-	    enable => {
-		default_key => 1,
-		description => 'Enable or disable log rate limiting',
-		type => 'boolean',
-		default => '1',
-	    },
-	    rate => {
-		type => 'string',
-		description => 'Frequency with which the burst bucket gets refilled',
-		optional => 1,
-		pattern => '[1-9][0-9]*\/(second|minute|hour|day)',
-		format_description => 'rate',
-		default => '1/second',
-	    },
-	    burst => {
-		type => 'integer',
-		minimum => 0,
-		optional => 1,
-		description => 'Initial burst of packages which will always get logged before the rate is applied',
-		default => 5,
-	    },
-	},
-	optional => 1,
+        description => "Log ratelimiting settings",
+        type => 'string',
+        format => {
+            enable => {
+                default_key => 1,
+                description => 'Enable or disable log rate limiting',
+                type => 'boolean',
+                default => '1',
+            },
+            rate => {
+                type => 'string',
+                description => 'Frequency with which the burst bucket gets refilled',
+                optional => 1,
+                pattern => '[1-9][0-9]*\/(second|minute|hour|day)',
+                format_description => 'rate',
+                default => '1/second',
+            },
+            burst => {
+                type => 'integer',
+                minimum => 0,
+                optional => 1,
+                description =>
+                    'Initial burst of packages which will always get logged before the rate is applied',
+                default => 5,
+            },
+        },
+        optional => 1,
     },
 };
 
 our $host_option_properties = {
     enable => {
-	description => "Enable host firewall rules.",
-	type => 'boolean',
-	optional => 1,
+        description => "Enable host firewall rules.",
+        type => 'boolean',
+        optional => 1,
     },
-    log_level_in =>  get_standard_option('pve-fw-loglevel', {
-	description => "Log level for incoming traffic." }),
-    log_level_out =>  get_standard_option('pve-fw-loglevel', {
-	description => "Log level for outgoing traffic." }),
-    log_level_forward =>  get_standard_option('pve-fw-loglevel', {
-	description => "Log level for forwarded traffic." }),
-    tcp_flags_log_level =>  get_standard_option('pve-fw-loglevel', {
-	description => "Log level for illegal tcp flags filter." }),
-    smurf_log_level =>  get_standard_option('pve-fw-loglevel', {
-	description => "Log level for SMURFS filter." }),
+    log_level_in => get_standard_option(
+        'pve-fw-loglevel',
+        { description => "Log level for incoming traffic." },
+    ),
+    log_level_out => get_standard_option(
+        'pve-fw-loglevel',
+        { description => "Log level for outgoing traffic." },
+    ),
+    log_level_forward => get_standard_option(
+        'pve-fw-loglevel',
+        { description => "Log level for forwarded traffic." },
+    ),
+    tcp_flags_log_level => get_standard_option(
+        'pve-fw-loglevel',
+        { description => "Log level for illegal tcp flags filter." },
+    ),
+    smurf_log_level =>
+        get_standard_option('pve-fw-loglevel', { description => "Log level for SMURFS filter." }),
     nosmurfs => {
-	description => "Enable SMURFS filter.",
-	type => 'boolean',
-	optional => 1,
+        description => "Enable SMURFS filter.",
+        type => 'boolean',
+        optional => 1,
     },
     tcpflags => {
-	description => "Filter illegal combinations of TCP flags.",
-	type => 'boolean',
-	default => 0,
-	optional => 1,
+        description => "Filter illegal combinations of TCP flags.",
+        type => 'boolean',
+        default => 0,
+        optional => 1,
     },
     nf_conntrack_max => {
-	description => "Maximum number of tracked connections.",
-	type => 'integer',
-	optional => 1,
-	default => 262144,
-	minimum => 32768,
+        description => "Maximum number of tracked connections.",
+        type => 'integer',
+        optional => 1,
+        default => 262144,
+        minimum => 32768,
     },
     nf_conntrack_tcp_timeout_established => {
-	description => "Conntrack established timeout.",
-	type => 'integer',
-	optional => 1,
-	default => 432000,
-	minimum => 7875,
+        description => "Conntrack established timeout.",
+        type => 'integer',
+        optional => 1,
+        default => 432000,
+        minimum => 7875,
     },
     nf_conntrack_tcp_timeout_syn_recv => {
-	description => "Conntrack syn recv timeout.",
-	type => 'integer',
-	optional => 1,
-	default => 60,
-	minimum => 30,
-	maximum => 60,
+        description => "Conntrack syn recv timeout.",
+        type => 'integer',
+        optional => 1,
+        default => 60,
+        minimum => 30,
+        maximum => 60,
     },
     ndp => {
-	description => "Enable NDP (Neighbor Discovery Protocol).",
-	type => 'boolean',
-	default => 0,
-	optional => 1,
+        description => "Enable NDP (Neighbor Discovery Protocol).",
+        type => 'boolean',
+        default => 0,
+        optional => 1,
     },
     nf_conntrack_allow_invalid => {
-	description => "Allow invalid packets on connection tracking.",
-	type => 'boolean',
-	default => 0,
-	optional => 1,
+        description => "Allow invalid packets on connection tracking.",
+        type => 'boolean',
+        default => 0,
+        optional => 1,
     },
     nf_conntrack_helpers => {
-	type => 'string', format => 'pve-fw-conntrack-helper',
-	description => "Enable conntrack helpers for specific protocols. ".
-	    "Supported protocols: amanda, ftp, irc, netbios-ns, pptp, sane, sip, snmp, tftp",
-	default => '',
-	optional => 1,
+        type => 'string',
+        format => 'pve-fw-conntrack-helper',
+        description => "Enable conntrack helpers for specific protocols. "
+            . "Supported protocols: amanda, ftp, irc, netbios-ns, pptp, sane, sip, snmp, tftp",
+        default => '',
+        optional => 1,
     },
     protection_synflood => {
-	description => "Enable synflood protection",
-	type => 'boolean',
-	default => 0,
-	optional => 1,
+        description => "Enable synflood protection",
+        type => 'boolean',
+        default => 0,
+        optional => 1,
     },
     protection_synflood_rate => {
-	description => "Synflood protection rate syn/sec by ip src.",
-	type => 'integer',
-	optional => 1,
-	default => 200,
+        description => "Synflood protection rate syn/sec by ip src.",
+        type => 'integer',
+        optional => 1,
+        default => 200,
     },
     protection_synflood_burst => {
-	description => "Synflood protection rate burst by ip src.",
-	type => 'integer',
-	optional => 1,
-	default => 1000,
+        description => "Synflood protection rate burst by ip src.",
+        type => 'integer',
+        optional => 1,
+        default => 1000,
     },
     log_nf_conntrack => {
-	description => "Enable logging of conntrack information.",
-	type => 'boolean',
-	default => 0,
-	optional => 1
+        description => "Enable logging of conntrack information.",
+        type => 'boolean',
+        default => 0,
+        optional => 1,
     },
     nftables => {
-	description => "Enable nftables based firewall (tech preview)",
-	type => 'boolean',
-	default => 0,
-	optional => 1,
+        description => "Enable nftables based firewall (tech preview)",
+        type => 'boolean',
+        default => 0,
+        optional => 1,
     },
 };
 
 our $vm_option_properties = {
     enable => {
-	description => "Enable/disable firewall rules.",
-	type => 'boolean',
-	default => 0,
-	optional => 1,
+        description => "Enable/disable firewall rules.",
+        type => 'boolean',
+        default => 0,
+        optional => 1,
     },
     macfilter => {
-	description => "Enable/disable MAC address filter.",
-	type => 'boolean',
-	default => 1,
-	optional => 1,
+        description => "Enable/disable MAC address filter.",
+        type => 'boolean',
+        default => 1,
+        optional => 1,
     },
     dhcp => {
-	description => "Enable DHCP.",
-	type => 'boolean',
-	default => 0,
-	optional => 1,
+        description => "Enable DHCP.",
+        type => 'boolean',
+        default => 0,
+        optional => 1,
     },
     ndp => {
-	description => "Enable NDP (Neighbor Discovery Protocol).",
-	type => 'boolean',
-	default => 0,
-	optional => 1,
+        description => "Enable NDP (Neighbor Discovery Protocol).",
+        type => 'boolean',
+        default => 0,
+        optional => 1,
     },
     radv => {
-	description => "Allow sending Router Advertisement.",
-	type => 'boolean',
-	optional => 1,
+        description => "Allow sending Router Advertisement.",
+        type => 'boolean',
+        optional => 1,
     },
     ipfilter => {
-	description => "Enable default IP filters. " .
-	   "This is equivalent to adding an empty ipfilter-net<id> ipset " .
-	   "for every interface. Such ipsets implicitly contain sane default " .
-	   "restrictions such as restricting IPv6 link local addresses to " .
-	   "the one derived from the interface's MAC address. For containers " .
-	   "the configured IP addresses will be implicitly added.",
-	type => 'boolean',
-	optional => 1,
+        description => "Enable default IP filters. "
+            . "This is equivalent to adding an empty ipfilter-net<id> ipset "
+            . "for every interface. Such ipsets implicitly contain sane default "
+            . "restrictions such as restricting IPv6 link local addresses to "
+            . "the one derived from the interface's MAC address. For containers "
+            . "the configured IP addresses will be implicitly added.",
+        type => 'boolean',
+        optional => 1,
     },
     policy_in => {
-	description => "Input policy.",
-	type => 'string',
-	optional => 1,
-	enum => ['ACCEPT', 'REJECT', 'DROP'],
+        description => "Input policy.",
+        type => 'string',
+        optional => 1,
+        enum => ['ACCEPT', 'REJECT', 'DROP'],
     },
     policy_out => {
-	description => "Output policy.",
-	type => 'string',
-	optional => 1,
-	enum => ['ACCEPT', 'REJECT', 'DROP'],
+        description => "Output policy.",
+        type => 'string',
+        optional => 1,
+        enum => ['ACCEPT', 'REJECT', 'DROP'],
     },
-    log_level_in =>  get_standard_option('pve-fw-loglevel', {
-	description => "Log level for incoming traffic." }),
-    log_level_out =>  get_standard_option('pve-fw-loglevel', {
-	description => "Log level for outgoing traffic." }),
+    log_level_in => get_standard_option(
+        'pve-fw-loglevel',
+        { description => "Log level for incoming traffic." },
+    ),
+    log_level_out => get_standard_option(
+        'pve-fw-loglevel',
+        { description => "Log level for outgoing traffic." },
+    ),
 
 };
 
 our $vnet_option_properties = {
     enable => {
-	description => "Enable/disable firewall rules.",
-	type => 'boolean',
-	default => 0,
-	optional => 1,
+        description => "Enable/disable firewall rules.",
+        type => 'boolean',
+        default => 0,
+        optional => 1,
     },
     policy_forward => {
-	description => "Forward policy.",
-	type => 'string',
-	optional => 1,
-	enum => ['ACCEPT', 'DROP'],
+        description => "Forward policy.",
+        type => 'string',
+        optional => 1,
+        enum => ['ACCEPT', 'DROP'],
     },
-    log_level_forward =>  get_standard_option('pve-fw-loglevel', {
-	description => "Log level for forwarded traffic." }),
+    log_level_forward => get_standard_option(
+        'pve-fw-loglevel',
+        { description => "Log level for forwarded traffic." },
+    ),
 };
 
+my $addr_list_descr =
+    "This can refer to a single IP address, an IP set ('+ipsetname') or an IP alias definition. You can also specify an address range like '20.34.101.207-201.3.9.99', or a list of IP addresses and networks (entries are separated by comma). Please do not mix IPv4 and IPv6 addresses inside such lists.";
 
-my $addr_list_descr = "This can refer to a single IP address, an IP set ('+ipsetname') or an IP alias definition. You can also specify an address range like '20.34.101.207-201.3.9.99', or a list of IP addresses and networks (entries are separated by comma). Please do not mix IPv4 and IPv6 addresses inside such lists.";
-
-my $port_descr = "You can use service names or simple numbers (0-65535), as defined in '/etc/services'. Port ranges can be specified with '\\d+:\\d+', for example '80:85', and you can use comma separated list to match several ports or ranges.";
+my $port_descr =
+    "You can use service names or simple numbers (0-65535), as defined in '/etc/services'. Port ranges can be specified with '\\d+:\\d+', for example '80:85', and you can use comma separated list to match several ports or ranges.";
 
 my $rule_properties = {
     pos => {
-	description => "Update rule at position <pos>.",
-	type => 'integer',
-	minimum => 0,
-	optional => 1,
+        description => "Update rule at position <pos>.",
+        type => 'integer',
+        minimum => 0,
+        optional => 1,
     },
     digest => get_standard_option('pve-config-digest'),
     type => {
-	description => "Rule type.",
-	type => 'string',
-	optional => 1,
-	enum => ['in', 'out', 'forward', 'group'],
+        description => "Rule type.",
+        type => 'string',
+        optional => 1,
+        enum => ['in', 'out', 'forward', 'group'],
     },
     action => {
-	description => "Rule action ('ACCEPT', 'DROP', 'REJECT') or security group name.",
-	type => 'string',
-	optional => 1,
-	pattern => $security_group_name_pattern,
-	maxLength => 20,
-	minLength => 2,
+        description => "Rule action ('ACCEPT', 'DROP', 'REJECT') or security group name.",
+        type => 'string',
+        optional => 1,
+        pattern => $security_group_name_pattern,
+        maxLength => 20,
+        minLength => 2,
     },
     macro => {
-	description => "Use predefined standard macro.",
-	type => 'string',
-	optional => 1,
-	maxLength => 128,
+        description => "Use predefined standard macro.",
+        type => 'string',
+        optional => 1,
+        maxLength => 128,
     },
-    iface => get_standard_option('pve-iface', {
-	description => "Network interface name. You have to use network configuration key names for VMs and containers ('net\\d+'). Host related rules can use arbitrary strings.",
-	optional => 1
-    }),
+    iface => get_standard_option(
+        'pve-iface',
+        {
+            description =>
+                "Network interface name. You have to use network configuration key names for VMs and containers ('net\\d+'). Host related rules can use arbitrary strings.",
+            optional => 1,
+        },
+    ),
     source => {
-	description => "Restrict packet source address. $addr_list_descr",
-	type => 'string', format => 'pve-fw-addr-spec',
-	optional => 1,
-	maxLength => 512,
+        description => "Restrict packet source address. $addr_list_descr",
+        type => 'string',
+        format => 'pve-fw-addr-spec',
+        optional => 1,
+        maxLength => 512,
     },
     dest => {
-	description => "Restrict packet destination address. $addr_list_descr",
-	type => 'string', format => 'pve-fw-addr-spec',
-	optional => 1,
-	maxLength => 512,
+        description => "Restrict packet destination address. $addr_list_descr",
+        type => 'string',
+        format => 'pve-fw-addr-spec',
+        optional => 1,
+        maxLength => 512,
     },
     proto => {
-	description => "IP protocol. You can use protocol names ('tcp'/'udp') or simple numbers, as defined in '/etc/protocols'.",
-	type => 'string', format => 'pve-fw-protocol-spec',
-	optional => 1,
+        description =>
+            "IP protocol. You can use protocol names ('tcp'/'udp') or simple numbers, as defined in '/etc/protocols'.",
+        type => 'string',
+        format => 'pve-fw-protocol-spec',
+        optional => 1,
     },
     enable => {
-	description => "Flag to enable/disable a rule.",
+        description => "Flag to enable/disable a rule.",
         type => 'integer',
-	minimum => 0,
-	optional => 1,
+        minimum => 0,
+        optional => 1,
     },
     log => get_standard_option('pve-fw-loglevel', {
-	description => "Log level for firewall rule.",
+            description => "Log level for firewall rule.",
     }),
     sport => {
-	description => "Restrict TCP/UDP source port. $port_descr",
-	type => 'string', format => 'pve-fw-sport-spec',
-	optional => 1,
+        description => "Restrict TCP/UDP source port. $port_descr",
+        type => 'string',
+        format => 'pve-fw-sport-spec',
+        optional => 1,
     },
     dport => {
-	description => "Restrict TCP/UDP destination port. $port_descr",
-	type => 'string', format => 'pve-fw-dport-spec',
-	optional => 1,
+        description => "Restrict TCP/UDP destination port. $port_descr",
+        type => 'string',
+        format => 'pve-fw-dport-spec',
+        optional => 1,
     },
     comment => {
-	description => "Descriptive comment.",
-	type => 'string',
-	optional => 1,
+        description => "Descriptive comment.",
+        type => 'string',
+        optional => 1,
     },
     'icmp-type' => {
-	description => "Specify icmp-type. Only valid if proto equals 'icmp' or 'icmpv6'/'ipv6-icmp'.",
-	type => 'string', format => 'pve-fw-icmp-type-spec',
-	optional => 1,
+        description =>
+            "Specify icmp-type. Only valid if proto equals 'icmp' or 'icmpv6'/'ipv6-icmp'.",
+        type => 'string',
+        format => 'pve-fw-icmp-type-spec',
+        optional => 1,
     },
 };
 
@@ -1591,9 +1635,9 @@ sub add_rule_properties {
     my ($properties) = @_;
 
     foreach my $k (keys %$rule_properties) {
-	my $h = $rule_properties->{$k};
-	# copy data, so that we can modify later without side effects
-	foreach my $opt (keys %$h) { $properties->{$k}->{$opt} = $h->{$opt}; }
+        my $h = $rule_properties->{$k};
+        # copy data, so that we can modify later without side effects
+        foreach my $opt (keys %$h) { $properties->{$k}->{$opt} = $h->{$opt}; }
     }
 
     return $properties;
@@ -1603,11 +1647,11 @@ sub delete_rule_properties {
     my ($rule, $delete_str) = @_;
 
     foreach my $opt (PVE::Tools::split_list($delete_str)) {
-	raise_param_exc({ 'delete' => "no such property ('$opt')"})
-	    if !defined($rule_properties->{$opt});
-	raise_param_exc({ 'delete' => "unable to delete required property '$opt'"})
-	    if $opt eq 'type' || $opt eq 'action';
-	delete $rule->{$opt};
+        raise_param_exc({ 'delete' => "no such property ('$opt')" })
+            if !defined($rule_properties->{$opt});
+        raise_param_exc({ 'delete' => "unable to delete required property '$opt'" })
+            if $opt eq 'type' || $opt eq 'action';
+        delete $rule->{$opt};
     }
 
     return $rule;
@@ -1620,54 +1664,54 @@ my $apply_macro = sub {
     die "unknown macro '$macro_name'\n" if !$macro_rules; # should not happen
 
     if ($ipversion && ($ipversion == 6) && $pve_ipv6fw_macros->{$macro_name}) {
-	$macro_rules = $pve_ipv6fw_macros->{$macro_name};
+        $macro_rules = $pve_ipv6fw_macros->{$macro_name};
     }
 
     # skip macros which are specific to another ipversion
     if ($ipversion && (my $required = $pve_fw_macro_ipversion->{$macro_name})) {
-	return if $ipversion != $required;
+        return if $ipversion != $required;
     }
 
     my $rules = [];
 
     foreach my $templ (@$macro_rules) {
-	my $rule = {};
-	my $param_used = {};
-	foreach my $k (keys %$templ) {
-	    my $v = $templ->{$k};
-	    if ($v eq 'PARAM') {
-		$v = $param->{$k};
-		$param_used->{$k} = 1;
-	    } elsif ($v eq 'DEST') {
-		$v = $param->{dest};
-		$param_used->{dest} = 1;
-	    } elsif ($v eq 'SOURCE') {
-		$v = $param->{source};
-		$param_used->{source} = 1;
-	    }
+        my $rule = {};
+        my $param_used = {};
+        foreach my $k (keys %$templ) {
+            my $v = $templ->{$k};
+            if ($v eq 'PARAM') {
+                $v = $param->{$k};
+                $param_used->{$k} = 1;
+            } elsif ($v eq 'DEST') {
+                $v = $param->{dest};
+                $param_used->{dest} = 1;
+            } elsif ($v eq 'SOURCE') {
+                $v = $param->{source};
+                $param_used->{source} = 1;
+            }
 
-	    if (!defined($v)) {
-		my $msg = "missing parameter '$k' in macro '$macro_name'";
-		raise_param_exc({ macro => $msg }) if $verify;
-		die "$msg\n";
-	    }
-	    $rule->{$k} = $v;
-	}
-	foreach my $k (keys %$param) {
-	    next if $k eq 'macro';
-	    next if !defined($param->{$k});
-	    next if $param_used->{$k};
-	    if (defined($rule->{$k})) {
-		if ($rule->{$k} ne $param->{$k}) {
-		    my $msg = "parameter '$k' already define in macro (value = '$rule->{$k}')";
-		    raise_param_exc({ $k => $msg }) if $verify;
-		    die "$msg\n";
-		}
-	    } else {
-		$rule->{$k} = $param->{$k};
-	    }
-	}
-	push @$rules, $rule;
+            if (!defined($v)) {
+                my $msg = "missing parameter '$k' in macro '$macro_name'";
+                raise_param_exc({ macro => $msg }) if $verify;
+                die "$msg\n";
+            }
+            $rule->{$k} = $v;
+        }
+        foreach my $k (keys %$param) {
+            next if $k eq 'macro';
+            next if !defined($param->{$k});
+            next if $param_used->{$k};
+            if (defined($rule->{$k})) {
+                if ($rule->{$k} ne $param->{$k}) {
+                    my $msg = "parameter '$k' already define in macro (value = '$rule->{$k}')";
+                    raise_param_exc({ $k => $msg }) if $verify;
+                    die "$msg\n";
+                }
+            } else {
+                $rule->{$k} = $param->{$k};
+            }
+        }
+        push @$rules, $rule;
     }
 
     return $rules;
@@ -1704,57 +1748,58 @@ sub verify_rule {
     my $error_count = 0;
 
     my $add_error = sub {
-	my ($param, $msg)  = @_;
-	chomp $msg;
-	raise_param_exc({ $param => $msg }) if !$noerr;
-	$error_count++;
-	$errors->{$param} = $msg if !$errors->{$param};
+        my ($param, $msg) = @_;
+        chomp $msg;
+        raise_param_exc({ $param => $msg }) if !$noerr;
+        $error_count++;
+        $errors->{$param} = $msg if !$errors->{$param};
     };
 
     my $ipversion;
     my $set_ip_version = sub {
-	my $vers = shift;
-	if ($vers) {
-	    die "detected mixed ipv4/ipv6 addresses in rule\n"
-		if $ipversion && ($vers != $ipversion);
-	    $ipversion = $vers;
-	}
+        my $vers = shift;
+        if ($vers) {
+            die "detected mixed ipv4/ipv6 addresses in rule\n"
+                if $ipversion && ($vers != $ipversion);
+            $ipversion = $vers;
+        }
     };
 
     my $check_ipset_or_alias_property = sub {
-	my ($name, $expected_ipversion) = @_;
+        my ($name, $expected_ipversion) = @_;
 
-	if (my $value = $rule->{$name}) {
-	    if ($value =~ m/^\+/) {
-		if ($value =~ m@^\+(guest/|dc/|sdn/)?(${ipset_name_pattern})$@) {
-		    if (
-			!($cluster_conf->{ipset}->{$2})
-			&& !($fw_conf && $fw_conf->{ipset}->{$2})
-			&& !($cluster_conf->{sdn} && $cluster_conf->{sdn}->{ipset}->{$2})
-			&& !($fw_conf->{sdn} && $fw_conf->{sdn}->{ipset}->{$2})
-		    ) {
-			$add_error->($name, "no such ipset '$2'")
-		    }
-		} else {
-		    $add_error->($name, "invalid ipset name '$value'");
-		}
-	    } elsif ($value =~ m@^(guest/|dc/)?(${ip_alias_pattern})$@){
-		my $scope = $1 // "";
-		my $alias = lc($2);
-		$add_error->($name, "no such alias '$value'")
-		    if !($cluster_conf->{aliases}->{$alias} || ($fw_conf && $fw_conf->{aliases}->{$alias}));
+        if (my $value = $rule->{$name}) {
+            if ($value =~ m/^\+/) {
+                if ($value =~ m@^\+(guest/|dc/|sdn/)?(${ipset_name_pattern})$@) {
+                    if (
+                        !($cluster_conf->{ipset}->{$2})
+                        && !($fw_conf && $fw_conf->{ipset}->{$2})
+                        && !($cluster_conf->{sdn} && $cluster_conf->{sdn}->{ipset}->{$2})
+                        && !($fw_conf->{sdn} && $fw_conf->{sdn}->{ipset}->{$2})
+                    ) {
+                        $add_error->($name, "no such ipset '$2'");
+                    }
+                } else {
+                    $add_error->($name, "invalid ipset name '$value'");
+                }
+            } elsif ($value =~ m@^(guest/|dc/)?(${ip_alias_pattern})$@) {
+                my $scope = $1 // "";
+                my $alias = lc($2);
+                $add_error->($name, "no such alias '$value'")
+                    if !($cluster_conf->{aliases}->{$alias}
+                        || ($fw_conf && $fw_conf->{aliases}->{$alias}));
 
-		my $e;
-		if ($scope ne 'dc/' && $fw_conf) {
-		    $e = $fw_conf->{aliases}->{$alias};
-		}
-		if ($scope ne 'guest/' && !$e && $cluster_conf) {
-		    $e = $cluster_conf->{aliases}->{$alias};
-		}
+                my $e;
+                if ($scope ne 'dc/' && $fw_conf) {
+                    $e = $fw_conf->{aliases}->{$alias};
+                }
+                if ($scope ne 'guest/' && !$e && $cluster_conf) {
+                    $e = $cluster_conf->{aliases}->{$alias};
+                }
 
-		&$set_ip_version($e->{ipversion});
-	    }
-	}
+                &$set_ip_version($e->{ipversion});
+            }
+        }
     };
 
     my $type = $rule->{type};
@@ -1764,122 +1809,124 @@ sub verify_rule {
     $add_error->('action', "missing property") if !$action;
 
     if ($type) {
-	my $valid_types = $rule_env_direction_lookup->{$rule_env}
-	    or die "unknown rule_env '$rule_env'\n";
+        my $valid_types = $rule_env_direction_lookup->{$rule_env}
+            or die "unknown rule_env '$rule_env'\n";
 
-	$add_error->('type', "invalid rule type '$type' for rule_env '$rule_env'")
-	    if !(grep { $_ eq $type } @$valid_types);
+        $add_error->('type', "invalid rule type '$type' for rule_env '$rule_env'")
+            if !(grep { $_ eq $type } @$valid_types);
 
-	if ($type eq  'in' || $type eq 'out' || $type eq 'forward') {
-	    $add_error->('action', 'cannot define REJECT rules on forward chain')
-		if $type eq 'forward' && $action eq 'REJECT';
+        if ($type eq 'in' || $type eq 'out' || $type eq 'forward') {
+            $add_error->('action', 'cannot define REJECT rules on forward chain')
+                if $type eq 'forward' && $action eq 'REJECT';
 
-	    $add_error->('action', "unknown action '$action'")
-		if $action && ($action !~ m/^(ACCEPT|DROP|REJECT)$/);
-	} elsif ($type eq 'group') {
-	    $add_error->('type', "security groups not allowed")
-		if !$allow_groups;
-	    $add_error->('action', "invalid characters in security group name")
-		if $action && ($action !~ m/^${security_group_name_pattern}$/);
-	} else {
-	    $add_error->('type', "unknown rule type '$type'");
-	}
+            $add_error->('action', "unknown action '$action'")
+                if $action && ($action !~ m/^(ACCEPT|DROP|REJECT)$/);
+        } elsif ($type eq 'group') {
+            $add_error->('type', "security groups not allowed")
+                if !$allow_groups;
+            $add_error->('action', "invalid characters in security group name")
+                if $action && ($action !~ m/^${security_group_name_pattern}$/);
+        } else {
+            $add_error->('type', "unknown rule type '$type'");
+        }
     }
 
     if ($rule->{iface}) {
-	$add_error->('type', "parameter -i not allowed for this rule type")
-	    if !$allow_iface;
-	eval { PVE::JSONSchema::pve_verify_iface($rule->{iface}); };
-	$add_error->('iface', $@) if $@;
-    	if ($rule_env eq 'vm' || $rule_env eq 'ct') {
-	    $add_error->('iface', "value does not match the regex pattern 'net\\d+'")
-		if $rule->{iface} !~  m/^net(\d+)$/;
-	}
+        $add_error->('type', "parameter -i not allowed for this rule type")
+            if !$allow_iface;
+        eval { PVE::JSONSchema::pve_verify_iface($rule->{iface}); };
+        $add_error->('iface', $@) if $@;
+        if ($rule_env eq 'vm' || $rule_env eq 'ct') {
+            $add_error->('iface', "value does not match the regex pattern 'net\\d+'")
+                if $rule->{iface} !~ m/^net(\d+)$/;
+        }
     }
 
     if ($rule->{macro}) {
-	if (my $preferred_name = $pve_fw_preferred_macro_names->{lc($rule->{macro})}) {
-	    $rule->{macro} = $preferred_name;
-	} else {
-	    $add_error->('macro', "unknown macro '$rule->{macro}'");
-	}
+        if (my $preferred_name = $pve_fw_preferred_macro_names->{ lc($rule->{macro}) }) {
+            $rule->{macro} = $preferred_name;
+        } else {
+            $add_error->('macro', "unknown macro '$rule->{macro}'");
+        }
     }
 
     my $is_icmp = 0;
     if ($rule->{proto}) {
-	eval { pve_fw_verify_protocol_spec($rule->{proto}); };
-	$add_error->('proto', $@) if $@;
-	&$set_ip_version(4) if $rule->{proto} eq 'icmp';
-	&$set_ip_version(6) if $rule->{proto} eq 'icmpv6';
-	&$set_ip_version(6) if $rule->{proto} eq 'ipv6-icmp';
-	$is_icmp = $proto_is_icmp->($rule->{proto});
+        eval { pve_fw_verify_protocol_spec($rule->{proto}); };
+        $add_error->('proto', $@) if $@;
+        &$set_ip_version(4) if $rule->{proto} eq 'icmp';
+        &$set_ip_version(6) if $rule->{proto} eq 'icmpv6';
+        &$set_ip_version(6) if $rule->{proto} eq 'ipv6-icmp';
+        $is_icmp = $proto_is_icmp->($rule->{proto});
     }
 
     if ($rule->{dport}) {
-	eval { parse_port_name_number_or_range($rule->{dport}, $is_icmp); };
-	$add_error->('dport', $@) if $@;
-	my $proto = $rule->{proto};
-	$add_error->('proto', "missing property - 'dport' requires this property")
-	    if !$proto;
-	$add_error->('dport', "protocol '$proto' does not support ports")
-	    if !$PROTOCOLS_WITH_PORTS->{$proto} && !$is_icmp; #special cases
+        eval { parse_port_name_number_or_range($rule->{dport}, $is_icmp); };
+        $add_error->('dport', $@) if $@;
+        my $proto = $rule->{proto};
+        $add_error->('proto', "missing property - 'dport' requires this property")
+            if !$proto;
+        $add_error->('dport', "protocol '$proto' does not support ports")
+            if !$PROTOCOLS_WITH_PORTS->{$proto} && !$is_icmp; #special cases
     }
 
-    if (my $icmp_type = $rule ->{'icmp-type'}) {
-	my $proto = $rule->{proto};
-	$add_error->('proto', "missing property - 'icmp-type' requires this property")
-	    if !$is_icmp;
-	$add_error->('icmp-type', "'icmp-type' cannot be specified together with 'dport'")
-	    if $rule->{dport};
-	if ($proto eq 'icmp' && !$icmp_type_names->{$icmp_type}) {
-	    $add_error->('icmp-type', "invalid icmp-type '$icmp_type' for proto 'icmp'");
-	} elsif (($proto eq 'icmpv6' || $proto eq 'ipv6-icmp') && !$icmpv6_type_names->{$icmp_type}) {
-	    $add_error->('icmp-type', "invalid icmp-type '$icmp_type' for proto '$proto'");
-	}
+    if (my $icmp_type = $rule->{'icmp-type'}) {
+        my $proto = $rule->{proto};
+        $add_error->('proto', "missing property - 'icmp-type' requires this property")
+            if !$is_icmp;
+        $add_error->('icmp-type', "'icmp-type' cannot be specified together with 'dport'")
+            if $rule->{dport};
+        if ($proto eq 'icmp' && !$icmp_type_names->{$icmp_type}) {
+            $add_error->('icmp-type', "invalid icmp-type '$icmp_type' for proto 'icmp'");
+        } elsif (
+            ($proto eq 'icmpv6' || $proto eq 'ipv6-icmp') && !$icmpv6_type_names->{$icmp_type}
+        ) {
+            $add_error->('icmp-type', "invalid icmp-type '$icmp_type' for proto '$proto'");
+        }
     }
 
     if ($rule->{sport}) {
-	eval { parse_port_name_number_or_range($rule->{sport}, 0); };
-	$add_error->('sport', $@) if $@;
-	my $proto = $rule->{proto};
-	$add_error->('proto', "missing property - 'sport' requires this property")
-	    if !$proto;
-	$add_error->('sport', "protocol '$proto' does not support ports")
-	    if !$PROTOCOLS_WITH_PORTS->{$proto};
+        eval { parse_port_name_number_or_range($rule->{sport}, 0); };
+        $add_error->('sport', $@) if $@;
+        my $proto = $rule->{proto};
+        $add_error->('proto', "missing property - 'sport' requires this property")
+            if !$proto;
+        $add_error->('sport', "protocol '$proto' does not support ports")
+            if !$PROTOCOLS_WITH_PORTS->{$proto};
     }
 
     if ($rule->{source}) {
-	eval {
-	    my $source_ipversion = parse_address_list($rule->{source});
-	    &$set_ip_version($source_ipversion);
-	};
-	$add_error->('source', $@) if $@;
-	&$check_ipset_or_alias_property('source', $ipversion);
+        eval {
+            my $source_ipversion = parse_address_list($rule->{source});
+            &$set_ip_version($source_ipversion);
+        };
+        $add_error->('source', $@) if $@;
+        &$check_ipset_or_alias_property('source', $ipversion);
     }
 
     if ($rule->{dest}) {
-	eval {
-	    my $dest_ipversion = parse_address_list($rule->{dest});
-	    &$set_ip_version($dest_ipversion);
-	};
-	$add_error->('dest', $@) if $@;
-	&$check_ipset_or_alias_property('dest', $ipversion);
+        eval {
+            my $dest_ipversion = parse_address_list($rule->{dest});
+            &$set_ip_version($dest_ipversion);
+        };
+        $add_error->('dest', $@) if $@;
+        &$check_ipset_or_alias_property('dest', $ipversion);
     }
 
     $rule->{ipversion} = $ipversion if $ipversion;
 
     if ($rule->{macro} && !$error_count) {
-	eval { &$apply_macro($rule->{macro}, $rule, 1, $ipversion); };
-	if (my $err = $@) {
-	    if (ref($err) eq "PVE::Exception" && $err->{errors}) {
-		my $eh = $err->{errors};
-		foreach my $p (keys %$eh) {
-		    $add_error->($p, $eh->{$p});
-		}
-	    } else {
-		$add_error->('macro', "$err");
-	    }
-	}
+        eval { &$apply_macro($rule->{macro}, $rule, 1, $ipversion); };
+        if (my $err = $@) {
+            if (ref($err) eq "PVE::Exception" && $err->{errors}) {
+                my $eh = $err->{errors};
+                foreach my $p (keys %$eh) {
+                    $add_error->($p, $eh->{$p});
+                }
+            } else {
+                $add_error->('macro', "$err");
+            }
+        }
     }
 
     $rule->{errors} = $errors if $error_count;
@@ -1891,13 +1938,13 @@ sub copy_rule_data {
     my ($rule, $param) = @_;
 
     foreach my $k (keys %$rule_properties) {
-	if (defined(my $v = $param->{$k})) {
-	    if ($v eq '' || $v eq '-') {
-		delete $rule->{$k};
-	    } else {
-		$rule->{$k} = $v;
-	    }
-	}
+        if (defined(my $v = $param->{$k})) {
+            if ($v eq '' || $v eq '-') {
+                delete $rule->{$k};
+            } else {
+                $rule->{$k} = $v;
+            }
+        }
     }
 
     return $rule;
@@ -1907,22 +1954,22 @@ sub rules_modify_permissions {
     my ($rule_env) = @_;
 
     if ($rule_env eq 'host') {
-	return {
-	    check => ['perm', '/nodes/{node}', [ 'Sys.Modify' ]],
-	};
+        return {
+            check => ['perm', '/nodes/{node}', ['Sys.Modify']],
+        };
     } elsif ($rule_env eq 'cluster' || $rule_env eq 'group') {
-	return {
-	    check => ['perm', '/', [ 'Sys.Modify' ]],
-	};
+        return {
+            check => ['perm', '/', ['Sys.Modify']],
+        };
     } elsif ($rule_env eq 'vm' || $rule_env eq 'ct') {
-	return {
-	    check => ['perm', '/vms/{vmid}', [ 'VM.Config.Network' ]],
-	}
+        return {
+            check => ['perm', '/vms/{vmid}', ['VM.Config.Network']],
+        };
     } elsif ($rule_env eq 'vnet') {
-	return {
-	    description => "Needs SDN.Allocate permissions on '/sdn/zones/<zone>/<vnet>'",
-	    user => 'all',
-	}
+        return {
+            description => "Needs SDN.Allocate permissions on '/sdn/zones/<zone>/<vnet>'",
+            user => 'all',
+        };
     }
 
     return undef;
@@ -1932,22 +1979,23 @@ sub rules_audit_permissions {
     my ($rule_env) = @_;
 
     if ($rule_env eq 'host') {
-	return {
-	    check => ['perm', '/nodes/{node}', [ 'Sys.Audit' ]],
-	};
+        return {
+            check => ['perm', '/nodes/{node}', ['Sys.Audit']],
+        };
     } elsif ($rule_env eq 'cluster' || $rule_env eq 'group') {
-	return {
-	    check => ['perm', '/', [ 'Sys.Audit' ]],
-	};
+        return {
+            check => ['perm', '/', ['Sys.Audit']],
+        };
     } elsif ($rule_env eq 'vm' || $rule_env eq 'ct') {
-	return {
-	    check => ['perm', '/vms/{vmid}', [ 'VM.Audit' ]],
-	}
+        return {
+            check => ['perm', '/vms/{vmid}', ['VM.Audit']],
+        };
     } elsif ($rule_env eq 'vnet') {
-	return {
-	    description => "Needs SDN.Audit or SDN.Allocate permissions on '/sdn/zones/<zone>/<vnet>'",
-	    user => 'all',
-	}
+        return {
+            description =>
+                "Needs SDN.Audit or SDN.Allocate permissions on '/sdn/zones/<zone>/<vnet>'",
+            user => 'all',
+        };
     }
 
     return undef;
@@ -1956,7 +2004,6 @@ sub rules_audit_permissions {
 # core functions
 
 sub enable_bridge_firewall {
-
 
     PVE::ProcFSTools::write_proc_entry("/proc/sys/net/bridge/bridge-nf-call-iptables", "1");
     PVE::ProcFSTools::write_proc_entry("/proc/sys/net/bridge/bridge-nf-call-ip6tables", "1");
@@ -1970,14 +2017,22 @@ sub iptables_restore_cmdlist {
     my ($cmdlist, $table) = @_;
 
     $table = 'filter' if !$table;
-    run_command(['iptables-restore', '-T', $table, '-n'], input => $cmdlist, errmsg => "iptables_restore_cmdlist");
+    run_command(
+        ['iptables-restore', '-T', $table, '-n'],
+        input => $cmdlist,
+        errmsg => "iptables_restore_cmdlist",
+    );
 }
 
 sub ip6tables_restore_cmdlist {
     my ($cmdlist, $table) = @_;
 
     $table = 'filter' if !$table;
-    run_command(['ip6tables-restore', '-T', $table, '-n'], input => $cmdlist, errmsg => "iptables_restore_cmdlist");
+    run_command(
+        ['ip6tables-restore', '-T', $table, '-n'],
+        input => $cmdlist,
+        errmsg => "iptables_restore_cmdlist",
+    );
 }
 
 sub ipset_restore_cmdlist {
@@ -2002,18 +2057,18 @@ sub iptables_get_chains {
 
     # check what chains we want to track
     my $is_pvefw_chain = sub {
-	my $name = shift;
+        my $name = shift;
 
-	return 1 if $name =~ m/^PVEFW-\S+$/;
+        return 1 if $name =~ m/^PVEFW-\S+$/;
 
-	return 1 if $name =~ m/^tap\d+i\d+-(?:IN|OUT)$/;
+        return 1 if $name =~ m/^tap\d+i\d+-(?:IN|OUT)$/;
 
-	return 1 if $name =~ m/^veth\d+i\d+-(?:IN|OUT)$/;
+        return 1 if $name =~ m/^veth\d+i\d+-(?:IN|OUT)$/;
 
-	return 1 if $name =~ m/^fwbr\d+(v\d+)?-(?:FW|IN|OUT|IPS)$/;
-	return 1 if $name =~ m/^GROUP-(?:$security_group_name_pattern)-(?:IN|OUT)$/;
+        return 1 if $name =~ m/^fwbr\d+(v\d+)?-(?:FW|IN|OUT|IPS)$/;
+        return 1 if $name =~ m/^GROUP-(?:$security_group_name_pattern)-(?:IN|OUT)$/;
 
-	return undef;
+        return undef;
     };
 
     my $table = '';
@@ -2021,32 +2076,32 @@ sub iptables_get_chains {
     my $hooks = {};
 
     my $parser = sub {
-	my $line = shift;
+        my $line = shift;
 
-	return if $line =~ m/^#/;
-	return if $line =~ m/^\s*$/;
+        return if $line =~ m/^#/;
+        return if $line =~ m/^\s*$/;
 
-	if ($line =~ m/^\*(\S+)$/) {
-	    $table = $1;
-	    return;
-	}
+        if ($line =~ m/^\*(\S+)$/) {
+            $table = $1;
+            return;
+        }
 
-	return if $table ne $t;
+        return if $table ne $t;
 
-	if ($line =~ m/^:(\S+)\s/) {
-	    my $chain = $1;
-	    return if !&$is_pvefw_chain($chain);
-	    $res->{$chain} = "unknown";
-	} elsif ($line =~ m/^-A\s+(\S+)\s.*--comment\s+\"PVESIG:(\S+)\"/) {
-	    my ($chain, $sig) = ($1, $2);
-	    return if !&$is_pvefw_chain($chain);
-	    $res->{$chain} = $sig;
-	} elsif ($line =~ m/^-A\s+(INPUT|OUTPUT|FORWARD|PREROUTING)\s+-j\s+PVEFW-\1$/) {
-	    $hooks->{$1} = 1;
-	} else {
-	    # simply ignore the rest
-	    return;
-	}
+        if ($line =~ m/^:(\S+)\s/) {
+            my $chain = $1;
+            return if !&$is_pvefw_chain($chain);
+            $res->{$chain} = "unknown";
+        } elsif ($line =~ m/^-A\s+(\S+)\s.*--comment\s+\"PVESIG:(\S+)\"/) {
+            my ($chain, $sig) = ($1, $2);
+            return if !&$is_pvefw_chain($chain);
+            $res->{$chain} = $sig;
+        } elsif ($line =~ m/^-A\s+(INPUT|OUTPUT|FORWARD|PREROUTING)\s+-j\s+PVEFW-\1$/) {
+            $hooks->{$1} = 1;
+        } else {
+            # simply ignore the rest
+            return;
+        }
     };
 
     run_command(["$iptablescmd-save"], outfunc => $parser);
@@ -2058,7 +2113,7 @@ sub iptables_chain_digest {
     my ($rules) = @_;
     my $digest = Digest::SHA->new('sha1');
     foreach my $rule (@$rules) { # order is important
-	$digest->add($rule);
+        $digest->add($rule);
     }
     return $digest->b64digest;
 }
@@ -2068,7 +2123,7 @@ sub ipset_chain_digest {
 
     my $digest = Digest::SHA->new('sha1');
     foreach my $rule (sort @$rules) { # note: sorted
-	$digest->add($rule);
+        $digest->add($rule);
     }
     return $digest->b64digest;
 }
@@ -2079,27 +2134,27 @@ sub ipset_get_chains {
     my $chains = {};
 
     my $parser = sub {
-	my $line = shift;
+        my $line = shift;
 
-	return if $line =~ m/^#/;
-	return if $line =~ m/^\s*$/;
-	if ($line =~ m/^(?:\S+)\s(PVEFW-\S+)\s(?:\S+).*/) {
-	    my $chain = $1;
-	    # ignore initval from ipset v7.7+, won't set that yet so it'd mess up change detection
-	    $line =~ s/\binitval 0x[0-9a-f]+//;
-	    $line =~ s/\s+$//; # delete trailing white space
-	    push @{$chains->{$chain}}, $line;
-	} else {
-	    # simply ignore the rest
-	    return;
-	}
+        return if $line =~ m/^#/;
+        return if $line =~ m/^\s*$/;
+        if ($line =~ m/^(?:\S+)\s(PVEFW-\S+)\s(?:\S+).*/) {
+            my $chain = $1;
+            # ignore initval from ipset v7.7+, won't set that yet so it'd mess up change detection
+            $line =~ s/\binitval 0x[0-9a-f]+//;
+            $line =~ s/\s+$//; # delete trailing white space
+            push @{ $chains->{$chain} }, $line;
+        } else {
+            # simply ignore the rest
+            return;
+        }
     };
 
     run_command(['ipset', 'save'], outfunc => $parser);
 
     # compute digest for each chain
     foreach my $chain (keys %$chains) {
-	$res->{$chain} = ipset_chain_digest($chains->{$chain});
+        $res->{$chain} = ipset_chain_digest($chains->{$chain});
     }
 
     return $res;
@@ -2111,35 +2166,35 @@ sub ebtables_get_chains {
     my $chains = {};
     my $table;
     my $parser = sub {
-	my $line = shift;
-	return if $line =~ m/^#/;
-	return if $line =~ m/^\s*$/;
-	if ($line =~ m/^\*(\S+)$/) {
-	    $table = $1;
-	    return;
-	}
+        my $line = shift;
+        return if $line =~ m/^#/;
+        return if $line =~ m/^\s*$/;
+        if ($line =~ m/^\*(\S+)$/) {
+            $table = $1;
+            return;
+        }
 
-	return if $table ne "filter";
+        return if $table ne "filter";
 
-	if ($line =~ m/^:(\S+)\s(ACCEPT|DROP|RETURN)$/) {
-	    # Make sure we know chains exist even if they're empty.
-	    $chains->{$1} //= [];
-	    $res->{$1}->{policy} = $2;
-	} elsif ($line =~ m/^(?:\S+)\s(\S+)\s(?:\S+).*/) {
-	    my $chain = $1;
-	    $line =~ s/\s+$//;
-	    push @{$chains->{$chain}}, $line;
-	} else {
-	    # simply ignore the rest
-	    return;
-	}
+        if ($line =~ m/^:(\S+)\s(ACCEPT|DROP|RETURN)$/) {
+            # Make sure we know chains exist even if they're empty.
+            $chains->{$1} //= [];
+            $res->{$1}->{policy} = $2;
+        } elsif ($line =~ m/^(?:\S+)\s(\S+)\s(?:\S+).*/) {
+            my $chain = $1;
+            $line =~ s/\s+$//;
+            push @{ $chains->{$chain} }, $line;
+        } else {
+            # simply ignore the rest
+            return;
+        }
     };
 
     run_command(['ebtables-save'], outfunc => $parser);
     # compute digest for each chain and store rules as well
     foreach my $chain (keys %$chains) {
-	$res->{$chain}->{rules} = $chains->{$chain};
-	$res->{$chain}->{sig} = iptables_chain_digest($chains->{$chain});
+        $res->{$chain}->{rules} = $chains->{$chain};
+        $res->{$chain}->{sig} = iptables_chain_digest($chains->{$chain});
     }
     return $res;
 }
@@ -2149,7 +2204,7 @@ sub rule_substitude_action {
     my ($rule, $actions) = @_;
 
     if (my $action = $rule->{action}) {
-	$rule->{action} = $actions->{$action} if defined($actions->{$action});
+        $rule->{action} = $actions->{$action} if defined($actions->{$action});
     }
 }
 
@@ -2160,51 +2215,55 @@ sub ipt_gen_src_or_dst_match {
 
     my $srcdst;
     if ($dir eq 's') {
-	$srcdst = "src";
+        $srcdst = "src";
     } elsif ($dir eq 'd') {
-	$srcdst = "dst";
+        $srcdst = "dst";
     } else {
-	die "ipt_gen_src_or_dst_match: invalid direction $dir \n";
+        die "ipt_gen_src_or_dst_match: invalid direction $dir \n";
     }
 
     my $match;
     if ($adr =~ m/^\+/) {
-	if ($adr =~ m@^\+(guest/|dc/|sdn/)?(${ipset_name_pattern})$@) {
-	    my $scope = $1 // "";
-	    my $name = $2;
-	    my $ipset_chain;
+        if ($adr =~ m@^\+(guest/|dc/|sdn/)?(${ipset_name_pattern})$@) {
+            my $scope = $1 // "";
+            my $name = $2;
+            my $ipset_chain;
 
-	    my $is_scope = sub { return !$scope || $scope eq "$_[0]/" };
+            my $is_scope = sub { return !$scope || $scope eq "$_[0]/" };
 
-	    if ($is_scope->('guest') && $fw_conf && $fw_conf->{ipset}->{$name}) {
-		$ipset_chain = compute_ipset_chain_name($fw_conf->{vmid}, $name, $ipversion);
-	    } elsif ($is_scope->('dc') && $cluster_conf && $cluster_conf->{ipset}->{$name}) {
-		$ipset_chain = compute_ipset_chain_name(0, $name, $ipversion);
-	    } elsif ($is_scope->('sdn') && $cluster_conf->{sdn} && $cluster_conf->{sdn}->{ipset}->{$name}) {
-		$ipset_chain = compute_ipset_chain_name(0, $name, $ipversion);
-	    } else {
-		die "no such ipset '$name'\n";
-	    }
-	    $match = "-m set --match-set ${ipset_chain} ${srcdst}";
-	} else {
-	    die "invalid security group name '$adr'\n";
-	}
-    } elsif ($adr =~ m@^(dc/|guest/)?(${ip_alias_pattern})$@){
-	my $scope = $1 // "";
-	my $alias = lc($2);
-	my $e;
-	if ($scope ne 'dc/' && $fw_conf) {
-	    $e = $fw_conf->{aliases}->{$alias};
-	}
-	if ($scope ne 'guest/' && !$e && $cluster_conf) {
-	    $e = $cluster_conf->{aliases}->{$alias};
-	}
-	die "no such alias '$adr'\n" if !$e;
-	$match = "-${dir} $e->{cidr}";
-    } elsif ($adr =~ m/\-/){
-	$match = "-m iprange --${srcdst}-range $adr";
+            if ($is_scope->('guest') && $fw_conf && $fw_conf->{ipset}->{$name}) {
+                $ipset_chain = compute_ipset_chain_name($fw_conf->{vmid}, $name, $ipversion);
+            } elsif ($is_scope->('dc') && $cluster_conf && $cluster_conf->{ipset}->{$name}) {
+                $ipset_chain = compute_ipset_chain_name(0, $name, $ipversion);
+            } elsif (
+                $is_scope->('sdn')
+                && $cluster_conf->{sdn}
+                && $cluster_conf->{sdn}->{ipset}->{$name}
+            ) {
+                $ipset_chain = compute_ipset_chain_name(0, $name, $ipversion);
+            } else {
+                die "no such ipset '$name'\n";
+            }
+            $match = "-m set --match-set ${ipset_chain} ${srcdst}";
+        } else {
+            die "invalid security group name '$adr'\n";
+        }
+    } elsif ($adr =~ m@^(dc/|guest/)?(${ip_alias_pattern})$@) {
+        my $scope = $1 // "";
+        my $alias = lc($2);
+        my $e;
+        if ($scope ne 'dc/' && $fw_conf) {
+            $e = $fw_conf->{aliases}->{$alias};
+        }
+        if ($scope ne 'guest/' && !$e && $cluster_conf) {
+            $e = $cluster_conf->{aliases}->{$alias};
+        }
+        die "no such alias '$adr'\n" if !$e;
+        $match = "-${dir} $e->{cidr}";
+    } elsif ($adr =~ m/\-/) {
+        $match = "-m iprange --${srcdst}-range $adr";
     } else {
-	$match = "-${dir} $adr";
+        $match = "-${dir} $adr";
     }
 
     return $match;
@@ -2219,95 +2278,100 @@ sub ipt_rule_to_cmds {
     my @match = ();
 
     if (defined $rule->{match}) {
-	push @match, $rule->{match};
+        push @match, $rule->{match};
     } else {
-	push @match, "-i $rule->{iface_in}" if $rule->{iface_in};
-	push @match, "-o $rule->{iface_out}" if $rule->{iface_out};
+        push @match, "-i $rule->{iface_in}" if $rule->{iface_in};
+        push @match, "-o $rule->{iface_out}" if $rule->{iface_out};
 
-	if ($rule->{source}) {
-	    push @match, ipt_gen_src_or_dst_match($rule->{source}, 's', $ipversion, $cluster_conf, $fw_conf);
-	}
-	if ($rule->{dest}) {
-	    push @match, ipt_gen_src_or_dst_match($rule->{dest}, 'd', $ipversion, $cluster_conf, $fw_conf);
-	}
+        if ($rule->{source}) {
+            push @match,
+                ipt_gen_src_or_dst_match($rule->{source}, 's', $ipversion, $cluster_conf, $fw_conf);
+        }
+        if ($rule->{dest}) {
+            push @match,
+                ipt_gen_src_or_dst_match($rule->{dest}, 'd', $ipversion, $cluster_conf, $fw_conf);
+        }
 
-	if (my $proto = $rule->{proto}) {
-	    push @match, "-p $proto";
-	    my $is_icmp = $proto_is_icmp->($proto);
+        if (my $proto = $rule->{proto}) {
+            push @match, "-p $proto";
+            my $is_icmp = $proto_is_icmp->($proto);
 
-	    my $multidport = defined($rule->{dport}) && parse_port_name_number_or_range($rule->{dport}, $is_icmp);
-	    my $multisport = defined($rule->{sport}) && parse_port_name_number_or_range($rule->{sport}, 0);
+            my $multidport = defined($rule->{dport})
+                && parse_port_name_number_or_range($rule->{dport}, $is_icmp);
+            my $multisport =
+                defined($rule->{sport}) && parse_port_name_number_or_range($rule->{sport}, 0);
 
-	    my $add_dport = sub {
-		return if !defined($rule->{dport});
+            my $add_dport = sub {
+                return if !defined($rule->{dport});
 
-		# NOTE: we re-use dport to store --icmp-type for icmp* protocol
-		if ($proto eq 'icmp') {
-		    $is_valid_icmp_type->($rule->{dport}, $icmp_type_names);
-		    push @match, "-m icmp --icmp-type $rule->{dport}";
-		} elsif ($proto eq 'icmpv6') {
-		    $is_valid_icmp_type->($rule->{dport}, $icmpv6_type_names);
-		    push @match, "-m icmpv6 --icmpv6-type $rule->{dport}";
-		} elsif (!$PROTOCOLS_WITH_PORTS->{$proto}) {
-		    die "protocol $proto does not have ports\n";
-		} elsif ($multidport) {
-		    push @match, "--match multiport", "--dports $rule->{dport}";
-		} else {
-		    return if !$rule->{dport};
-		    push @match, "--dport $rule->{dport}";
-		}
-	    };
+                # NOTE: we re-use dport to store --icmp-type for icmp* protocol
+                if ($proto eq 'icmp') {
+                    $is_valid_icmp_type->($rule->{dport}, $icmp_type_names);
+                    push @match, "-m icmp --icmp-type $rule->{dport}";
+                } elsif ($proto eq 'icmpv6') {
+                    $is_valid_icmp_type->($rule->{dport}, $icmpv6_type_names);
+                    push @match, "-m icmpv6 --icmpv6-type $rule->{dport}";
+                } elsif (!$PROTOCOLS_WITH_PORTS->{$proto}) {
+                    die "protocol $proto does not have ports\n";
+                } elsif ($multidport) {
+                    push @match, "--match multiport", "--dports $rule->{dport}";
+                } else {
+                    return if !$rule->{dport};
+                    push @match, "--dport $rule->{dport}";
+                }
+            };
 
-	    my $add_sport = sub {
-		return if !$rule->{sport};
+            my $add_sport = sub {
+                return if !$rule->{sport};
 
-		die "protocol $proto does not have ports\n"
-		    if !$PROTOCOLS_WITH_PORTS->{$proto};
-		if ($multisport) {
-		    push @match, "--match multiport", "--sports $rule->{sport}";
-		} else {
-		    push @match, "--sport $rule->{sport}";
-		}
-	    };
+                die "protocol $proto does not have ports\n"
+                    if !$PROTOCOLS_WITH_PORTS->{$proto};
+                if ($multisport) {
+                    push @match, "--match multiport", "--sports $rule->{sport}";
+                } else {
+                    push @match, "--sport $rule->{sport}";
+                }
+            };
 
-	    my $add_icmp_type = sub {
-		return if !defined($rule->{'icmp-type'}) || $rule->{'icmp-type'} eq '';
+            my $add_icmp_type = sub {
+                return if !defined($rule->{'icmp-type'}) || $rule->{'icmp-type'} eq '';
 
-		die "'icmp-type' can only be set if 'icmp', 'icmpv6' or 'ipv6-icmp' is specified\n"
-		    if !$is_icmp;
-		my $type = $proto eq 'icmp' ? 'icmp-type' : 'icmpv6-type';
+                die
+                    "'icmp-type' can only be set if 'icmp', 'icmpv6' or 'ipv6-icmp' is specified\n"
+                    if !$is_icmp;
+                my $type = $proto eq 'icmp' ? 'icmp-type' : 'icmpv6-type';
 
-		push @match, "-m $proto --$type $rule->{'icmp-type'}";
-	    };
+                push @match, "-m $proto --$type $rule->{'icmp-type'}";
+            };
 
-	    # order matters - single port before multiport!
-	    $add_icmp_type->();
-	    $add_dport->() if $multisport;
-	    $add_sport->();
-	    $add_dport->() if !$multisport;
-	} elsif ($rule->{dport} || $rule->{sport}) {
-	    die "destination port '$rule->{dport}', but no protocol specified\n" if $rule->{dport};
-	    die "source port '$rule->{sport}', but no protocol specified\n" if $rule->{sport};
-	}
+            # order matters - single port before multiport!
+            $add_icmp_type->();
+            $add_dport->() if $multisport;
+            $add_sport->();
+            $add_dport->() if !$multisport;
+        } elsif ($rule->{dport} || $rule->{sport}) {
+            die "destination port '$rule->{dport}', but no protocol specified\n" if $rule->{dport};
+            die "source port '$rule->{sport}', but no protocol specified\n" if $rule->{sport};
+        }
 
-	push @match, "-m addrtype --dst-type $rule->{dsttype}" if $rule->{dsttype};
+        push @match, "-m addrtype --dst-type $rule->{dsttype}" if $rule->{dsttype};
     }
     my $matchstr = scalar(@match) ? join(' ', @match) : "";
 
     my $targetstr;
     if (defined $rule->{target}) {
-	$targetstr = $rule->{target};
+        $targetstr = $rule->{target};
     } else {
-	my $action = (defined $rule->{action}) ? $rule->{action} : "";
-	$targetstr = $action eq 'PVEFW-SET-ACCEPT-MARK' ? "-g $action" : "-j $action";
+        my $action = (defined $rule->{action}) ? $rule->{action} : "";
+        $targetstr = $action eq 'PVEFW-SET-ACCEPT-MARK' ? "-g $action" : "-j $action";
     }
 
     my @iptcmds;
     my $log = $rule->{log};
     if (defined($log) && $log ne 'nolog') {
-	my $loglevel = $log_level_hash->{$log};
-	my $logaction = get_log_rule_base($chain, $vmid, $rule->{logmsg}, $loglevel);
-	push @iptcmds, "-A $chain $matchstr $logaction";
+        my $loglevel = $log_level_hash->{$log};
+        my $logaction = get_log_rule_base($chain, $vmid, $rule->{logmsg}, $loglevel);
+        push @iptcmds, "-A $chain $matchstr $logaction";
     }
     push @iptcmds, "-A $chain $matchstr $targetstr";
     return @iptcmds;
@@ -2319,18 +2383,19 @@ sub ruleset_generate_rule {
     my $rules;
 
     if ($rule->{macro}) {
-	$rules = &$apply_macro($rule->{macro}, $rule, 0, $ipversion);
+        $rules = &$apply_macro($rule->{macro}, $rule, 0, $ipversion);
     } else {
-	$rules = [ $rule ];
+        $rules = [$rule];
     }
 
     # update all or nothing
     my @ipt_rule_cmds;
     foreach my $r (@$rules) {
-	push @ipt_rule_cmds, ipt_rule_to_cmds($r, $chain, $ipversion, $cluster_conf, $fw_conf, $vmid);
+        push @ipt_rule_cmds,
+            ipt_rule_to_cmds($r, $chain, $ipversion, $cluster_conf, $fw_conf, $vmid);
     }
     foreach my $c (@ipt_rule_cmds) {
-	ruleset_add_ipt_cmd($ruleset, $chain, $c);
+        ruleset_add_ipt_cmd($ruleset, $chain, $c);
     }
 }
 
@@ -2353,11 +2418,11 @@ sub ruleset_chain_exist {
 
 # add an iptables command (like generated by ipt_rule_to_cmds) to a chain
 sub ruleset_add_ipt_cmd {
-   my ($ruleset, $chain, $iptcmd) = @_;
+    my ($ruleset, $chain, $iptcmd) = @_;
 
-   die "no such chain '$chain'\n" if !$ruleset->{$chain};
+    die "no such chain '$chain'\n" if !$ruleset->{$chain};
 
-   push @{$ruleset->{$chain}}, $iptcmd;
+    push @{ $ruleset->{$chain} }, $iptcmd;
 }
 
 sub ruleset_addrule {
@@ -2366,21 +2431,21 @@ sub ruleset_addrule {
     die "no such chain '$chain'\n" if !$ruleset->{$chain};
 
     if ($log) {
-	my $loglevel = $log_level_hash->{$log};
-	my $logaction = get_log_rule_base($chain, $vmid, $logmsg, $loglevel);
-	push @{$ruleset->{$chain}}, "-A $chain $match $logaction";
+        my $loglevel = $log_level_hash->{$log};
+        my $logaction = get_log_rule_base($chain, $vmid, $logmsg, $loglevel);
+        push @{ $ruleset->{$chain} }, "-A $chain $match $logaction";
     }
     # for stable ebtables digests avoid double-spaces to match ebtables-save output
     $match .= ' ' if length($match);
-    push @{$ruleset->{$chain}}, "-A $chain ${match}$action";
+    push @{ $ruleset->{$chain} }, "-A $chain ${match}$action";
 }
 
 sub ruleset_insertrule {
-   my ($ruleset, $chain, $match, $action, $log) = @_;
+    my ($ruleset, $chain, $match, $action, $log) = @_;
 
-   die "no such chain '$chain'\n" if !$ruleset->{$chain};
+    die "no such chain '$chain'\n" if !$ruleset->{$chain};
 
-   unshift @{$ruleset->{$chain}}, "-A $chain $match $action";
+    unshift @{ $ruleset->{$chain} }, "-A $chain $match $action";
 }
 
 sub get_log_rule_base {
@@ -2391,7 +2456,7 @@ sub get_log_rule_base {
 
     my $rlimit = '';
     if (defined($global_log_ratelimit)) {
-	$rlimit = "-m limit $global_log_ratelimit ";
+        $rlimit = "-m limit $global_log_ratelimit ";
     }
 
     # Note: we use special format for prefix to pass further
@@ -2404,22 +2469,30 @@ sub ruleset_add_chain_policy {
 
     if ($policy eq 'ACCEPT') {
 
-	my $rule = { action => 'ACCEPT' };
-	rule_substitude_action($rule, { ACCEPT =>  $accept_action});
-	ruleset_generate_rule($ruleset, $chain, $ipversion, $rule);
+        my $rule = { action => 'ACCEPT' };
+        rule_substitude_action($rule, { ACCEPT => $accept_action });
+        ruleset_generate_rule($ruleset, $chain, $ipversion, $rule);
 
     } elsif ($policy eq 'DROP') {
 
-	ruleset_addrule($ruleset, $chain, "", "-j PVEFW-Drop");
+        ruleset_addrule($ruleset, $chain, "", "-j PVEFW-Drop");
 
-	ruleset_addrule($ruleset, $chain, "", "-j DROP", $loglevel, "policy $policy: ", $vmid);
+        ruleset_addrule($ruleset, $chain, "", "-j DROP", $loglevel, "policy $policy: ", $vmid);
     } elsif ($policy eq 'REJECT') {
-	ruleset_addrule($ruleset, $chain, "", "-j PVEFW-Reject");
+        ruleset_addrule($ruleset, $chain, "", "-j PVEFW-Reject");
 
-	ruleset_addrule($ruleset, $chain, "", "-g PVEFW-reject", $loglevel, "policy $policy: ", $vmid);
+        ruleset_addrule(
+            $ruleset,
+            $chain,
+            "",
+            "-g PVEFW-reject",
+            $loglevel,
+            "policy $policy: ",
+            $vmid,
+        );
     } else {
-	# should not happen
-	die "internal error: unknown policy '$policy'";
+        # should not happen
+        die "internal error: unknown policy '$policy'";
     }
 }
 
@@ -2429,7 +2502,7 @@ sub ruleset_chain_add_ndp {
 
     ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type router-solicitation", $accept);
     if ($direction ne 'OUT' || $options->{radv}) {
-	ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type router-advertisement", $accept);
+        ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type router-advertisement", $accept);
     }
     ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type neighbor-solicitation", $accept);
     ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type neighbor-advertisement", $accept);
@@ -2439,7 +2512,7 @@ sub ruleset_chain_add_conn_filters {
     my ($ruleset, $chain, $allow_invalid, $accept) = @_;
 
     if (!$allow_invalid) {
-	ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate INVALID", "-j DROP");
+        ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate INVALID", "-j DROP");
     }
     ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate RELATED,ESTABLISHED", "-j $accept");
 }
@@ -2447,23 +2520,33 @@ sub ruleset_chain_add_conn_filters {
 sub ruleset_chain_add_input_filters {
     my ($ruleset, $chain, $ipversion, $options, $cluster_conf, $loglevel) = @_;
 
-    if ($cluster_conf->{ipset}->{blacklist}){
-	if (!ruleset_chain_exist($ruleset, "PVEFW-blacklist")) {
-	    ruleset_create_chain($ruleset, "PVEFW-blacklist");
-	    ruleset_addrule($ruleset, "PVEFW-blacklist", "", "-j DROP", $loglevel, "DROP: ", 0);
-	}
-	my $ipset_chain = compute_ipset_chain_name(0, 'blacklist', $ipversion);
-	ruleset_addrule($ruleset, $chain, "-m set --match-set ${ipset_chain} src", "-j PVEFW-blacklist");
+    if ($cluster_conf->{ipset}->{blacklist}) {
+        if (!ruleset_chain_exist($ruleset, "PVEFW-blacklist")) {
+            ruleset_create_chain($ruleset, "PVEFW-blacklist");
+            ruleset_addrule($ruleset, "PVEFW-blacklist", "", "-j DROP", $loglevel, "DROP: ", 0);
+        }
+        my $ipset_chain = compute_ipset_chain_name(0, 'blacklist', $ipversion);
+        ruleset_addrule(
+            $ruleset,
+            $chain,
+            "-m set --match-set ${ipset_chain} src",
+            "-j PVEFW-blacklist",
+        );
     }
 
     if (!(defined($options->{nosmurfs}) && $options->{nosmurfs} == 0)) {
-	if ($ipversion == 4) {
-	    ruleset_addrule($ruleset, $chain, "-m conntrack --ctstate INVALID,NEW", "-j PVEFW-smurfs");
-	}
+        if ($ipversion == 4) {
+            ruleset_addrule(
+                $ruleset,
+                $chain,
+                "-m conntrack --ctstate INVALID,NEW",
+                "-j PVEFW-smurfs",
+            );
+        }
     }
 
     if ($options->{tcpflags}) {
-	ruleset_addrule($ruleset, $chain, "-p tcp", "-j PVEFW-tcpflags");
+        ruleset_addrule($ruleset, $chain, "-p tcp", "-j PVEFW-tcpflags");
     }
 }
 
@@ -2474,41 +2557,79 @@ sub ruleset_create_vm_chain {
     my $accept = generate_nfqueue($options);
 
     if (!(defined($options->{dhcp}) && $options->{dhcp} == 0)) {
-	if ($ipversion == 4) {
-	    if ($direction eq 'OUT') {
-		ruleset_generate_rule($ruleset, $chain, $ipversion,
-				      { action => 'PVEFW-SET-ACCEPT-MARK',
-					proto => 'udp', sport => 68, dport => 67 });
-	    } else {
-		ruleset_generate_rule($ruleset, $chain, $ipversion,
-				      { action => 'ACCEPT',
-					proto => 'udp', sport => 67, dport => 68 });
-	    }
-	} elsif ($ipversion == 6) {
-	    if ($direction eq 'OUT') {
-		ruleset_generate_rule($ruleset, $chain, $ipversion,
-				      { action => 'PVEFW-SET-ACCEPT-MARK',
-					proto => 'udp', sport => 546, dport => 547 });
-	    } else {
-		ruleset_generate_rule($ruleset, $chain, $ipversion,
-				      { action => 'ACCEPT',
-					proto => 'udp', sport => 547, dport => 546 });
-	    }
-	}
+        if ($ipversion == 4) {
+            if ($direction eq 'OUT') {
+                ruleset_generate_rule(
+                    $ruleset,
+                    $chain,
+                    $ipversion,
+                    {
+                        action => 'PVEFW-SET-ACCEPT-MARK',
+                        proto => 'udp',
+                        sport => 68,
+                        dport => 67,
+                    },
+                );
+            } else {
+                ruleset_generate_rule(
+                    $ruleset,
+                    $chain,
+                    $ipversion,
+                    {
+                        action => 'ACCEPT',
+                        proto => 'udp',
+                        sport => 67,
+                        dport => 68,
+                    },
+                );
+            }
+        } elsif ($ipversion == 6) {
+            if ($direction eq 'OUT') {
+                ruleset_generate_rule(
+                    $ruleset,
+                    $chain,
+                    $ipversion,
+                    {
+                        action => 'PVEFW-SET-ACCEPT-MARK',
+                        proto => 'udp',
+                        sport => 546,
+                        dport => 547,
+                    },
+                );
+            } else {
+                ruleset_generate_rule(
+                    $ruleset,
+                    $chain,
+                    $ipversion,
+                    {
+                        action => 'ACCEPT',
+                        proto => 'udp',
+                        sport => 547,
+                        dport => 546,
+                    },
+                );
+            }
+        }
 
     }
 
     if ($direction eq 'OUT') {
-	if (defined($macaddr) && !(defined($options->{macfilter}) && $options->{macfilter} == 0)) {
-	    ruleset_addrule($ruleset, $chain, "-m mac ! --mac-source $macaddr", "-j DROP");
-	}
-	if ($ipversion == 6 && !$options->{radv}) {
-	    ruleset_addrule($ruleset, $chain, "-p icmpv6 --icmpv6-type router-advertisement", "-j DROP");
-	}
-	if ($ipfilter_ipset) {
-	    ruleset_addrule($ruleset, $chain, "-m set ! --match-set $ipfilter_ipset src", "-j DROP");
-	}
-	ruleset_addrule($ruleset, $chain, "", "-j MARK --set-mark $FWACCEPTMARK_OFF"); # clear mark
+        if (defined($macaddr) && !(defined($options->{macfilter}) && $options->{macfilter} == 0)) {
+            ruleset_addrule($ruleset, $chain, "-m mac ! --mac-source $macaddr", "-j DROP");
+        }
+        if ($ipversion == 6 && !$options->{radv}) {
+            ruleset_addrule(
+                $ruleset,
+                $chain,
+                "-p icmpv6 --icmpv6-type router-advertisement",
+                "-j DROP",
+            );
+        }
+        if ($ipfilter_ipset) {
+            ruleset_addrule($ruleset, $chain, "-m set ! --match-set $ipfilter_ipset src",
+                "-j DROP");
+        }
+        ruleset_addrule($ruleset, $chain, "", "-j MARK --set-mark $FWACCEPTMARK_OFF"); # clear mark
     }
 
     my $accept_action = $direction eq 'OUT' ? '-g PVEFW-SET-ACCEPT-MARK' : "-j $accept";
@@ -2520,50 +2641,90 @@ sub ruleset_add_group_rule {
 
     my $group = $rule->{action};
     my $group_chain = "GROUP-$group-$direction";
-    if(!ruleset_chain_exist($ruleset, $group_chain)){
-	generate_group_rules($ruleset, $cluster_conf, $group, $ipversion);
+    if (!ruleset_chain_exist($ruleset, $group_chain)) {
+        generate_group_rules($ruleset, $cluster_conf, $group, $ipversion);
     }
 
     if ($direction eq 'OUT' && $rule->{iface_out}) {
-	ruleset_addrule($ruleset, $chain, "-o $rule->{iface_out}", "-j $group_chain");
+        ruleset_addrule($ruleset, $chain, "-o $rule->{iface_out}", "-j $group_chain");
     } elsif ($direction eq 'IN' && $rule->{iface_in}) {
-	ruleset_addrule($ruleset, $chain, "-i $rule->{iface_in}", "-j $group_chain");
+        ruleset_addrule($ruleset, $chain, "-i $rule->{iface_in}", "-j $group_chain");
     } else {
-	ruleset_addrule($ruleset, $chain, "", "-j $group_chain");
+        ruleset_addrule($ruleset, $chain, "", "-j $group_chain");
     }
 
     ruleset_addrule($ruleset, $chain, "-m mark --mark $FWACCEPTMARK_ON", "-j $action");
 }
 
 sub ruleset_generate_vm_rules {
-    my ($ruleset, $rules, $cluster_conf, $vmfw_conf, $chain, $netid, $direction, $options, $ipversion, $vmid) = @_;
+    my (
+        $ruleset,
+        $rules,
+        $cluster_conf,
+        $vmfw_conf,
+        $chain,
+        $netid,
+        $direction,
+        $options,
+        $ipversion,
+        $vmid,
+    ) = @_;
 
     my $lc_direction = lc($direction);
 
     my $in_accept = generate_nfqueue($options);
 
     foreach my $rule (@$rules) {
-	next if $rule->{iface} && $rule->{iface} ne $netid;
-	next if !$rule->{enable} || $rule->{errors};
-	next if $rule->{ipversion} && ($rule->{ipversion} != $ipversion);
+        next if $rule->{iface} && $rule->{iface} ne $netid;
+        next if !$rule->{enable} || $rule->{errors};
+        next if $rule->{ipversion} && ($rule->{ipversion} != $ipversion);
 
-	if ($rule->{type} eq 'group') {
-	    ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, $direction,
-				   $direction eq 'OUT' ? 'RETURN' : $in_accept, $ipversion);
-	} else {
-	    next if $rule->{type} ne $lc_direction;
-	    eval {
-		$rule->{logmsg} = "$rule->{action}: ";
-		if ($direction eq 'OUT') {
-		    rule_substitude_action($rule, { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" });
-		    ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, $cluster_conf, $vmfw_conf, $vmid);
-		} else {
-		    rule_substitude_action($rule, { ACCEPT => $in_accept , REJECT => "PVEFW-reject" });
-		    ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, $cluster_conf, $vmfw_conf, $vmid);
-		}
-	    };
-	    warn $@ if $@;
-	}
+        if ($rule->{type} eq 'group') {
+            ruleset_add_group_rule(
+                $ruleset,
+                $cluster_conf,
+                $chain,
+                $rule,
+                $direction,
+                $direction eq 'OUT' ? 'RETURN' : $in_accept,
+                $ipversion,
+            );
+        } else {
+            next if $rule->{type} ne $lc_direction;
+            eval {
+                $rule->{logmsg} = "$rule->{action}: ";
+                if ($direction eq 'OUT') {
+                    rule_substitude_action(
+                        $rule,
+                        { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" },
+                    );
+                    ruleset_generate_rule(
+                        $ruleset,
+                        $chain,
+                        $ipversion,
+                        $rule,
+                        $cluster_conf,
+                        $vmfw_conf,
+                        $vmid,
+                    );
+                } else {
+                    rule_substitude_action(
+                        $rule,
+                        { ACCEPT => $in_accept, REJECT => "PVEFW-reject" },
+                    );
+                    ruleset_generate_rule(
+                        $ruleset,
+                        $chain,
+                        $ipversion,
+                        $rule,
+                        $cluster_conf,
+                        $vmfw_conf,
+                        $vmid,
+                    );
+                }
+            };
+            warn $@ if $@;
+        }
     }
 }
 
@@ -2571,18 +2732,18 @@ sub generate_nfqueue {
     my ($options) = @_;
 
     if ($options->{ips}) {
-	my $action = "NFQUEUE";
-	if ($options->{ips_queues} && $options->{ips_queues} =~ m/^(\d+)(:(\d+))?$/) {
-	    if (defined($3) && defined($1)) {
-		$action .= " --queue-balance $1:$3";
-	    } elsif (defined($1)) {
-		$action .= " --queue-num $1";
-	    }
-	}
-	$action .= " --queue-bypass" if $feature_ipset_nomatch; #need kernel 3.10
-	return $action;
+        my $action = "NFQUEUE";
+        if ($options->{ips_queues} && $options->{ips_queues} =~ m/^(\d+)(:(\d+))?$/) {
+            if (defined($3) && defined($1)) {
+                $action .= " --queue-balance $1:$3";
+            } elsif (defined($1)) {
+                $action .= " --queue-num $1";
+            }
+        }
+        $action .= " --queue-bypass" if $feature_ipset_nomatch; #need kernel 3.10
+        return $action;
     } else {
-	return "ACCEPT";
+        return "ACCEPT";
     }
 }
 
@@ -2590,18 +2751,33 @@ sub ruleset_generate_vm_ipsrules {
     my ($ruleset, $options, $direction, $iface) = @_;
 
     if ($options->{ips} && $direction eq 'IN') {
-	my $nfqueue = generate_nfqueue($options);
+        my $nfqueue = generate_nfqueue($options);
 
-	if (!ruleset_chain_exist($ruleset, "PVEFW-IPS")) {
-	    ruleset_create_chain($ruleset, "PVEFW-IPS");
-	}
+        if (!ruleset_chain_exist($ruleset, "PVEFW-IPS")) {
+            ruleset_create_chain($ruleset, "PVEFW-IPS");
+        }
 
-        ruleset_addrule($ruleset, "PVEFW-IPS", "-m physdev --physdev-out $iface --physdev-is-bridged", "-j $nfqueue");
+        ruleset_addrule(
+            $ruleset,
+            "PVEFW-IPS",
+            "-m physdev --physdev-out $iface --physdev-is-bridged",
+            "-j $nfqueue",
+        );
     }
 }
 
 sub generate_tap_rules_direction {
-    my ($ruleset, $cluster_conf, $iface, $netid, $macaddr, $vmfw_conf, $vmid, $direction, $ipversion) = @_;
+    my (
+        $ruleset,
+        $cluster_conf,
+        $iface,
+        $netid,
+        $macaddr,
+        $vmfw_conf,
+        $vmid,
+        $direction,
+        $ipversion,
+    ) = @_;
 
     my $lc_direction = lc($direction);
 
@@ -2615,40 +2791,65 @@ sub generate_tap_rules_direction {
     my $ipfilter_name = compute_ipfilter_ipset_name($netid);
     my $ipfilter_ipset;
     $ipfilter_ipset = compute_ipset_chain_name($vmid, $ipfilter_name, $ipversion)
-	if $options->{ipfilter} || $vmfw_conf->{ipset}->{$ipfilter_name};
+        if $options->{ipfilter} || $vmfw_conf->{ipset}->{$ipfilter_name};
 
     if ($options->{enable}) {
-	# create chain with mac and ip filter
-	ruleset_create_vm_chain($ruleset, $tapchain, $ipversion, $options, $macaddr, $ipfilter_ipset, $direction);
+        # create chain with mac and ip filter
+        ruleset_create_vm_chain(
+            $ruleset, $tapchain, $ipversion, $options, $macaddr, $ipfilter_ipset, $direction,
+        );
 
-	ruleset_generate_vm_rules($ruleset, $rules, $cluster_conf, $vmfw_conf, $tapchain, $netid, $direction, $options, $ipversion, $vmid);
+        ruleset_generate_vm_rules(
+            $ruleset,
+            $rules,
+            $cluster_conf,
+            $vmfw_conf,
+            $tapchain,
+            $netid,
+            $direction,
+            $options,
+            $ipversion,
+            $vmid,
+        );
 
-	ruleset_generate_vm_ipsrules($ruleset, $options, $direction, $iface);
+        ruleset_generate_vm_ipsrules($ruleset, $options, $direction, $iface);
 
-	# implement policy
-	my $policy;
+        # implement policy
+        my $policy;
 
-	if ($direction eq 'OUT') {
-	    $policy = $options->{policy_out} || 'ACCEPT'; # allow everything by default
-	} else {
-	    $policy = $options->{policy_in} || 'DROP'; # allow nothing by default
-	}
+        if ($direction eq 'OUT') {
+            $policy = $options->{policy_out} || 'ACCEPT'; # allow everything by default
+        } else {
+            $policy = $options->{policy_in} || 'DROP'; # allow nothing by default
+        }
 
-	my $accept = generate_nfqueue($options);
-	my $accept_action = $direction eq 'OUT' ? "PVEFW-SET-ACCEPT-MARK" : $accept;
-	ruleset_add_chain_policy($ruleset, $tapchain, $ipversion, $vmid, $policy, $loglevel, $accept_action);
+        my $accept = generate_nfqueue($options);
+        my $accept_action = $direction eq 'OUT' ? "PVEFW-SET-ACCEPT-MARK" : $accept;
+        ruleset_add_chain_policy(
+            $ruleset, $tapchain, $ipversion, $vmid, $policy, $loglevel, $accept_action,
+        );
     } else {
-	my $accept_action = $direction eq 'OUT' ? "PVEFW-SET-ACCEPT-MARK" : 'ACCEPT';
-	ruleset_add_chain_policy($ruleset, $tapchain, $ipversion, $vmid, 'ACCEPT', $loglevel, $accept_action);
+        my $accept_action = $direction eq 'OUT' ? "PVEFW-SET-ACCEPT-MARK" : 'ACCEPT';
+        ruleset_add_chain_policy(
+            $ruleset, $tapchain, $ipversion, $vmid, 'ACCEPT', $loglevel, $accept_action,
+        );
     }
 
     # plug the tap chain to bridge chain
     if ($direction eq 'IN') {
-	ruleset_addrule($ruleset, "PVEFW-FWBR-IN",
-			"-m physdev --physdev-is-bridged --physdev-out $iface", "-j $tapchain");
+        ruleset_addrule(
+            $ruleset,
+            "PVEFW-FWBR-IN",
+            "-m physdev --physdev-is-bridged --physdev-out $iface",
+            "-j $tapchain",
+        );
     } else {
-	ruleset_addrule($ruleset, "PVEFW-FWBR-OUT",
-			"-m physdev --physdev-is-bridged --physdev-in $iface", "-j $tapchain");
+        ruleset_addrule(
+            $ruleset,
+            "PVEFW-FWBR-OUT",
+            "-m physdev --physdev-is-bridged --physdev-in $iface",
+            "-j $tapchain",
+        );
     }
 }
 
@@ -2666,17 +2867,21 @@ sub enable_host_firewall {
     my $multicast_enabled;
     my $local_hostname = PVE::INotify::nodename();
     if (defined($corosync_conf)) {
-	PVE::Corosync::for_all_corosync_addresses($corosync_conf, $ipversion, sub {
-	    my ($node_name, $node_ip, $node_ipversion, $key) = @_;
+        PVE::Corosync::for_all_corosync_addresses(
+            $corosync_conf,
+            $ipversion,
+            sub {
+                my ($node_name, $node_ip, $node_ipversion, $key) = @_;
 
-	    if ($node_name eq $local_hostname) {
-		$corosync_local_addresses->{$key} = $node_ip;
-	    }
-	});
+                if ($node_name eq $local_hostname) {
+                    $corosync_local_addresses->{$key} = $node_ip;
+                }
+            },
+        );
 
-	# allow multicast only if enabled in config
-	my $corosync_transport = $corosync_conf->{main}->{totem}->{transport};
-	$multicast_enabled = defined($corosync_transport) && $corosync_transport eq 'udp';
+        # allow multicast only if enabled in config
+        my $corosync_transport = $corosync_conf->{main}->{totem}->{transport};
+        $multicast_enabled = defined($corosync_transport) && $corosync_transport eq 'udp';
     }
 
     # host inbound firewall
@@ -2689,7 +2894,9 @@ sub enable_host_firewall {
 
     ruleset_chain_add_conn_filters($ruleset, $chain, 0, 'ACCEPT');
     ruleset_chain_add_ndp($ruleset, $chain, $ipversion, $options, 'IN', '-j RETURN');
-    ruleset_chain_add_input_filters($ruleset, $chain, $ipversion, $options, $cluster_conf, $loglevel);
+    ruleset_chain_add_input_filters(
+        $ruleset, $chain, $ipversion, $options, $cluster_conf, $loglevel,
+    );
 
     # we use RETURN because we need to check also tap rules
     my $accept_action = 'RETURN';
@@ -2698,47 +2905,68 @@ sub enable_host_firewall {
 
     # add host rules first, so that cluster wide rules can be overwritten
     foreach my $rule (@$rules, @$cluster_rules) {
-	next if !$rule->{enable} || $rule->{errors};
-	next if $rule->{ipversion} && ($rule->{ipversion} != $ipversion);
+        next if !$rule->{enable} || $rule->{errors};
+        next if $rule->{ipversion} && ($rule->{ipversion} != $ipversion);
 
-	$rule->{iface_in} = $rule->{iface} if $rule->{iface};
+        $rule->{iface_in} = $rule->{iface} if $rule->{iface};
 
-	eval {
-	    $rule->{logmsg} = "$rule->{action}: ";
-	    if ($rule->{type} eq 'group') {
-		ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, 'IN', $accept_action, $ipversion);
-	    } elsif ($rule->{type} eq 'in') {
-		rule_substitude_action($rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" });
-		ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, $cluster_conf, $hostfw_conf, 0);
-	    }
-	};
-	warn $@ if $@;
-	delete $rule->{iface_in};
+        eval {
+            $rule->{logmsg} = "$rule->{action}: ";
+            if ($rule->{type} eq 'group') {
+                ruleset_add_group_rule(
+                    $ruleset, $cluster_conf, $chain, $rule, 'IN', $accept_action, $ipversion,
+                );
+            } elsif ($rule->{type} eq 'in') {
+                rule_substitude_action(
+                    $rule,
+                    { ACCEPT => $accept_action, REJECT => "PVEFW-reject" },
+                );
+                ruleset_generate_rule(
+                    $ruleset, $chain, $ipversion, $rule, $cluster_conf, $hostfw_conf, 0,
+                );
+            }
+        };
+        warn $@ if $@;
+        delete $rule->{iface_in};
     }
 
     # allow standard traffic for management ipset (includes cluster network)
     my $mngmnt_ipset_chain = compute_ipset_chain_name(0, "management", $ipversion);
     my $mngmntsrc = "-m set --match-set ${mngmnt_ipset_chain} src";
-    ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 8006", "-j $accept_action");  # PVE API
-    ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 5900:5999", "-j $accept_action");  # PVE VNC Console
-    ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 3128", "-j $accept_action");  # SPICE Proxy
-    ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 22", "-j $accept_action");  # SSH
-    ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 60000:60050", "-j $accept_action");  # Migration
+    ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 8006", "-j $accept_action"); # PVE API
+    ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 5900:5999", "-j $accept_action"); # PVE VNC Console
+    ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 3128", "-j $accept_action"); # SPICE Proxy
+    ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 22", "-j $accept_action"); # SSH
+    ruleset_addrule($ruleset, $chain, "$mngmntsrc -p tcp --dport 60000:60050", "-j $accept_action")
+        ; # Migration
 
     # corosync inbound rules
     if (defined($corosync_conf)) {
-	ruleset_addrule($ruleset, $chain, "-m addrtype --dst-type MULTICAST $corosync_rule", "-j $accept_action")
-	    if $multicast_enabled;
+        ruleset_addrule(
+            $ruleset,
+            $chain,
+            "-m addrtype --dst-type MULTICAST $corosync_rule",
+            "-j $accept_action",
+        ) if $multicast_enabled;
 
-	PVE::Corosync::for_all_corosync_addresses($corosync_conf, $ipversion, sub {
-	    my ($node_name, $node_ip, $node_ipversion, $key) = @_;
-	    my $destination = $corosync_local_addresses->{$key};
+        PVE::Corosync::for_all_corosync_addresses(
+            $corosync_conf,
+            $ipversion,
+            sub {
+                my ($node_name, $node_ip, $node_ipversion, $key) = @_;
+                my $destination = $corosync_local_addresses->{$key};
 
-	    if ($node_name ne $local_hostname && defined($destination)) {
-		# accept only traffic on same ring
-		ruleset_addrule($ruleset, $chain, "-d $destination -s $node_ip $corosync_rule", "-j $accept_action");
-	    }
-	});
+                if ($node_name ne $local_hostname && defined($destination)) {
+                    # accept only traffic on same ring
+                    ruleset_addrule(
+                        $ruleset,
+                        $chain,
+                        "-d $destination -s $node_ip $corosync_rule",
+                        "-j $accept_action",
+                    );
+                }
+            },
+        );
     }
 
     # implement input policy
@@ -2763,21 +2991,34 @@ sub enable_host_firewall {
 
     # add host rules first, so that cluster wide rules can be overwritten
     foreach my $rule (@$rules, @$cluster_rules) {
-	next if !$rule->{enable} || $rule->{errors};
-	next if $rule->{ipversion} && ($rule->{ipversion} != $ipversion);
+        next if !$rule->{enable} || $rule->{errors};
+        next if $rule->{ipversion} && ($rule->{ipversion} != $ipversion);
 
-	$rule->{iface_out} = $rule->{iface} if $rule->{iface};
-	eval {
-	    $rule->{logmsg} = "$rule->{action}: ";
-	    if ($rule->{type} eq 'group') {
-		ruleset_add_group_rule($ruleset, $cluster_conf, $chain, $rule, 'OUT', $accept_action, $ipversion);
-	    } elsif ($rule->{type} eq 'out') {
-		rule_substitude_action($rule, { ACCEPT => $accept_action, REJECT => "PVEFW-reject" });
-		ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, $cluster_conf, $hostfw_conf, 0);
-	    }
-	};
-	warn $@ if $@;
-	delete $rule->{iface_out};
+        $rule->{iface_out} = $rule->{iface} if $rule->{iface};
+        eval {
+            $rule->{logmsg} = "$rule->{action}: ";
+            if ($rule->{type} eq 'group') {
+                ruleset_add_group_rule(
+                    $ruleset,
+                    $cluster_conf,
+                    $chain,
+                    $rule,
+                    'OUT',
+                    $accept_action,
+                    $ipversion,
+                );
+            } elsif ($rule->{type} eq 'out') {
+                rule_substitude_action(
+                    $rule,
+                    { ACCEPT => $accept_action, REJECT => "PVEFW-reject" },
+                );
+                ruleset_generate_rule(
+                    $ruleset, $chain, $ipversion, $rule, $cluster_conf, $hostfw_conf, 0,
+                );
+            }
+        };
+        warn $@ if $@;
+        delete $rule->{iface_out};
     }
 
     # allow standard traffic on cluster network
@@ -2785,26 +3026,46 @@ sub enable_host_firewall {
     my $localnet_ver = $cluster_conf->{aliases}->{local_network}->{ipversion};
 
     if ($localnet && ($ipversion == $localnet_ver)) {
-	ruleset_addrule($ruleset, $chain, "-d $localnet -p tcp --dport 8006", "-j $accept_action");  # PVE API
-	ruleset_addrule($ruleset, $chain, "-d $localnet -p tcp --dport 22", "-j $accept_action");  # SSH
-	ruleset_addrule($ruleset, $chain, "-d $localnet -p tcp --dport 5900:5999", "-j $accept_action");  # PVE VNC Console
-	ruleset_addrule($ruleset, $chain, "-d $localnet -p tcp --dport 3128", "-j $accept_action");  # SPICE Proxy
+        ruleset_addrule($ruleset, $chain, "-d $localnet -p tcp --dport 8006", "-j $accept_action")
+            ; # PVE API
+        ruleset_addrule($ruleset, $chain, "-d $localnet -p tcp --dport 22", "-j $accept_action"); # SSH
+        ruleset_addrule(
+            $ruleset,
+            $chain,
+            "-d $localnet -p tcp --dport 5900:5999",
+            "-j $accept_action",
+        ); # PVE VNC Console
+        ruleset_addrule($ruleset, $chain, "-d $localnet -p tcp --dport 3128", "-j $accept_action")
+            ; # SPICE Proxy
     }
 
     # corosync outbound rules
     if (defined($corosync_conf)) {
-	ruleset_addrule($ruleset, $chain, "-m addrtype --dst-type MULTICAST $corosync_rule", "-j $accept_action")
-	    if $multicast_enabled;
+        ruleset_addrule(
+            $ruleset,
+            $chain,
+            "-m addrtype --dst-type MULTICAST $corosync_rule",
+            "-j $accept_action",
+        ) if $multicast_enabled;
 
-	PVE::Corosync::for_all_corosync_addresses($corosync_conf, $ipversion, sub {
-	    my ($node_name, $node_ip, $node_ipversion, $key) = @_;
-	    my $source = $corosync_local_addresses->{$key};
+        PVE::Corosync::for_all_corosync_addresses(
+            $corosync_conf,
+            $ipversion,
+            sub {
+                my ($node_name, $node_ip, $node_ipversion, $key) = @_;
+                my $source = $corosync_local_addresses->{$key};
 
-	    if ($node_name ne $local_hostname && defined($source)) {
-		# accept only traffic on same ring
-		ruleset_addrule($ruleset, $chain, "-s $source -d $node_ip $corosync_rule", "-j $accept_action");
-	    }
-	});
+                if ($node_name ne $local_hostname && defined($source)) {
+                    # accept only traffic on same ring
+                    ruleset_addrule(
+                        $ruleset,
+                        $chain,
+                        "-s $source -d $node_ip $corosync_rule",
+                        "-j $accept_action",
+                    );
+                }
+            },
+        );
     }
 
     # implement output policy
@@ -2821,8 +3082,8 @@ sub generate_group_rules {
     my $rules = $cluster_conf->{groups}->{$group};
 
     if (!$rules) {
-	warn "no such security group '$group'\n";
-	$rules = []; # create empty chain
+        warn "no such security group '$group'\n";
+        $rules = []; # create empty chain
     }
 
     my $chain = "GROUP-${group}-IN";
@@ -2831,11 +3092,14 @@ sub generate_group_rules {
     ruleset_addrule($ruleset, $chain, "", "-j MARK --set-mark $FWACCEPTMARK_OFF"); # clear mark
 
     foreach my $rule (@$rules) {
-	next if $rule->{type} ne 'in';
-	next if !$rule->{enable} || $rule->{errors};
-	next if $rule->{ipversion} && $rule->{ipversion} ne $ipversion;
-	rule_substitude_action($rule, { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" });
-	ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, $cluster_conf);
+        next if $rule->{type} ne 'in';
+        next if !$rule->{enable} || $rule->{errors};
+        next if $rule->{ipversion} && $rule->{ipversion} ne $ipversion;
+        rule_substitude_action(
+            $rule,
+            { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" },
+        );
+        ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, $cluster_conf);
     }
 
     $chain = "GROUP-${group}-OUT";
@@ -2844,19 +3108,22 @@ sub generate_group_rules {
     ruleset_addrule($ruleset, $chain, "", "-j MARK --set-mark $FWACCEPTMARK_OFF"); # clear mark
 
     foreach my $rule (@$rules) {
-	next if $rule->{type} ne 'out';
-	next if !$rule->{enable} || $rule->{errors};
-	next if $rule->{ipversion} && $rule->{ipversion} ne $ipversion;
-	# we use PVEFW-SET-ACCEPT-MARK (Instead of ACCEPT) because we need to
-	# check also other tap rules later
-	rule_substitude_action($rule, { ACCEPT => 'PVEFW-SET-ACCEPT-MARK', REJECT => "PVEFW-reject" });
-	ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, $cluster_conf);
+        next if $rule->{type} ne 'out';
+        next if !$rule->{enable} || $rule->{errors};
+        next if $rule->{ipversion} && $rule->{ipversion} ne $ipversion;
+        # we use PVEFW-SET-ACCEPT-MARK (Instead of ACCEPT) because we need to
+        # check also other tap rules later
+        rule_substitude_action(
+            $rule,
+            { ACCEPT => 'PVEFW-SET-ACCEPT-MARK', REJECT => "PVEFW-reject" },
+        );
+        ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, $cluster_conf);
     }
 }
 
 my $MAX_NETS = 32;
 my $valid_netdev_names = {};
-for (my $i = 0; $i < $MAX_NETS; $i++)  {
+for (my $i = 0; $i < $MAX_NETS; $i++) {
     $valid_netdev_names->{"net$i"} = 1;
 }
 
@@ -2877,80 +3144,80 @@ sub parse_fw_rule {
 
     # we can add single line comments to the end of the rule
     if ($line =~ s/#\s*(.*?)\s*$//) {
-	$rule->{comment} = decode('utf8', $1);
+        $rule->{comment} = decode('utf8', $1);
     }
 
     # we can disable a rule when prefixed with '|'
 
     $rule->{enable} = $line =~ s/^\|// ? 0 : 1;
 
-    $line =~ s/^(\S+)\s+(\S+)\s*// ||
- 	die "unable to parse rule: $line\n";
+    $line =~ s/^(\S+)\s+(\S+)\s*//
+        || die "unable to parse rule: $line\n";
 
     $rule->{type} = lc($1);
     $rule->{action} = $2;
 
-    if ($rule->{type} eq  'in' || $rule->{type} eq 'out' || $rule->{type} eq 'forward') {
-	if ($rule->{action} =~ m/^(\S+)\((ACCEPT|DROP|REJECT)\)$/) {
-	    $rule->{macro} = $1;
-	    $rule->{action} = $2;
-	}
+    if ($rule->{type} eq 'in' || $rule->{type} eq 'out' || $rule->{type} eq 'forward') {
+        if ($rule->{action} =~ m/^(\S+)\((ACCEPT|DROP|REJECT)\)$/) {
+            $rule->{macro} = $1;
+            $rule->{action} = $2;
+        }
     }
 
     while (length($line)) {
-	if ($line =~ s/^-i (\S+)\s*//) {
-	    $rule->{iface} = $1;
-	    next;
-	}
+        if ($line =~ s/^-i (\S+)\s*//) {
+            $rule->{iface} = $1;
+            next;
+        }
 
-	last if $rule->{type} eq 'group';
+        last if $rule->{type} eq 'group';
 
-	if ($line =~ s/^(?:-p|--?proto) (\S+)\s*//) {
-	    $rule->{proto} = $1;
-	    next;
-	}
+        if ($line =~ s/^(?:-p|--?proto) (\S+)\s*//) {
+            $rule->{proto} = $1;
+            next;
+        }
 
-	if ($line =~ s/^--?dport (\S+)\s*//) {
-	    $rule->{dport} = $1;
-	    next;
-	}
+        if ($line =~ s/^--?dport (\S+)\s*//) {
+            $rule->{dport} = $1;
+            next;
+        }
 
-	if ($line =~ s/^--?sport (\S+)\s*//) {
-	    $rule->{sport} = $1;
-	    next;
-	}
-	if ($line =~ s/^--?source (\S+)\s*//) {
-	    $rule->{source} = $1;
-	    next;
-	}
-	if ($line =~ s/^--?dest (\S+)\s*//) {
-	    $rule->{dest} = $1;
-	    next;
-	}
-	if ($line =~ s/^--?log (emerg|alert|crit|err|warning|notice|info|debug|nolog)\s*//) {
-	    $rule->{log} = $1;
-	    next;
-	}
-	if ($line =~ s/^--?icmp-type (\S+)\s*//) {
-	    $rule->{'icmp-type'} = $1;
-	    next;
-	}
+        if ($line =~ s/^--?sport (\S+)\s*//) {
+            $rule->{sport} = $1;
+            next;
+        }
+        if ($line =~ s/^--?source (\S+)\s*//) {
+            $rule->{source} = $1;
+            next;
+        }
+        if ($line =~ s/^--?dest (\S+)\s*//) {
+            $rule->{dest} = $1;
+            next;
+        }
+        if ($line =~ s/^--?log (emerg|alert|crit|err|warning|notice|info|debug|nolog)\s*//) {
+            $rule->{log} = $1;
+            next;
+        }
+        if ($line =~ s/^--?icmp-type (\S+)\s*//) {
+            $rule->{'icmp-type'} = $1;
+            next;
+        }
 
-	last;
+        last;
     }
 
     die "unable to parse rule parameters: $line\n" if length($line);
 
     $rule = verify_rule($rule, $cluster_conf, $fw_conf, $rule_env, 1);
     if ($rule->{errors}) {
-	# The verbose flag really means we're running from the CLI and want
-	# output on the console - in the other case we really want such errors
-	# to go into the syslog instead.
-	my $log = $verbose ? sub { warn @_ } : sub { syslog(err => @_) };
-	$log->("$prefix - errors in rule parameters: $orig_line\n");
-	foreach my $p (keys %{$rule->{errors}}) {
-	    $log->("  $p: $rule->{errors}->{$p}\n");
-	}
+        # The verbose flag really means we're running from the CLI and want
+        # output on the console - in the other case we really want such errors
+        # to go into the syslog instead.
+        my $log = $verbose ? sub { warn @_ } : sub { syslog(err => @_) };
+        $log->("$prefix - errors in rule parameters: $orig_line\n");
+        foreach my $p (keys %{ $rule->{errors} }) {
+            $log->("  $p: $rule->{errors}->{$p}\n");
+        }
     }
 
     return $rule;
@@ -2960,8 +3227,8 @@ sub verify_ethertype {
     my ($value) = @_;
     my $types = get_etc_ethertypes();
     die "unknown ethernet protocol type: $value\n"
-	if !defined($types->{byname}->{$value}) &&
-	   !defined($types->{byid}->{$value});
+        if !defined($types->{byname}->{$value})
+        && !defined($types->{byid}->{$value});
 }
 
 sub parse_vmfw_option {
@@ -2972,23 +3239,23 @@ sub parse_vmfw_option {
     my $loglevels = "emerg|alert|crit|err|warning|notice|info|debug|nolog";
 
     if ($line =~ m/^(enable|dhcp|ndp|radv|macfilter|ipfilter|ips):\s*(0|1)\s*$/i) {
-	$opt = lc($1);
-	$value = int($2);
+        $opt = lc($1);
+        $value = int($2);
     } elsif ($line =~ m/^(log_level_in|log_level_out):\s*(($loglevels)\s*)?$/i) {
-	$opt = lc($1);
-	$value = $2 ? lc($3) : '';
+        $opt = lc($1);
+        $value = $2 ? lc($3) : '';
     } elsif ($line =~ m/^(policy_(in|out)):\s*(ACCEPT|DROP|REJECT)\s*$/i) {
-	$opt = lc($1);
-	$value = uc($3);
+        $opt = lc($1);
+        $value = uc($3);
     } elsif ($line =~ m/^(ips_queues):\s*((\d+)(:(\d+))?)\s*$/i) {
-	$opt = lc($1);
-	$value = $2;
+        $opt = lc($1);
+        $value = $2;
     } elsif ($line =~ m/^(layer2_protocols):\s*(((\S+)[,]?)+)\s*$/i) {
-	$opt = lc($1);
-	$value = $2;
-	verify_ethertype($_) foreach split(/\s*,\s*/, $value);
+        $opt = lc($1);
+        $value = $2;
+        verify_ethertype($_) foreach split(/\s*,\s*/, $value);
     } else {
-	die "can't parse option '$line'\n"
+        die "can't parse option '$line'\n";
     }
 
     return ($opt, $value);
@@ -3001,21 +3268,27 @@ sub parse_hostfw_option {
 
     my $loglevels = "emerg|alert|crit|err|warning|notice|info|debug|nolog";
 
-    if ($line =~ m/^(enable|nosmurfs|tcpflags|ndp|log_nf_conntrack|nf_conntrack_allow_invalid|protection_synflood|nftables):\s*(0|1)\s*$/i) {
-	$opt = lc($1);
-	$value = int($2);
-    } elsif ($line =~ m/^(log_level_(?:in|out|forward)|tcp_flags_log_level|smurf_log_level):\s*(($loglevels)\s*)?$/i) {
-	$opt = lc($1);
-	$value = $2 ? lc($3) : '';
+    if ($line =~
+        m/^(enable|nosmurfs|tcpflags|ndp|log_nf_conntrack|nf_conntrack_allow_invalid|protection_synflood|nftables):\s*(0|1)\s*$/i
+    ) {
+        $opt = lc($1);
+        $value = int($2);
+    } elsif ($line =~
+        m/^(log_level_(?:in|out|forward)|tcp_flags_log_level|smurf_log_level):\s*(($loglevels)\s*)?$/i
+    ) {
+        $opt = lc($1);
+        $value = $2 ? lc($3) : '';
     } elsif ($line =~ m/^(nf_conntrack_helpers):\s*(((\S+)[,]?)+)\s*$/i) {
-	$opt = lc($1);
-	$value = lc($2);
-	pve_fw_verify_conntrack_helper($value);
-    } elsif ($line =~ m/^(nf_conntrack_max|nf_conntrack_tcp_timeout_established|nf_conntrack_tcp_timeout_syn_recv|protection_synflood_rate|protection_synflood_burst|protection_limit):\s*(\d+)\s*$/i) {
-	$opt = lc($1);
-	$value = int($2);
+        $opt = lc($1);
+        $value = lc($2);
+        pve_fw_verify_conntrack_helper($value);
+    } elsif ($line =~
+        m/^(nf_conntrack_max|nf_conntrack_tcp_timeout_established|nf_conntrack_tcp_timeout_syn_recv|protection_synflood_rate|protection_synflood_burst|protection_limit):\s*(\d+)\s*$/i
+    ) {
+        $opt = lc($1);
+        $value = int($2);
     } else {
-	die "can't parse option '$line'\n"
+        die "can't parse option '$line'\n";
     }
 
     return ($opt, $value);
@@ -3027,22 +3300,22 @@ sub parse_clusterfw_option {
     my ($opt, $value);
 
     if ($line =~ m/^(enable):\s*(\d+)\s*$/i) {
-	$opt = lc($1);
-	$value = int($2);
-	if (($value > 1) && ((time() - $value) > 60)) {
-	    $value = 0
-	}
+        $opt = lc($1);
+        $value = int($2);
+        if (($value > 1) && ((time() - $value) > 60)) {
+            $value = 0;
+        }
     } elsif ($line =~ m/^(ebtables):\s*(0|1)\s*$/i) {
-	$opt = lc($1);
-	$value = int($2);
+        $opt = lc($1);
+        $value = int($2);
     } elsif ($line =~ m/^(policy_(in|out|forward)):\s*(ACCEPT|DROP|REJECT)\s*$/i) {
-	$opt = lc($1);
-	$value = uc($3);
+        $opt = lc($1);
+        $value = uc($3);
     } elsif ($line =~ m/^(log_ratelimit):\s*(\S+)\s*$/) {
-	$opt = lc($1);
-	$value = $2;
+        $opt = lc($1);
+        $value = $2;
     } else {
-	die "can't parse option '$line'\n"
+        die "can't parse option '$line'\n";
     }
 
     return ($opt, $value);
@@ -3056,16 +3329,16 @@ sub parse_vnetfw_option {
     my $loglevels = "emerg|alert|crit|err|warning|notice|info|debug|nolog";
 
     if ($line =~ m/^(enable):\s*(\d+)\s*$/i) {
-	$opt = lc($1);
-	$value = int($2);
+        $opt = lc($1);
+        $value = int($2);
     } elsif ($line =~ m/^(policy_forward):\s*(ACCEPT|DROP)\s*$/i) {
-	$opt = lc($1);
-	$value = uc($2);
+        $opt = lc($1);
+        $value = uc($2);
     } elsif ($line =~ m/^(log_level_forward):\s*($loglevels)\s*$/i) {
-	$opt = lc($1);
-	$value = lc($2);
+        $opt = lc($1);
+        $value = lc($2);
     } else {
-	die "can't parse option '$line'\n"
+        die "can't parse option '$line'\n";
     }
 
     return ($opt, $value);
@@ -3079,21 +3352,21 @@ sub resolve_alias {
     # stay consistent)
     my ($cluster_config, $local_config);
     if (!$clusterfw_conf) {
-	($cluster_config, $local_config) = ($fw_conf, undef);
+        ($cluster_config, $local_config) = ($fw_conf, undef);
     } else {
-	($cluster_config, $local_config) = ($clusterfw_conf, $fw_conf);
+        ($cluster_config, $local_config) = ($clusterfw_conf, $fw_conf);
     }
 
     my $alias = lc($cidr);
     my $e;
     if ($scope ne 'dc/' && $local_config) {
-	$e = $local_config->{aliases}->{$alias};
+        $e = $local_config->{aliases}->{$alias};
     }
     if ($scope ne 'guest/' && !$e && $cluster_config) {
-	$e = $cluster_config->{aliases}->{$alias};
+        $e = $cluster_config->{aliases}->{$alias};
     }
 
-    die "no such alias '$cidr'\n" if !$e;;
+    die "no such alias '$cidr'\n" if !$e;
 
     return wantarray ? ($e->{cidr}, $e->{ipversion}) : $e->{cidr};
 }
@@ -3104,13 +3377,13 @@ sub parse_ip_or_cidr {
     my $ipversion;
 
     if ($cidr =~ m!^(?:$IPV6RE)(/(\d+))?$!) {
-	$cidr =~ s|/128$||;
-	$ipversion = 6;
+        $cidr =~ s|/128$||;
+        $ipversion = 6;
     } elsif ($cidr =~ m!^(?:$IPV4RE)(/(\d+))?$!) {
-	$cidr =~ s|/32$||;
-	$ipversion = 4;
+        $cidr =~ s|/32$||;
+        $ipversion = 4;
     } else {
-	die "value does not look like a valid IP address or CIDR network\n";
+        die "value does not look like a valid IP address or CIDR network\n";
     }
 
     return wantarray ? ($cidr, $ipversion) : $cidr;
@@ -3123,18 +3396,18 @@ sub parse_alias {
     my $comment = $line =~ s/\s*#\s*(.*?)\s*$// ? decode('utf8', $1) : undef;
 
     if ($line =~ m/^(\S+)\s(\S+)$/) {
-	my ($name, $cidr) = ($1, $2);
-	my $ipversion;
+        my ($name, $cidr) = ($1, $2);
+        my $ipversion;
 
-	($cidr, $ipversion) = parse_ip_or_cidr($cidr);
+        ($cidr, $ipversion) = parse_ip_or_cidr($cidr);
 
-	my $data = {
-	    name => $name,
-	    cidr => $cidr,
-	    ipversion => $ipversion,
-	};
-	$data->{comment} = $comment  if $comment;
-	return $data;
+        my $data = {
+            name => $name,
+            cidr => $cidr,
+            ipversion => $ipversion,
+        };
+        $data->{comment} = $comment if $comment;
+        return $data;
     }
 
     return undef;
@@ -3150,9 +3423,9 @@ sub generic_fw_config_parser {
 
     my $raw;
     if ($filename =~ m!^/etc/pve/(.*)$!) {
-	$raw = PVE::Cluster::get_config($1);
+        $raw = PVE::Cluster::get_config($1);
     } else {
-	$raw = eval { PVE::Tools::file_get_contents($filename) }; # ignore errors
+        $raw = eval { PVE::Tools::file_get_contents($filename) }; # ignore errors
     }
     return {} if !$raw;
 
@@ -3160,164 +3433,165 @@ sub generic_fw_config_parser {
 
     my $linenr = 0;
     while ($raw =~ /^\h*(.*?)\h*$/gm) {
-	my $line = $1;
-	$linenr++;
-	next if $line =~ m/^#/;
-	next if $line =~ m/^\s*$/;
-	chomp $line;
+        my $line = $1;
+        $linenr++;
+        next if $line =~ m/^#/;
+        next if $line =~ m/^\s*$/;
+        chomp $line;
 
-	my $prefix = "$filename (line $linenr)";
+        my $prefix = "$filename (line $linenr)";
 
-	if ($empty_conf->{options} && ($line =~ m/^\[options\]$/i)) {
-	    $section = 'options';
-	    next;
-	}
+        if ($empty_conf->{options} && ($line =~ m/^\[options\]$/i)) {
+            $section = 'options';
+            next;
+        }
 
-	if ($empty_conf->{aliases} && ($line =~ m/^\[aliases\]$/i)) {
-	    $section = 'aliases';
-	    next;
-	}
+        if ($empty_conf->{aliases} && ($line =~ m/^\[aliases\]$/i)) {
+            $section = 'aliases';
+            next;
+        }
 
-	if ($empty_conf->{groups} && ($line =~ m/^\[group\s+(\S+)\]\s*(?:#\s*(.*?)\s*)?$/i)) {
-	    $section = 'groups';
-	    $group = lc($1);
-	    my $comment = $2;
-	    eval {
-		die "security group name too long\n" if length($group) > $max_group_name_length;
-		die "invalid security group name '$group'\n" if $group !~ m/^${security_group_name_pattern}$/;
-	    };
-	    if (my $err = $@) {
-		($section, $group, $comment) = undef;
-		warn "$prefix: $err";
-		next;
-	    }
+        if ($empty_conf->{groups} && ($line =~ m/^\[group\s+(\S+)\]\s*(?:#\s*(.*?)\s*)?$/i)) {
+            $section = 'groups';
+            $group = lc($1);
+            my $comment = $2;
+            eval {
+                die "security group name too long\n" if length($group) > $max_group_name_length;
+                die "invalid security group name '$group'\n"
+                    if $group !~ m/^${security_group_name_pattern}$/;
+            };
+            if (my $err = $@) {
+                ($section, $group, $comment) = undef;
+                warn "$prefix: $err";
+                next;
+            }
 
-	    $res->{$section}->{$group} = [];
-	    $res->{group_comments}->{$group} =  decode('utf8', $comment)
-		if $comment;
-	    next;
-	}
+            $res->{$section}->{$group} = [];
+            $res->{group_comments}->{$group} = decode('utf8', $comment)
+                if $comment;
+            next;
+        }
 
-	if ($empty_conf->{rules} && ($line =~ m/^\[rules\]$/i)) {
-	    $section = 'rules';
-	    next;
-	}
+        if ($empty_conf->{rules} && ($line =~ m/^\[rules\]$/i)) {
+            $section = 'rules';
+            next;
+        }
 
-	if ($empty_conf->{ipset} && ($line =~ m/^\[ipset\s+(\S+)\]\s*(?:#\s*(.*?)\s*)?$/i)) {
-	    $section = 'ipset';
-	    $group = lc($1);
-	    my $comment = $2;
-	    eval {
-		die "ipset name too long\n" if length($group) > $max_ipset_name_length;
-		die "invalid ipset name '$group'\n" if $group !~ m/^${ipset_name_pattern}$/;
-	    };
-	    if (my $err = $@) {
-		($section, $group, $comment) = undef;
-		warn "$prefix: $err";
-		next;
-	    }
+        if ($empty_conf->{ipset} && ($line =~ m/^\[ipset\s+(\S+)\]\s*(?:#\s*(.*?)\s*)?$/i)) {
+            $section = 'ipset';
+            $group = lc($1);
+            my $comment = $2;
+            eval {
+                die "ipset name too long\n" if length($group) > $max_ipset_name_length;
+                die "invalid ipset name '$group'\n" if $group !~ m/^${ipset_name_pattern}$/;
+            };
+            if (my $err = $@) {
+                ($section, $group, $comment) = undef;
+                warn "$prefix: $err";
+                next;
+            }
 
-	    $res->{$section}->{$group} = [];
-	    $curr_group_keys = {};
+            $res->{$section}->{$group} = [];
+            $curr_group_keys = {};
 
-	    $res->{ipset_comments}->{$group} = decode('utf8', $comment)
-		if $comment;
-	    next;
-	}
+            $res->{ipset_comments}->{$group} = decode('utf8', $comment)
+                if $comment;
+            next;
+        }
 
-	if (!$section) {
-	    warn "$prefix: skip line - no section\n";
-	    next;
-	}
+        if (!$section) {
+            warn "$prefix: skip line - no section\n";
+            next;
+        }
 
-	if ($section eq 'options') {
-	    eval {
-		my ($opt, $value);
-		if ($rule_env eq 'cluster') {
-		    ($opt, $value) = parse_clusterfw_option($line);
-		} elsif ($rule_env eq 'host') {
-		    ($opt, $value) = parse_hostfw_option($line);
-		} elsif ($rule_env eq 'vnet') {
-		    ($opt, $value) = parse_vnetfw_option($line);
-		} else {
-		    ($opt, $value) = parse_vmfw_option($line);
-		}
-		$res->{options}->{$opt} = $value;
-	    };
-	    warn "$prefix: $@" if $@;
-	} elsif ($section eq 'aliases') {
-	    eval {
-		my $data = parse_alias($line);
-		$res->{aliases}->{lc($data->{name})} = $data;
-	    };
-	    warn "$prefix: $@" if $@;
-	} elsif ($section eq 'rules') {
-	    my $rule;
-	    eval { $rule = parse_fw_rule($prefix, $line, $cluster_conf, $res, $rule_env); };
-	    if (my $err = $@) {
-		warn "$prefix: $err";
-		next;
-	    }
-	    push @{$res->{$section}}, $rule;
-	} elsif ($section eq 'groups') {
-	    my $rule;
-	    eval { $rule = parse_fw_rule($prefix, $line, $cluster_conf, undef, 'group'); };
-	    if (my $err = $@) {
-		warn "$prefix: $err";
-		next;
-	    }
-	    push @{$res->{$section}->{$group}}, $rule;
-	} elsif ($section eq 'ipset') {
-	    # we can add single line comments to the end of the rule
-	    my $comment = $line =~ s/#\s*(.*?)\s*$// ? decode('utf8', $1) : undef;
+        if ($section eq 'options') {
+            eval {
+                my ($opt, $value);
+                if ($rule_env eq 'cluster') {
+                    ($opt, $value) = parse_clusterfw_option($line);
+                } elsif ($rule_env eq 'host') {
+                    ($opt, $value) = parse_hostfw_option($line);
+                } elsif ($rule_env eq 'vnet') {
+                    ($opt, $value) = parse_vnetfw_option($line);
+                } else {
+                    ($opt, $value) = parse_vmfw_option($line);
+                }
+                $res->{options}->{$opt} = $value;
+            };
+            warn "$prefix: $@" if $@;
+        } elsif ($section eq 'aliases') {
+            eval {
+                my $data = parse_alias($line);
+                $res->{aliases}->{ lc($data->{name}) } = $data;
+            };
+            warn "$prefix: $@" if $@;
+        } elsif ($section eq 'rules') {
+            my $rule;
+            eval { $rule = parse_fw_rule($prefix, $line, $cluster_conf, $res, $rule_env); };
+            if (my $err = $@) {
+                warn "$prefix: $err";
+                next;
+            }
+            push @{ $res->{$section} }, $rule;
+        } elsif ($section eq 'groups') {
+            my $rule;
+            eval { $rule = parse_fw_rule($prefix, $line, $cluster_conf, undef, 'group'); };
+            if (my $err = $@) {
+                warn "$prefix: $err";
+                next;
+            }
+            push @{ $res->{$section}->{$group} }, $rule;
+        } elsif ($section eq 'ipset') {
+            # we can add single line comments to the end of the rule
+            my $comment = $line =~ s/#\s*(.*?)\s*$// ? decode('utf8', $1) : undef;
 
-	    $line =~ m/^(\!)?\s*(\S+)\s*$/;
-	    my $nomatch = $1;
-	    my $cidr = $2;
-	    my $errors;
+            $line =~ m/^(\!)?\s*(\S+)\s*$/;
+            my $nomatch = $1;
+            my $cidr = $2;
+            my $errors;
 
-	    if ($nomatch && !$feature_ipset_nomatch) {
-		$errors->{nomatch} = "nomatch not supported by kernel";
-	    }
+            if ($nomatch && !$feature_ipset_nomatch) {
+                $errors->{nomatch} = "nomatch not supported by kernel";
+            }
 
-	    eval {
-		if ($cidr =~ m@^(dc/|guest/)?(${ip_alias_pattern}$)@) {
-		    my $scope = $1 // "";
-		    my $alias = $2;
-		    resolve_alias($cluster_conf, $res, $alias, $scope); # make sure alias exists
-		} else {
-		    $cidr = parse_ip_or_cidr($cidr);
-		}
-		die "duplicate ipset entry for '$cidr'\n"
-		    if defined($curr_group_keys->{$cidr});
-	    };
-	    if (my $err = $@) {
-		chomp $err;
-		$errors->{cidr} = $err;
-	    }
+            eval {
+                if ($cidr =~ m@^(dc/|guest/)?(${ip_alias_pattern}$)@) {
+                    my $scope = $1 // "";
+                    my $alias = $2;
+                    resolve_alias($cluster_conf, $res, $alias, $scope); # make sure alias exists
+                } else {
+                    $cidr = parse_ip_or_cidr($cidr);
+                }
+                die "duplicate ipset entry for '$cidr'\n"
+                    if defined($curr_group_keys->{$cidr});
+            };
+            if (my $err = $@) {
+                chomp $err;
+                $errors->{cidr} = $err;
+            }
 
-	    if ($cidr =~ m!/0+$!) {
-		$errors->{cidr} = "a zero prefix is not allowed in ipset entries\n";
-	    }
+            if ($cidr =~ m!/0+$!) {
+                $errors->{cidr} = "a zero prefix is not allowed in ipset entries\n";
+            }
 
-	    my $entry = { cidr => $cidr };
-	    $entry->{nomatch} = 1 if $nomatch;
-	    $entry->{comment} = $comment if $comment;
-	    $entry->{errors} =  $errors if $errors;
+            my $entry = { cidr => $cidr };
+            $entry->{nomatch} = 1 if $nomatch;
+            $entry->{comment} = $comment if $comment;
+            $entry->{errors} = $errors if $errors;
 
-	    if ($verbose && $errors) {
-		warn "$prefix - errors in ipset '$group': $line\n";
-		foreach my $p (keys %{$errors}) {
-		    warn "  $p: $errors->{$p}\n";
-		}
-	    }
+            if ($verbose && $errors) {
+                warn "$prefix - errors in ipset '$group': $line\n";
+                foreach my $p (keys %{$errors}) {
+                    warn "  $p: $errors->{$p}\n";
+                }
+            }
 
-	    push @{$res->{$section}->{$group}}, $entry;
-	    $curr_group_keys->{$cidr} = 1;
-	} else {
-	    warn "$prefix: skip line - unknown section\n";
-	    next;
-	}
+            push @{ $res->{$section}->{$group} }, $entry;
+            $curr_group_keys->{$cidr} = 1;
+        } else {
+            warn "$prefix: skip line - unknown section\n";
+            next;
+        }
     }
 
     return $res;
@@ -3349,29 +3623,29 @@ sub read_local_vm_config {
     my $ids = $vmlist->{ids};
 
     foreach my $vmid (keys %$ids) {
-	next if !$vmid; # skip VE0
-	my $d = $ids->{$vmid};
-	next if !$d->{node} || $d->{node} ne $nodename;
-	next if !$d->{type};
-	if ($d->{type} eq 'qemu') {
-	    if ($have_qemu_server) {
-		my $cfspath = PVE::QemuConfig->cfs_config_path($vmid);
-		if (my $conf = PVE::Cluster::cfs_read_file($cfspath)) {
-		    $qemu->{$vmid} = $conf;
-		}
-	    }
+        next if !$vmid; # skip VE0
+        my $d = $ids->{$vmid};
+        next if !$d->{node} || $d->{node} ne $nodename;
+        next if !$d->{type};
+        if ($d->{type} eq 'qemu') {
+            if ($have_qemu_server) {
+                my $cfspath = PVE::QemuConfig->cfs_config_path($vmid);
+                if (my $conf = PVE::Cluster::cfs_read_file($cfspath)) {
+                    $qemu->{$vmid} = $conf;
+                }
+            }
         } elsif ($d->{type} eq 'lxc') {
-	    if ($have_lxc) {
-		my $cfspath = PVE::LXC::Config->cfs_config_path($vmid);
-		if (my $conf = PVE::Cluster::cfs_read_file($cfspath)) {
-		    $lxc->{$vmid} = $conf;
-		}
-	    }
-	}
+            if ($have_lxc) {
+                my $cfspath = PVE::LXC::Config->cfs_config_path($vmid);
+                if (my $conf = PVE::Cluster::cfs_read_file($cfspath)) {
+                    $lxc->{$vmid} = $conf;
+                }
+            }
+        }
     }
 
     return $vmdata;
-};
+}
 
 # FIXME: move use sites over to moved helper and break older packages, then remove this here
 sub lock_vmfw_conf {
@@ -3389,11 +3663,11 @@ sub load_vmfw_conf {
     my $filename = "$dir/$vmid.fw";
 
     my $empty_conf = {
-	rules => [],
-	options => {},
-	aliases => {},
-	ipset => {} ,
-	ipset_comments => {},
+        rules => [],
+        options => {},
+        aliases => {},
+        ipset => {},
+        ipset_comments => {},
     };
 
     my $vmfw_conf = generic_fw_config_parser($filename, $cluster_conf, $empty_conf, $rule_env);
@@ -3408,34 +3682,35 @@ my $format_rules = sub {
     my $raw = '';
 
     foreach my $rule (@$rules) {
-	if (grep { $_ eq $rule->{type} } qw(in out forward group)) {
-	    $raw .= '|' if defined($rule->{enable}) && !$rule->{enable};
-	    $raw .= uc($rule->{type});
-	    if ($rule->{macro}) {
-		$raw .= " $rule->{macro}($rule->{action})";
-	    } else {
-		$raw .= " " . $rule->{action};
-	    }
-	    if ($allow_iface && $rule->{iface}) {
-		$raw .= " -i $rule->{iface}";
-	    }
+        if (grep { $_ eq $rule->{type} } qw(in out forward group)) {
+            $raw .= '|' if defined($rule->{enable}) && !$rule->{enable};
+            $raw .= uc($rule->{type});
+            if ($rule->{macro}) {
+                $raw .= " $rule->{macro}($rule->{action})";
+            } else {
+                $raw .= " " . $rule->{action};
+            }
+            if ($allow_iface && $rule->{iface}) {
+                $raw .= " -i $rule->{iface}";
+            }
 
-	    if ($rule->{type} ne  'group')  {
-		$raw .= " -source $rule->{source}" if $rule->{source};
-		$raw .= " -dest $rule->{dest}" if $rule->{dest};
-		$raw .= " -p $rule->{proto}" if $rule->{proto};
-		$raw .= " -dport $rule->{dport}" if $rule->{dport};
-		$raw .= " -sport $rule->{sport}" if $rule->{sport};
-		$raw .= " -log $rule->{log}" if $rule->{log};
-		$raw .= " -icmp-type $rule->{'icmp-type'}" if defined($rule->{'icmp-type'}) && $rule->{'icmp-type'} ne '';
-	    }
+            if ($rule->{type} ne 'group') {
+                $raw .= " -source $rule->{source}" if $rule->{source};
+                $raw .= " -dest $rule->{dest}" if $rule->{dest};
+                $raw .= " -p $rule->{proto}" if $rule->{proto};
+                $raw .= " -dport $rule->{dport}" if $rule->{dport};
+                $raw .= " -sport $rule->{sport}" if $rule->{sport};
+                $raw .= " -log $rule->{log}" if $rule->{log};
+                $raw .= " -icmp-type $rule->{'icmp-type'}"
+                    if defined($rule->{'icmp-type'}) && $rule->{'icmp-type'} ne '';
+            }
 
-	    $raw .= " # " . encode('utf8', $rule->{comment})
-		if $rule->{comment} && $rule->{comment} !~ m/^\s*$/;
-	    $raw .= "\n";
-	} else {
-	    die "unknown rule type '$rule->{type}'";
-	}
+            $raw .= " # " . encode('utf8', $rule->{comment})
+                if $rule->{comment} && $rule->{comment} !~ m/^\s*$/;
+            $raw .= "\n";
+        } else {
+            die "unknown rule type '$rule->{type}'";
+        }
     }
 
     return $raw;
@@ -3448,7 +3723,7 @@ my $format_options = sub {
 
     $raw .= "[OPTIONS]\n\n";
     foreach my $opt (keys %$options) {
-	$raw .= "$opt: $options->{$opt}\n";
+        $raw .= "$opt: $options->{$opt}\n";
     }
     $raw .= "\n";
 
@@ -3462,11 +3737,11 @@ my $format_aliases = sub {
 
     $raw .= "[ALIASES]\n\n";
     foreach my $k (sort keys %$aliases) {
-	my $e = $aliases->{$k};
-	$raw .= "$e->{name} $e->{cidr}";
-	$raw .= " # " . encode('utf8', $e->{comment})
-	    if $e->{comment} && $e->{comment} !~ m/^\s*$/;
-	$raw .= "\n";
+        my $e = $aliases->{$k};
+        $raw .= "$e->{name} $e->{cidr}";
+        $raw .= " # " . encode('utf8', $e->{comment})
+            if $e->{comment} && $e->{comment} !~ m/^\s*$/;
+        $raw .= "\n";
     }
     $raw .= "\n";
 
@@ -3478,36 +3753,36 @@ my $format_ipsets = sub {
 
     my $raw = '';
 
-    foreach my $ipset (sort keys %{$fw_conf->{ipset}}) {
-	if (my $comment = $fw_conf->{ipset_comments}->{$ipset}) {
-	    my $utf8comment = encode('utf8', $comment);
-	    $raw .= "[IPSET $ipset] # $utf8comment\n\n";
-	} else {
-	    $raw .= "[IPSET $ipset]\n\n";
-	}
-	my $options = $fw_conf->{ipset}->{$ipset};
+    foreach my $ipset (sort keys %{ $fw_conf->{ipset} }) {
+        if (my $comment = $fw_conf->{ipset_comments}->{$ipset}) {
+            my $utf8comment = encode('utf8', $comment);
+            $raw .= "[IPSET $ipset] # $utf8comment\n\n";
+        } else {
+            $raw .= "[IPSET $ipset]\n\n";
+        }
+        my $options = $fw_conf->{ipset}->{$ipset};
 
-	my $nethash = {};
-	foreach my $entry (@$options) {
-	    my $cidr = $entry->{cidr};
-	    if (defined($nethash->{$cidr})) {
-		warn "ignoring duplicate ipset entry '$cidr'\n";
-		next;
-	    }
+        my $nethash = {};
+        foreach my $entry (@$options) {
+            my $cidr = $entry->{cidr};
+            if (defined($nethash->{$cidr})) {
+                warn "ignoring duplicate ipset entry '$cidr'\n";
+                next;
+            }
 
-	    $nethash->{$cidr} = $entry;
-	}
+            $nethash->{$cidr} = $entry;
+        }
 
-	foreach my $cidr (sort keys %$nethash) {
-	    my $entry = $nethash->{$cidr};
-	    my $line = $entry->{nomatch} ? '!' : '';
-	    $line .= $entry->{cidr};
-	    $line .= " # " . encode('utf8', $entry->{comment})
-		if $entry->{comment} && $entry->{comment} !~ m/^\s*$/;
-	    $raw .= "$line\n";
-	}
+        foreach my $cidr (sort keys %$nethash) {
+            my $entry = $nethash->{$cidr};
+            my $line = $entry->{nomatch} ? '!' : '';
+            $line .= $entry->{cidr};
+            $line .= " # " . encode('utf8', $entry->{comment})
+                if $entry->{comment} && $entry->{comment} !~ m/^\s*$/;
+            $raw .= "$line\n";
+        }
 
-	$raw .= "\n";
+        $raw .= "\n";
     }
 
     return $raw;
@@ -3528,17 +3803,17 @@ sub save_vmfw_conf {
 
     my $rules = $vmfw_conf->{rules} || [];
     if ($rules && scalar(@$rules)) {
-	$raw .= "[RULES]\n\n";
-	$raw .= $format_rules->($rules, 1);
-	$raw .= "\n";
+        $raw .= "[RULES]\n\n";
+        $raw .= $format_rules->($rules, 1);
+        $raw .= "\n";
     }
 
     my $filename = "$pvefw_conf_dir/$vmid.fw";
     if ($raw) {
-	mkdir $pvefw_conf_dir;
-	PVE::Tools::file_set_contents($filename, $raw);
+        mkdir $pvefw_conf_dir;
+        PVE::Tools::file_set_contents($filename, $raw);
     } else {
-	unlink $filename;
+        unlink $filename;
     }
 }
 
@@ -3557,12 +3832,12 @@ sub read_vm_firewall_configs {
 
     my $vmfw_configs = {};
 
-    foreach my $vmid (keys %{$vmdata->{qemu}}) {
-	my $vmfw_conf = load_vmfw_conf($cluster_conf, 'vm', $vmid, $dir);
-	next if !$vmfw_conf->{options}; # skip if file does not exist
-	$vmfw_configs->{$vmid} = $vmfw_conf;
+    foreach my $vmid (keys %{ $vmdata->{qemu} }) {
+        my $vmfw_conf = load_vmfw_conf($cluster_conf, 'vm', $vmid, $dir);
+        next if !$vmfw_conf->{options}; # skip if file does not exist
+        $vmfw_configs->{$vmid} = $vmfw_conf;
     }
-    foreach my $vmid (keys %{$vmdata->{lxc}}) {
+    foreach my $vmid (keys %{ $vmdata->{lxc} }) {
         my $vmfw_conf = load_vmfw_conf($cluster_conf, 'ct', $vmid, $dir);
         next if !$vmfw_conf->{options}; # skip if file does not exist
         $vmfw_configs->{$vmid} = $vmfw_conf;
@@ -3593,30 +3868,30 @@ sub generate_std_chains {
 
     my $loglevel = get_option_log_level($options, 'smurf_log_level');
     my $chain = 'PVEFW-smurflog';
-    if ( $std_chains->{$chain} ) {
-	foreach my $r (@{$std_chains->{$chain}}) {
-	  $r->{log} = $loglevel;
-	}
+    if ($std_chains->{$chain}) {
+        foreach my $r (@{ $std_chains->{$chain} }) {
+            $r->{log} = $loglevel;
+        }
     }
 
     # same as shorewall logflags action.
     $loglevel = get_option_log_level($options, 'tcp_flags_log_level');
     $chain = 'PVEFW-logflags';
-    if ( $std_chains->{$chain} ) {
-	foreach my $r (@{$std_chains->{$chain}}) {
-	  $r->{log} = $loglevel;
-	}
+    if ($std_chains->{$chain}) {
+        foreach my $r (@{ $std_chains->{$chain} }) {
+            $r->{log} = $loglevel;
+        }
     }
 
     foreach my $chain (keys %$std_chains) {
-	ruleset_create_chain($ruleset, $chain);
-	foreach my $rule (@{$std_chains->{$chain}}) {
-	    if (ref($rule)) {
-		ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, 0);
-	    } else {
-		die "rule $rule as string - should not happen";
-	    }
-	}
+        ruleset_create_chain($ruleset, $chain);
+        foreach my $rule (@{ $std_chains->{$chain} }) {
+            if (ref($rule)) {
+                ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, 0);
+            } else {
+                die "rule $rule as string - should not happen";
+            }
+        }
     }
 }
 
@@ -3625,78 +3900,78 @@ sub generate_ipset_chains {
 
     foreach my $ipset (keys %{$ipsets}) {
 
-	my $options = $ipsets->{$ipset};
+        my $options = $ipsets->{$ipset};
 
-	if ($device_ips && $ipset =~ /^ipfilter-(net\d+)$/) {
-	    if (my $ips = $device_ips->{$1}) {
-		$options = [@$options, @$ips];
-	    }
-	}
+        if ($device_ips && $ipset =~ /^ipfilter-(net\d+)$/) {
+            if (my $ips = $device_ips->{$1}) {
+                $options = [@$options, @$ips];
+            }
+        }
 
-	# remove duplicates
-	my $nethash = {};
-	foreach my $entry (@$options) {
-	    next if $entry->{errors}; # skip entries with errors
-	    eval {
-		my ($cidr, $ver);
-		if ($entry->{cidr} =~ m@^(dc/|guest/)?(${ip_alias_pattern})$@) {
-		    my $scope = $1 // "";
-		    my $alias = $2;
-		    ($cidr, $ver) = resolve_alias($clusterfw_conf, $fw_conf, $alias, $scope);
-		} else {
-		    ($cidr, $ver) = parse_ip_or_cidr($entry->{cidr});
-		}
-		#http://backreference.org/2013/03/01/ipv6-address-normalization/
-		if ($ver == 6) {
-		    # ip_compress_address takes an address only, no CIDR
-		    my ($addr, $prefix_len) = ($cidr =~ m@^([^/]*)(/.*)?$@);
-		    $cidr = lc(Net::IP::ip_compress_address($addr, 6));
-		    $cidr .= $prefix_len if defined($prefix_len);
-		    $cidr =~ s|/128$||;
-		} else {
-		    $cidr =~ s|/32$||;
-		}
+        # remove duplicates
+        my $nethash = {};
+        foreach my $entry (@$options) {
+            next if $entry->{errors}; # skip entries with errors
+            eval {
+                my ($cidr, $ver);
+                if ($entry->{cidr} =~ m@^(dc/|guest/)?(${ip_alias_pattern})$@) {
+                    my $scope = $1 // "";
+                    my $alias = $2;
+                    ($cidr, $ver) = resolve_alias($clusterfw_conf, $fw_conf, $alias, $scope);
+                } else {
+                    ($cidr, $ver) = parse_ip_or_cidr($entry->{cidr});
+                }
+                #http://backreference.org/2013/03/01/ipv6-address-normalization/
+                if ($ver == 6) {
+                    # ip_compress_address takes an address only, no CIDR
+                    my ($addr, $prefix_len) = ($cidr =~ m@^([^/]*)(/.*)?$@);
+                    $cidr = lc(Net::IP::ip_compress_address($addr, 6));
+                    $cidr .= $prefix_len if defined($prefix_len);
+                    $cidr =~ s|/128$||;
+                } else {
+                    $cidr =~ s|/32$||;
+                }
 
-		$nethash->{$ver}->{$cidr} = { cidr => $cidr, nomatch => $entry->{nomatch} };
-	    };
-	    warn $@ if $@;
-	}
+                $nethash->{$ver}->{$cidr} = { cidr => $cidr, nomatch => $entry->{nomatch} };
+            };
+            warn $@ if $@;
+        }
 
-	foreach my $ipversion (4, 6) {
-	    my $data = $nethash->{$ipversion};
+        foreach my $ipversion (4, 6) {
+            my $data = $nethash->{$ipversion};
 
-	    my $name = compute_ipset_chain_name($fw_conf->{vmid}, $ipset, $ipversion);
+            my $name = compute_ipset_chain_name($fw_conf->{vmid}, $ipset, $ipversion);
 
-	    my $hashsize = scalar(@$options);
-	    if ($hashsize <= 64) {
-		$hashsize = 64;
-	    } else {
-		$hashsize = round_powerof2($hashsize);
-	    }
+            my $hashsize = scalar(@$options);
+            if ($hashsize <= 64) {
+                $hashsize = 64;
+            } else {
+                $hashsize = round_powerof2($hashsize);
+            }
 
-	    my $bucketsize = 12; # lower than the default of 14, faster but slightly more memory use
+            my $bucketsize = 12; # lower than the default of 14, faster but slightly more memory use
 
-	    my $family = $ipversion == "6" ? "inet6" : "inet";
+            my $family = $ipversion == "6" ? "inet6" : "inet";
 
-	    $ipset_ruleset->{$name} = [
-		"create $name hash:net family $family hashsize $hashsize maxelem $hashsize bucketsize $bucketsize"
-	    ];
+            $ipset_ruleset->{$name} = [
+                "create $name hash:net family $family hashsize $hashsize maxelem $hashsize bucketsize $bucketsize"
+            ];
 
-	    foreach my $cidr (sort keys %$data) {
-		my $entry = $data->{$cidr};
+            foreach my $cidr (sort keys %$data) {
+                my $entry = $data->{$cidr};
 
-		my $cmd = "add $name $cidr";
-		if ($entry->{nomatch}) {
-		    if ($feature_ipset_nomatch) {
-			push @{$ipset_ruleset->{$name}}, "$cmd nomatch";
-		    } else {
-			warn "ignore !$cidr - nomatch not supported by kernel\n";
-		    }
-		} else {
-		    push @{$ipset_ruleset->{$name}}, $cmd;
-		}
-	    }
-	}
+                my $cmd = "add $name $cidr";
+                if ($entry->{nomatch}) {
+                    if ($feature_ipset_nomatch) {
+                        push @{ $ipset_ruleset->{$name} }, "$cmd nomatch";
+                    } else {
+                        warn "ignore !$cidr - nomatch not supported by kernel\n";
+                    }
+                } else {
+                    push @{ $ipset_ruleset->{$name} }, $cmd;
+                }
+            }
+        }
     }
 }
 
@@ -3704,7 +3979,7 @@ sub round_powerof2 {
     my ($int) = @_;
 
     $int--;
-    $int |= $int >> $_ foreach (1,2,4,8,16);
+    $int |= $int >> $_ foreach (1, 2, 4, 8, 16);
     return ++$int;
 }
 
@@ -3713,19 +3988,19 @@ my $set_global_log_ratelimit = sub {
 
     $global_log_ratelimit = '--limit 1/sec';
     if (defined(my $log_rlimit = $cluster_opts->{log_ratelimit})) {
-	my $ll_format = $cluster_option_properties->{log_ratelimit}->{format};
-	my $limit = PVE::JSONSchema::parse_property_string($ll_format, $log_rlimit);
+        my $ll_format = $cluster_option_properties->{log_ratelimit}->{format};
+        my $limit = PVE::JSONSchema::parse_property_string($ll_format, $log_rlimit);
 
-	if ($limit->{enable}) {
-	    if (my $rate = $limit->{rate}) {
-		$global_log_ratelimit = "--limit $rate";
-	    }
-	    if (my $burst = $limit->{burst}) {
-		$global_log_ratelimit .= " --limit-burst $burst";
-	    }
-	} else {
-	    $global_log_ratelimit = undef;
-	}
+        if ($limit->{enable}) {
+            if (my $rate = $limit->{rate}) {
+                $global_log_ratelimit = "--limit $rate";
+            }
+            if (my $burst = $limit->{burst}) {
+                $global_log_ratelimit .= " --limit-burst $burst";
+            }
+        } else {
+            $global_log_ratelimit = undef;
+        }
     }
 };
 
@@ -3746,21 +4021,21 @@ sub load_clusterfw_conf {
     my $sdn_conf = load_sdn_conf();
 
     my $empty_conf = {
-	rules => [],
-	options => {},
-	aliases => {},
-	groups => {},
-	group_comments => {},
-	ipset => {} ,
-	ipset_comments => {},
-	sdn => $sdn_conf,
+        rules => [],
+        options => {},
+        aliases => {},
+        groups => {},
+        group_comments => {},
+        ipset => {},
+        ipset_comments => {},
+        sdn => $sdn_conf,
     };
 
     my $cluster_conf = generic_fw_config_parser($filename, $empty_conf, $empty_conf, 'cluster');
     $set_global_log_ratelimit->($cluster_conf->{options});
 
     if (!$cluster_conf->{sdn}) {
-	$cluster_conf->{sdn} = $sdn_conf;
+        $cluster_conf->{sdn} = $sdn_conf;
     }
 
     return $cluster_conf;
@@ -3769,11 +4044,9 @@ sub load_clusterfw_conf {
 sub load_sdn_conf {
     my ($allowed_vms, $allowed_vnets) = @_;
 
-    my $empty_sdn_config = { ipset => {} , ipset_comments => {} };
+    my $empty_sdn_config = { ipset => {}, ipset_comments => {} };
 
-    my $sdn_config = eval {
-	PVE::RS::Firewall::SDN::config($allowed_vnets, $allowed_vms)
-    };
+    my $sdn_config = eval { PVE::RS::Firewall::SDN::config($allowed_vnets, $allowed_vms) };
     warn $@ if $@;
 
     return $sdn_config // $empty_sdn_config;
@@ -3794,31 +4067,31 @@ sub save_clusterfw_conf {
 
     my $rules = $cluster_conf->{rules};
     if ($rules && scalar(@$rules)) {
-	$raw .= "[RULES]\n\n";
-	$raw .= $format_rules->($rules, 1);
-	$raw .= "\n";
+        $raw .= "[RULES]\n\n";
+        $raw .= $format_rules->($rules, 1);
+        $raw .= "\n";
     }
 
     if ($cluster_conf->{groups}) {
-	foreach my $group (sort keys %{$cluster_conf->{groups}}) {
-	    my $rules = $cluster_conf->{groups}->{$group};
-	    if (my $comment = $cluster_conf->{group_comments}->{$group}) {
-		my $utf8comment = encode('utf8', $comment);
-		$raw .= "[group $group] # $utf8comment\n\n";
-	    } else {
-		$raw .= "[group $group]\n\n";
-	    }
+        foreach my $group (sort keys %{ $cluster_conf->{groups} }) {
+            my $rules = $cluster_conf->{groups}->{$group};
+            if (my $comment = $cluster_conf->{group_comments}->{$group}) {
+                my $utf8comment = encode('utf8', $comment);
+                $raw .= "[group $group] # $utf8comment\n\n";
+            } else {
+                $raw .= "[group $group]\n\n";
+            }
 
-	    $raw .= $format_rules->($rules, 0);
-	    $raw .= "\n";
-	}
+            $raw .= $format_rules->($rules, 0);
+            $raw .= "\n";
+        }
     }
 
     if ($raw) {
-	mkdir $pvefw_conf_dir;
-	PVE::Tools::file_set_contents($clusterfw_conf_filename, $raw);
+        mkdir $pvefw_conf_dir;
+        PVE::Tools::file_set_contents($clusterfw_conf_filename, $raw);
     } else {
-	unlink $clusterfw_conf_filename;
+        unlink $clusterfw_conf_filename;
     }
 }
 
@@ -3838,7 +4111,7 @@ sub load_hostfw_conf {
 
     $filename = $hostfw_conf_filename if !defined($filename);
 
-    my $empty_conf = { rules => [], options => {}};
+    my $empty_conf = { rules => [], options => {} };
     return generic_fw_config_parser($filename, $cluster_conf, $empty_conf, 'host');
 }
 
@@ -3854,15 +4127,15 @@ sub save_hostfw_conf {
 
     my $rules = $hostfw_conf->{rules};
     if ($rules && scalar(@$rules)) {
-	$raw .= "[RULES]\n\n";
-	$raw .= $format_rules->($rules, 1);
-	$raw .= "\n";
+        $raw .= "[RULES]\n\n";
+        $raw .= $format_rules->($rules, 1);
+        $raw .= "\n";
     }
 
     if ($raw) {
-	PVE::Tools::file_set_contents($filename, $raw);
+        PVE::Tools::file_set_contents($filename, $raw);
     } else {
-	unlink $filename;
+        unlink $filename;
     }
 }
 
@@ -3874,8 +4147,8 @@ sub load_vnetfw_conf {
     my $filename = "$vnetfw_conf_dir/$vnet.fw";
 
     my $empty_conf = {
-	rules => [],
-	options => {},
+        rules => [],
+        options => {},
     };
 
     my $vnetfw_conf = generic_fw_config_parser($filename, $cluster_conf, $empty_conf, $rule_env);
@@ -3896,17 +4169,17 @@ sub save_vnetfw_conf {
 
     my $rules = $conf->{rules};
     if ($rules && scalar(@$rules)) {
-	$raw .= "[RULES]\n\n";
-	$raw .= $format_rules->($rules, 1);
-	$raw .= "\n";
+        $raw .= "[RULES]\n\n";
+        $raw .= $format_rules->($rules, 1);
+        $raw .= "\n";
     }
 
     mkdir($vnetfw_conf_dir, 0755) if !-d $vnetfw_conf_dir;
 
     if ($raw) {
-	PVE::Tools::file_set_contents($filename, $raw);
+        PVE::Tools::file_set_contents($filename, $raw);
     } else {
-	unlink $filename;
+        unlink $filename;
     }
 }
 
@@ -3919,49 +4192,58 @@ sub compile {
     $pve_std_chains = dclone($pve_std_chains_conf);
 
     if ($vmdata) { # test mode
-	my $testdir = $vmdata->{testdir} || die "no test directory specified";
-	my $filename = "$testdir/cluster.fw";
-	$cluster_conf = load_clusterfw_conf($filename);
+        my $testdir = $vmdata->{testdir} || die "no test directory specified";
+        my $filename = "$testdir/cluster.fw";
+        $cluster_conf = load_clusterfw_conf($filename);
 
-	$filename = "$testdir/host.fw";
-	$hostfw_conf = load_hostfw_conf($cluster_conf, $filename);
+        $filename = "$testdir/host.fw";
+        $hostfw_conf = load_hostfw_conf($cluster_conf, $filename);
 
-	$vmfw_configs = read_vm_firewall_configs($cluster_conf, $vmdata, $testdir);
+        $vmfw_configs = read_vm_firewall_configs($cluster_conf, $vmdata, $testdir);
     } else { # normal operation
-	$cluster_conf = load_clusterfw_conf() if !$cluster_conf;
+        $cluster_conf = load_clusterfw_conf() if !$cluster_conf;
 
-	$hostfw_conf = load_hostfw_conf($cluster_conf, undef) if !$hostfw_conf;
+        $hostfw_conf = load_hostfw_conf($cluster_conf, undef) if !$hostfw_conf;
 
-	# cfs_update is handled by daemon or API
-	$corosync_conf = PVE::Cluster::cfs_read_file("corosync.conf")
-	    if !defined($corosync_conf) && PVE::Corosync::check_conf_exists(1);
+        # cfs_update is handled by daemon or API
+        $corosync_conf = PVE::Cluster::cfs_read_file("corosync.conf")
+            if !defined($corosync_conf) && PVE::Corosync::check_conf_exists(1);
 
-	$vmdata = read_local_vm_config();
-	$vmfw_configs = read_vm_firewall_configs($cluster_conf, $vmdata, undef);
+        $vmdata = read_local_vm_config();
+        $vmfw_configs = read_vm_firewall_configs($cluster_conf, $vmdata, undef);
     }
 
-    return ({},{},{},{}) if !$cluster_conf->{options}->{enable};
+    return ({}, {}, {}, {}) if !$cluster_conf->{options}->{enable};
 
     my $localnet;
     if ($cluster_conf->{aliases}->{local_network}) {
-	$localnet = $cluster_conf->{aliases}->{local_network}->{cidr};
+        $localnet = $cluster_conf->{aliases}->{local_network}->{cidr};
     } else {
-	my $localnet_ver;
-	($localnet, $localnet_ver) = parse_ip_or_cidr(local_network() || '127.0.0.0/8');
+        my $localnet_ver;
+        ($localnet, $localnet_ver) = parse_ip_or_cidr(local_network() || '127.0.0.0/8');
 
-	$cluster_conf->{aliases}->{local_network} = {
-	    name => 'local_network', cidr => $localnet, ipversion => $localnet_ver };
+        $cluster_conf->{aliases}->{local_network} =
+            { name => 'local_network', cidr => $localnet, ipversion => $localnet_ver };
     }
 
-    push @{$cluster_conf->{ipset}->{management}}, { cidr => $localnet };
+    push @{ $cluster_conf->{ipset}->{management} }, { cidr => $localnet };
 
     my $ruleset = {};
     my $rulesetv6 = {};
-    $ruleset->{filter} = compile_iptables_filter($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, $corosync_conf, 4);
-    $ruleset->{raw} = compile_iptables_raw($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, $corosync_conf, 4);
-    $rulesetv6->{filter} = compile_iptables_filter($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, $corosync_conf, 6);
-    $rulesetv6->{raw} = compile_iptables_raw($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, $corosync_conf, 6);
-    my $ebtables_ruleset = compile_ebtables_filter($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata);
+    $ruleset->{filter} = compile_iptables_filter(
+        $cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, $corosync_conf, 4,
+    );
+    $ruleset->{raw} =
+        compile_iptables_raw($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, $corosync_conf,
+            4);
+    $rulesetv6->{filter} = compile_iptables_filter(
+        $cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, $corosync_conf, 6,
+    );
+    $rulesetv6->{raw} =
+        compile_iptables_raw($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata, $corosync_conf,
+            6);
+    my $ebtables_ruleset =
+        compile_ebtables_filter($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata);
     my $ipset_ruleset = compile_ipsets($cluster_conf, $vmfw_configs, $vmdata);
 
     return ($ruleset, $ipset_ruleset, $rulesetv6, $ebtables_ruleset);
@@ -3976,23 +4258,46 @@ sub compile_iptables_raw {
     my $protection_synflood = $hostfw_options->{protection_synflood} || 0;
     my $conntrack_helpers = $hostfw_options->{nf_conntrack_helpers} || '';
 
-    ruleset_create_chain($ruleset, "PVEFW-PREROUTING") if $protection_synflood != 0 || $conntrack_helpers ne '';
+    ruleset_create_chain($ruleset, "PVEFW-PREROUTING")
+        if $protection_synflood != 0 || $conntrack_helpers ne '';
 
-    if($protection_synflood) {
+    if ($protection_synflood) {
 
-	my $protection_synflood_rate = $hostfw_options->{protection_synflood_rate} ? $hostfw_options->{protection_synflood_rate} : 200;
-	my $protection_synflood_burst = $hostfw_options->{protection_synflood_burst} ? $hostfw_options->{protection_synflood_burst} : 1000;
-	my $protection_synflood_limit = $hostfw_options->{protection_synflood_limit} ? $hostfw_options->{protection_synflood_limit} : 3000;
- 	my $protection_synflood_expire = $hostfw_options->{nf_conntrack_tcp_timeout_syn_recv} ? $hostfw_options->{nf_conntrack_tcp_timeout_syn_recv} : 60;
-	$protection_synflood_expire = $protection_synflood_expire * 1000;
-	my $protection_synflood_mask = $ipversion == 4 ? 32 : 64;
+        my $protection_synflood_rate =
+            $hostfw_options->{protection_synflood_rate}
+            ? $hostfw_options->{protection_synflood_rate}
+            : 200;
+        my $protection_synflood_burst =
+            $hostfw_options->{protection_synflood_burst}
+            ? $hostfw_options->{protection_synflood_burst}
+            : 1000;
+        my $protection_synflood_limit =
+            $hostfw_options->{protection_synflood_limit}
+            ? $hostfw_options->{protection_synflood_limit}
+            : 3000;
+        my $protection_synflood_expire =
+            $hostfw_options->{nf_conntrack_tcp_timeout_syn_recv}
+            ? $hostfw_options->{nf_conntrack_tcp_timeout_syn_recv}
+            : 60;
+        $protection_synflood_expire = $protection_synflood_expire * 1000;
+        my $protection_synflood_mask = $ipversion == 4 ? 32 : 64;
 
-	ruleset_addrule($ruleset, "PVEFW-PREROUTING", "-p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m hashlimit --hashlimit-above $protection_synflood_rate/sec --hashlimit-burst $protection_synflood_burst --hashlimit-mode srcip --hashlimit-name syn --hashlimit-htable-size 2097152 --hashlimit-srcmask $protection_synflood_mask --hashlimit-htable-expire $protection_synflood_expire", "-j DROP");
+        ruleset_addrule(
+            $ruleset,
+            "PVEFW-PREROUTING",
+            "-p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m hashlimit --hashlimit-above $protection_synflood_rate/sec --hashlimit-burst $protection_synflood_burst --hashlimit-mode srcip --hashlimit-name syn --hashlimit-htable-size 2097152 --hashlimit-srcmask $protection_synflood_mask --hashlimit-htable-expire $protection_synflood_expire",
+            "-j DROP",
+        );
     }
 
     foreach my $conntrack_helper (split(/,/, $conntrack_helpers)) {
-	my $helper = $pve_fw_helpers->{$conntrack_helper};
-	ruleset_addrule($ruleset, "PVEFW-PREROUTING", "-p $helper->{proto} -m $helper->{proto} --dport $helper->{dport} -j CT", "--helper $conntrack_helper") if $helper && $helper->{"v$ipversion"};
+        my $helper = $pve_fw_helpers->{$conntrack_helper};
+        ruleset_addrule(
+            $ruleset,
+            "PVEFW-PREROUTING",
+            "-p $helper->{proto} -m $helper->{proto} --dport $helper->{dport} -j CT",
+            "--helper $conntrack_helper",
+        ) if $helper && $helper->{"v$ipversion"};
     }
 
     return $ruleset;
@@ -4017,70 +4322,127 @@ sub compile_iptables_filter {
     ruleset_chain_add_conn_filters($ruleset, "PVEFW-FORWARD", $conn_allow_invalid, "ACCEPT");
 
     ruleset_create_chain($ruleset, "PVEFW-FWBR-IN");
-    ruleset_chain_add_input_filters($ruleset, "PVEFW-FWBR-IN", $ipversion, $hostfw_options, $cluster_conf, $loglevel);
+    ruleset_chain_add_input_filters(
+        $ruleset, "PVEFW-FWBR-IN", $ipversion, $hostfw_options, $cluster_conf, $loglevel,
+    );
 
-    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m physdev --physdev-is-bridged --physdev-in fwln+", "-j PVEFW-FWBR-IN");
+    ruleset_addrule(
+        $ruleset,
+        "PVEFW-FORWARD",
+        "-m physdev --physdev-is-bridged --physdev-in fwln+",
+        "-j PVEFW-FWBR-IN",
+    );
 
     ruleset_create_chain($ruleset, "PVEFW-FWBR-OUT");
-    ruleset_addrule($ruleset, "PVEFW-FORWARD", "-m physdev --physdev-is-bridged --physdev-out fwln+", "-j PVEFW-FWBR-OUT");
+    ruleset_addrule(
+        $ruleset,
+        "PVEFW-FORWARD",
+        "-m physdev --physdev-is-bridged --physdev-out fwln+",
+        "-j PVEFW-FWBR-OUT",
+    );
 
     generate_std_chains($ruleset, $hostfw_options, $ipversion);
 
     my $hostfw_enable = !(defined($hostfw_options->{enable}) && ($hostfw_options->{enable} == 0));
 
     if ($hostfw_enable) {
-	eval { enable_host_firewall($ruleset, $hostfw_conf, $cluster_conf, $ipversion, $corosync_conf); };
-	warn $@ if $@; # just to be sure - should not happen
+        eval {
+            enable_host_firewall(
+                $ruleset, $hostfw_conf, $cluster_conf, $ipversion, $corosync_conf,
+            );
+        };
+        warn $@ if $@; # just to be sure - should not happen
     }
 
     # generate firewall rules for QEMU VMs
-    foreach my $vmid (sort keys %{$vmdata->{qemu}}) {
-	eval {
-	    my $conf = $vmdata->{qemu}->{$vmid};
-	    my $vmfw_conf = $vmfw_configs->{$vmid};
-	    return if !$vmfw_conf || !$vmfw_conf->{options}->{enable};
+    foreach my $vmid (sort keys %{ $vmdata->{qemu} }) {
+        eval {
+            my $conf = $vmdata->{qemu}->{$vmid};
+            my $vmfw_conf = $vmfw_configs->{$vmid};
+            return if !$vmfw_conf || !$vmfw_conf->{options}->{enable};
 
-	    foreach my $netid (sort keys %$conf) {
-		next if $netid !~ m/^net(\d+)$/;
-		my $net = PVE::QemuServer::parse_net($conf->{$netid});
-		next if !$net->{firewall};
+            foreach my $netid (sort keys %$conf) {
+                next if $netid !~ m/^net(\d+)$/;
+                my $net = PVE::QemuServer::parse_net($conf->{$netid});
+                next if !$net->{firewall};
 
-		my $iface = "tap${vmid}i$1";
-		my $macaddr = $net->{macaddr};
-		generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
-		                             $vmfw_conf, $vmid, 'IN', $ipversion);
-		generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
-		                             $vmfw_conf, $vmid, 'OUT', $ipversion);
-	    }
-	};
-	warn $@ if $@; # just to be sure - should not happen
+                my $iface = "tap${vmid}i$1";
+                my $macaddr = $net->{macaddr};
+                generate_tap_rules_direction(
+                    $ruleset,
+                    $cluster_conf,
+                    $iface,
+                    $netid,
+                    $macaddr,
+                    $vmfw_conf,
+                    $vmid,
+                    'IN',
+                    $ipversion,
+                );
+                generate_tap_rules_direction(
+                    $ruleset,
+                    $cluster_conf,
+                    $iface,
+                    $netid,
+                    $macaddr,
+                    $vmfw_conf,
+                    $vmid,
+                    'OUT',
+                    $ipversion,
+                );
+            }
+        };
+        warn $@ if $@; # just to be sure - should not happen
     }
 
     # generate firewall rules for LXC containers
-    foreach my $vmid (sort keys %{$vmdata->{lxc}}) {
-	eval {
-	    my $conf = $vmdata->{lxc}->{$vmid};
-	    my $vmfw_conf = $vmfw_configs->{$vmid};
-	    return if !$vmfw_conf || !$vmfw_conf->{options}->{enable};
+    foreach my $vmid (sort keys %{ $vmdata->{lxc} }) {
+        eval {
+            my $conf = $vmdata->{lxc}->{$vmid};
+            my $vmfw_conf = $vmfw_configs->{$vmid};
+            return if !$vmfw_conf || !$vmfw_conf->{options}->{enable};
 
-	    foreach my $netid (sort keys %$conf) {
-		next if $netid !~ m/^net(\d+)$/;
-		my $net = PVE::LXC::Config->parse_lxc_network($conf->{$netid});
-		next if !$net->{firewall};
+            foreach my $netid (sort keys %$conf) {
+                next if $netid !~ m/^net(\d+)$/;
+                my $net = PVE::LXC::Config->parse_lxc_network($conf->{$netid});
+                next if !$net->{firewall};
 
-		my $iface = "veth${vmid}i$1";
-		my $macaddr = $net->{hwaddr};
-		generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
-		                             $vmfw_conf, $vmid, 'IN', $ipversion);
-		generate_tap_rules_direction($ruleset, $cluster_conf, $iface, $netid, $macaddr,
-		                             $vmfw_conf, $vmid, 'OUT', $ipversion);
-	    }
-	};
-	warn $@ if $@; # just to be sure - should not happen
+                my $iface = "veth${vmid}i$1";
+                my $macaddr = $net->{hwaddr};
+                generate_tap_rules_direction(
+                    $ruleset,
+                    $cluster_conf,
+                    $iface,
+                    $netid,
+                    $macaddr,
+                    $vmfw_conf,
+                    $vmid,
+                    'IN',
+                    $ipversion,
+                );
+                generate_tap_rules_direction(
+                    $ruleset,
+                    $cluster_conf,
+                    $iface,
+                    $netid,
+                    $macaddr,
+                    $vmfw_conf,
+                    $vmid,
+                    'OUT',
+                    $ipversion,
+                );
+            }
+        };
+        warn $@ if $@; # just to be sure - should not happen
     }
 
-    if (ruleset_chain_exist($ruleset, "PVEFW-IPS")){
-	ruleset_insertrule($ruleset, "PVEFW-FORWARD", "-m conntrack --ctstate RELATED,ESTABLISHED", "-j PVEFW-IPS");
+    if (ruleset_chain_exist($ruleset, "PVEFW-IPS")) {
+        ruleset_insertrule(
+            $ruleset,
+            "PVEFW-FORWARD",
+            "-m conntrack --ctstate RELATED,ESTABLISHED",
+            "-j PVEFW-IPS",
+        );
     }
 
     return $ruleset;
@@ -4094,7 +4456,7 @@ sub mac_to_linklocal {
     # universal/local bit and inserting FF:FE in the middle.
     # See RFC 4291.
     $parts[0] = sprintf("%02x", hex($parts[0]) ^ 0x02);
-    my @meui64 = (@parts[0,1,2], 'ff', 'fe', @parts[3,4,5]);
+    my @meui64 = (@parts[0, 1, 2], 'ff', 'fe', @parts[3, 4, 5]);
     return "fe80::$parts[0]$parts[1]:$parts[2]FF:FE$parts[3]:$parts[4]$parts[5]";
 }
 
@@ -4103,107 +4465,126 @@ sub compile_ipsets {
 
     my $localnet;
     if ($cluster_conf->{aliases}->{local_network}) {
-	$localnet = $cluster_conf->{aliases}->{local_network}->{cidr};
+        $localnet = $cluster_conf->{aliases}->{local_network}->{cidr};
     } else {
-	my $localnet_ver;
-	($localnet, $localnet_ver) = parse_ip_or_cidr(local_network() || '127.0.0.0/8');
+        my $localnet_ver;
+        ($localnet, $localnet_ver) = parse_ip_or_cidr(local_network() || '127.0.0.0/8');
 
-	$cluster_conf->{aliases}->{local_network} = {
-	    name => 'local_network', cidr => $localnet, ipversion => $localnet_ver };
+        $cluster_conf->{aliases}->{local_network} =
+            { name => 'local_network', cidr => $localnet, ipversion => $localnet_ver };
     }
 
-    push @{$cluster_conf->{ipset}->{management}}, { cidr => $localnet };
-
+    push @{ $cluster_conf->{ipset}->{management} }, { cidr => $localnet };
 
     my $ipset_ruleset = {};
 
     # generate ipsets for QEMU VMs
-    foreach my $vmid (keys %{$vmdata->{qemu}}) {
-	eval {
-	    my $conf = $vmdata->{qemu}->{$vmid};
-	    my $vmfw_conf = $vmfw_configs->{$vmid};
-	    return if !$vmfw_conf;
+    foreach my $vmid (keys %{ $vmdata->{qemu} }) {
+        eval {
+            my $conf = $vmdata->{qemu}->{$vmid};
+            my $vmfw_conf = $vmfw_configs->{$vmid};
+            return if !$vmfw_conf;
 
-	    # When the 'ipfilter' option is enabled every device for which there
-	    # is no 'ipfilter-netX' ipset defined gets an implicit empty default
-	    # ipset.
-	    # The reason is that ipfilter ipsets are always filled with standard
-	    # IPv6 link-local filters.
-	    my $ipsets = $vmfw_conf->{ipset};
-	    my $implicit_sets = {};
+            # When the 'ipfilter' option is enabled every device for which there
+            # is no 'ipfilter-netX' ipset defined gets an implicit empty default
+            # ipset.
+            # The reason is that ipfilter ipsets are always filled with standard
+            # IPv6 link-local filters.
+            my $ipsets = $vmfw_conf->{ipset};
+            my $implicit_sets = {};
 
-	    my $device_ips = {};
-	    foreach my $netid (keys %$conf) {
-		next if $netid !~ m/^net(\d+)$/;
-		my $net = PVE::QemuServer::parse_net($conf->{$netid});
-		next if !$net->{firewall};
+            my $device_ips = {};
+            foreach my $netid (keys %$conf) {
+                next if $netid !~ m/^net(\d+)$/;
+                my $net = PVE::QemuServer::parse_net($conf->{$netid});
+                next if !$net->{firewall};
 
-		if ($vmfw_conf->{options}->{ipfilter} && !$ipsets->{"ipfilter-$netid"}) {
-		    $implicit_sets->{"ipfilter-$netid"} = [];
-		}
+                if ($vmfw_conf->{options}->{ipfilter} && !$ipsets->{"ipfilter-$netid"}) {
+                    $implicit_sets->{"ipfilter-$netid"} = [];
+                }
 
-		my $macaddr = $net->{macaddr};
-		my $linklocal = mac_to_linklocal($macaddr);
-		$device_ips->{$netid} = [
-		    { cidr => $linklocal },
-		    { cidr => 'fe80::/10', nomatch => 1 }
-		];
-	    }
+                my $macaddr = $net->{macaddr};
+                my $linklocal = mac_to_linklocal($macaddr);
+                $device_ips->{$netid} = [
+                    { cidr => $linklocal }, { cidr => 'fe80::/10', nomatch => 1 },
+                ];
+            }
 
-	    generate_ipset_chains($ipset_ruleset, $cluster_conf, $vmfw_conf, $device_ips, $ipsets);
-	    generate_ipset_chains($ipset_ruleset, $cluster_conf, $vmfw_conf, $device_ips, $implicit_sets);
-	};
-	warn $@ if $@; # just to be sure - should not happen
+            generate_ipset_chains(
+                $ipset_ruleset, $cluster_conf, $vmfw_conf, $device_ips, $ipsets,
+            );
+            generate_ipset_chains(
+                $ipset_ruleset,
+                $cluster_conf,
+                $vmfw_conf,
+                $device_ips,
+                $implicit_sets,
+            );
+        };
+        warn $@ if $@; # just to be sure - should not happen
     }
 
     # generate firewall rules for LXC containers
-    foreach my $vmid (keys %{$vmdata->{lxc}}) {
-	eval {
-	    my $conf = $vmdata->{lxc}->{$vmid};
-	    my $vmfw_conf = $vmfw_configs->{$vmid};
-	    return if !$vmfw_conf;
+    foreach my $vmid (keys %{ $vmdata->{lxc} }) {
+        eval {
+            my $conf = $vmdata->{lxc}->{$vmid};
+            my $vmfw_conf = $vmfw_configs->{$vmid};
+            return if !$vmfw_conf;
 
-	    # When the 'ipfilter' option is enabled every device for which there
-	    # is no 'ipfilter-netX' ipset defined gets an implicit empty default
-	    # ipset.
-	    # The reason is that ipfilter ipsets are always filled with standard
-	    # IPv6 link-local filters, as well as the IP addresses configured
-	    # for the container.
-	    my $ipsets = $vmfw_conf->{ipset};
-	    my $implicit_sets = {};
+            # When the 'ipfilter' option is enabled every device for which there
+            # is no 'ipfilter-netX' ipset defined gets an implicit empty default
+            # ipset.
+            # The reason is that ipfilter ipsets are always filled with standard
+            # IPv6 link-local filters, as well as the IP addresses configured
+            # for the container.
+            my $ipsets = $vmfw_conf->{ipset};
+            my $implicit_sets = {};
 
-	    my $device_ips = {};
-	    foreach my $netid (keys %$conf) {
-		next if $netid !~ m/^net(\d+)$/;
-		my $net = PVE::LXC::Config->parse_lxc_network($conf->{$netid});
-		next if !$net->{firewall};
+            my $device_ips = {};
+            foreach my $netid (keys %$conf) {
+                next if $netid !~ m/^net(\d+)$/;
+                my $net = PVE::LXC::Config->parse_lxc_network($conf->{$netid});
+                next if !$net->{firewall};
 
-		if ($vmfw_conf->{options}->{ipfilter} && !$ipsets->{"ipfilter-$netid"}) {
-		    $implicit_sets->{"ipfilter-$netid"} = [];
-		}
+                if ($vmfw_conf->{options}->{ipfilter} && !$ipsets->{"ipfilter-$netid"}) {
+                    $implicit_sets->{"ipfilter-$netid"} = [];
+                }
 
-		my $macaddr = $net->{hwaddr};
-		my $linklocal = mac_to_linklocal($macaddr);
-		my $set = $device_ips->{$netid} = [
-		    { cidr => $linklocal },
-		    { cidr => 'fe80::/10', nomatch => 1 }
-		];
-		if (defined($net->{ip}) && $net->{ip} =~ m!^($IPV4RE)(?:/\d+)?$!) {
-		    push @$set, { cidr => $1 };
-		}
-		if (defined($net->{ip6}) && $net->{ip6} =~ m!^($IPV6RE)(?:/\d+)?$!) {
-		    push @$set, { cidr => $1 };
-		}
-	    }
+                my $macaddr = $net->{hwaddr};
+                my $linklocal = mac_to_linklocal($macaddr);
+                my $set = $device_ips->{$netid} = [
+                    { cidr => $linklocal }, { cidr => 'fe80::/10', nomatch => 1 },
+                ];
+                if (defined($net->{ip}) && $net->{ip} =~ m!^($IPV4RE)(?:/\d+)?$!) {
+                    push @$set, { cidr => $1 };
+                }
+                if (defined($net->{ip6}) && $net->{ip6} =~ m!^($IPV6RE)(?:/\d+)?$!) {
+                    push @$set, { cidr => $1 };
+                }
+            }
 
-	    generate_ipset_chains($ipset_ruleset, $cluster_conf, $vmfw_conf, $device_ips, $ipsets);
-	    generate_ipset_chains($ipset_ruleset, $cluster_conf, $vmfw_conf, $device_ips, $implicit_sets);
-	};
-	warn $@ if $@; # just to be sure - should not happen
+            generate_ipset_chains(
+                $ipset_ruleset, $cluster_conf, $vmfw_conf, $device_ips, $ipsets,
+            );
+            generate_ipset_chains(
+                $ipset_ruleset,
+                $cluster_conf,
+                $vmfw_conf,
+                $device_ips,
+                $implicit_sets,
+            );
+        };
+        warn $@ if $@; # just to be sure - should not happen
     }
 
     generate_ipset_chains($ipset_ruleset, undef, $cluster_conf, undef, $cluster_conf->{ipset});
-    generate_ipset_chains($ipset_ruleset, undef, $cluster_conf, undef, $cluster_conf->{sdn}->{ipset});
+    generate_ipset_chains(
+        $ipset_ruleset,
+        undef,
+        $cluster_conf,
+        undef,
+        $cluster_conf->{sdn}->{ipset},
+    );
 
     return $ipset_ruleset;
 }
@@ -4212,7 +4593,7 @@ sub compile_ebtables_filter {
     my ($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata) = @_;
 
     if (!($cluster_conf->{options}->{ebtables} // 1)) {
-	return {};
+        return {};
     }
 
     my $ruleset = {};
@@ -4226,68 +4607,72 @@ sub compile_ebtables_filter {
     ruleset_addrule($ruleset, 'PVEFW-FORWARD', '-o fwln+', '-j PVEFW-FWBR-OUT');
 
     # generate firewall rules for QEMU VMs
-    foreach my $vmid (sort keys %{$vmdata->{qemu}}) {
-	eval {
-	    my $conf = $vmdata->{qemu}->{$vmid};
-	    my $vmfw_conf = $vmfw_configs->{$vmid};
-	    return if !$vmfw_conf || !$vmfw_conf->{options}->{enable};
-	    my $ipsets = $vmfw_conf->{ipset};
+    foreach my $vmid (sort keys %{ $vmdata->{qemu} }) {
+        eval {
+            my $conf = $vmdata->{qemu}->{$vmid};
+            my $vmfw_conf = $vmfw_configs->{$vmid};
+            return if !$vmfw_conf || !$vmfw_conf->{options}->{enable};
+            my $ipsets = $vmfw_conf->{ipset};
 
-	    foreach my $netid (sort keys %$conf) {
-		next if $netid !~ m/^net(\d+)$/;
-		my $net = PVE::QemuServer::parse_net($conf->{$netid});
-		next if !$net->{firewall};
-		my $iface = "tap${vmid}i$1";
-		my $macaddr = $net->{macaddr};
-		my $arpfilter = [];
-		if (defined(my $ipset = $ipsets->{"ipfilter-$netid"})) {
-		    foreach my $ipaddr (@$ipset) {
-			my($ip, $version) = parse_ip_or_cidr($ipaddr->{cidr});
-			next if !$ip || ($version && $version != 4);
-			push(@$arpfilter, $ip);
-		    }
-		}
-		generate_tap_layer2filter($ruleset, $iface, $macaddr, $vmfw_conf, $vmid, $arpfilter);
-	    }
-	};
-	warn $@ if $@; # just to be sure - should not happen
+            foreach my $netid (sort keys %$conf) {
+                next if $netid !~ m/^net(\d+)$/;
+                my $net = PVE::QemuServer::parse_net($conf->{$netid});
+                next if !$net->{firewall};
+                my $iface = "tap${vmid}i$1";
+                my $macaddr = $net->{macaddr};
+                my $arpfilter = [];
+                if (defined(my $ipset = $ipsets->{"ipfilter-$netid"})) {
+                    foreach my $ipaddr (@$ipset) {
+                        my ($ip, $version) = parse_ip_or_cidr($ipaddr->{cidr});
+                        next if !$ip || ($version && $version != 4);
+                        push(@$arpfilter, $ip);
+                    }
+                }
+                generate_tap_layer2filter(
+                    $ruleset, $iface, $macaddr, $vmfw_conf, $vmid, $arpfilter,
+                );
+            }
+        };
+        warn $@ if $@; # just to be sure - should not happen
     }
 
     # generate firewall rules for LXC containers
-    foreach my $vmid (sort keys %{$vmdata->{lxc}}) {
-	eval {
-	    my $conf = $vmdata->{lxc}->{$vmid};
+    foreach my $vmid (sort keys %{ $vmdata->{lxc} }) {
+        eval {
+            my $conf = $vmdata->{lxc}->{$vmid};
 
-	    my $vmfw_conf = $vmfw_configs->{$vmid};
-	    return if !$vmfw_conf || !$vmfw_conf->{options}->{enable};
-	    my $ipsets = $vmfw_conf->{ipset};
+            my $vmfw_conf = $vmfw_configs->{$vmid};
+            return if !$vmfw_conf || !$vmfw_conf->{options}->{enable};
+            my $ipsets = $vmfw_conf->{ipset};
 
-	    foreach my $netid (sort keys %$conf) {
-		next if $netid !~ m/^net(\d+)$/;
-		my $net = PVE::LXC::Config->parse_lxc_network($conf->{$netid});
-		next if !$net->{firewall};
-		my $iface = "veth${vmid}i$1";
-		my $macaddr = $net->{hwaddr};
-		my $arpfilter = [];
-		if (defined(my $ipset = $ipsets->{"ipfilter-$netid"})) {
-		    foreach my $ipaddr (@$ipset) {
-			my($ip, $version) = parse_ip_or_cidr($ipaddr->{cidr});
-			next if !$ip || ($version && $version != 4);
-			push(@$arpfilter, $ip);
-		    }
-		}
-		if (defined(my $ip = $net->{ip}) && $vmfw_conf->{options}->{ipfilter}) {
-		    # ebtables changes this to a .0/MASK network but we just
-		    # want the address here, no network - see #2193
-		    $ip =~ s|/(\d+)$||;
-		    if ($ip ne 'dhcp') {
-			push @$arpfilter, $ip;
-		    }
-		}
-		generate_tap_layer2filter($ruleset, $iface, $macaddr, $vmfw_conf, $vmid, $arpfilter);
-	    }
-	};
-	warn $@ if $@; # just to be sure - should not happen
+            foreach my $netid (sort keys %$conf) {
+                next if $netid !~ m/^net(\d+)$/;
+                my $net = PVE::LXC::Config->parse_lxc_network($conf->{$netid});
+                next if !$net->{firewall};
+                my $iface = "veth${vmid}i$1";
+                my $macaddr = $net->{hwaddr};
+                my $arpfilter = [];
+                if (defined(my $ipset = $ipsets->{"ipfilter-$netid"})) {
+                    foreach my $ipaddr (@$ipset) {
+                        my ($ip, $version) = parse_ip_or_cidr($ipaddr->{cidr});
+                        next if !$ip || ($version && $version != 4);
+                        push(@$arpfilter, $ip);
+                    }
+                }
+                if (defined(my $ip = $net->{ip}) && $vmfw_conf->{options}->{ipfilter}) {
+                    # ebtables changes this to a .0/MASK network but we just
+                    # want the address here, no network - see #2193
+                    $ip =~ s|/(\d+)$||;
+                    if ($ip ne 'dhcp') {
+                        push @$arpfilter, $ip;
+                    }
+                }
+                generate_tap_layer2filter(
+                    $ruleset, $iface, $macaddr, $vmfw_conf, $vmid, $arpfilter,
+                );
+            }
+        };
+        warn $@ if $@; # just to be sure - should not happen
     }
 
     return $ruleset;
@@ -4297,7 +4682,7 @@ sub generate_tap_layer2filter {
     my ($ruleset, $iface, $macaddr, $vmfw_conf, $vmid, $arpfilter) = @_;
     my $options = $vmfw_conf->{options};
 
-    my $tapchain = $iface."-OUT";
+    my $tapchain = $iface . "-OUT";
 
     # ebtables remove zeros from mac pairs
     $macaddr =~ s/0([0-9a-f])/$1/ig;
@@ -4306,29 +4691,29 @@ sub generate_tap_layer2filter {
     ruleset_create_chain($ruleset, $tapchain);
 
     if (defined($macaddr) && !(defined($options->{macfilter}) && $options->{macfilter} == 0)) {
-	ruleset_addrule($ruleset, $tapchain, "-s ! $macaddr", '-j DROP');
+        ruleset_addrule($ruleset, $tapchain, "-s ! $macaddr", '-j DROP');
     }
 
-    if (@$arpfilter){
-	my $arpchain = $tapchain."-ARP";
-	ruleset_addrule($ruleset, $tapchain, "-p ARP", "-j $arpchain");
-	ruleset_create_chain($ruleset, $arpchain);
+    if (@$arpfilter) {
+        my $arpchain = $tapchain . "-ARP";
+        ruleset_addrule($ruleset, $tapchain, "-p ARP", "-j $arpchain");
+        ruleset_create_chain($ruleset, $arpchain);
 
-	foreach my $ip (@{$arpfilter}) {
-	    ruleset_addrule($ruleset, $arpchain, "-p ARP --arp-ip-src $ip", '-j RETURN');
-	}
-	ruleset_addrule($ruleset, $arpchain, '', '-j DROP');
+        foreach my $ip (@{$arpfilter}) {
+            ruleset_addrule($ruleset, $arpchain, "-p ARP --arp-ip-src $ip", '-j RETURN');
+        }
+        ruleset_addrule($ruleset, $arpchain, '', '-j DROP');
     }
 
-    if (defined($options->{layer2_protocols})){
-	my $protochain = $tapchain."-PROTO";
-	ruleset_addrule($ruleset, $tapchain, '', "-j $protochain");
-	ruleset_create_chain($ruleset, $protochain);
+    if (defined($options->{layer2_protocols})) {
+        my $protochain = $tapchain . "-PROTO";
+        ruleset_addrule($ruleset, $tapchain, '', "-j $protochain");
+        ruleset_create_chain($ruleset, $protochain);
 
-	foreach my $proto (split(/,/, $options->{layer2_protocols})) {
-	    ruleset_addrule($ruleset, $protochain, "-p $proto", '-j RETURN');
-	}
-	ruleset_addrule($ruleset, $protochain, '', '-j DROP');
+        foreach my $proto (split(/,/, $options->{layer2_protocols})) {
+            ruleset_addrule($ruleset, $protochain, "-p $proto", '-j RETURN');
+        }
+        ruleset_addrule($ruleset, $protochain, '', '-j DROP');
     }
 
     ruleset_addrule($ruleset, $tapchain, '', '-j ACCEPT');
@@ -4346,47 +4731,47 @@ sub get_ruleset_status {
     my $statushash = {};
 
     foreach my $chain (sort keys %$ruleset) {
-	my $rules = $ruleset->{$chain};
-	my $sig = &$digest_fn($rules);
-	my $oldsig;
+        my $rules = $ruleset->{$chain};
+        my $sig = &$digest_fn($rules);
+        my $oldsig;
 
-	$statushash->{$chain}->{sig} = $sig;
-	if (defined($change_only_regex)) {
-	    $oldsig = $active_chains->{$chain}->{sig};
-	    $statushash->{$chain}->{rules} = $rules;
-	} else {
-	    $oldsig = $active_chains->{$chain};
-	}
-	if (!defined($oldsig)) {
-	    $statushash->{$chain}->{action} = 'create';
-	} else {
-	    if ($oldsig eq $sig) {
-		$statushash->{$chain}->{action} = 'exists';
-	    } else {
-		$statushash->{$chain}->{action} = 'update';
-	    }
-	}
-	if ($verbose) {
-	    print "$statushash->{$chain}->{action} $chain ($sig)\n";
-	    foreach my $cmd (@{$rules}) {
-		print "\t$cmd\n";
-	    }
-	}
+        $statushash->{$chain}->{sig} = $sig;
+        if (defined($change_only_regex)) {
+            $oldsig = $active_chains->{$chain}->{sig};
+            $statushash->{$chain}->{rules} = $rules;
+        } else {
+            $oldsig = $active_chains->{$chain};
+        }
+        if (!defined($oldsig)) {
+            $statushash->{$chain}->{action} = 'create';
+        } else {
+            if ($oldsig eq $sig) {
+                $statushash->{$chain}->{action} = 'exists';
+            } else {
+                $statushash->{$chain}->{action} = 'update';
+            }
+        }
+        if ($verbose) {
+            print "$statushash->{$chain}->{action} $chain ($sig)\n";
+            foreach my $cmd (@{$rules}) {
+                print "\t$cmd\n";
+            }
+        }
     }
 
     foreach my $chain (sort keys %$active_chains) {
-	next if defined($ruleset->{$chain});
-	my $action = 'delete';
-	my $sig = $active_chains->{$chain};
-	if (defined($change_only_regex)) {
-	    $action = 'ignore' if ($chain !~ m/$change_only_regex/);
-	    $statushash->{$chain}->{rules} = $active_chains->{$chain}->{rules};
-	    $statushash->{$chain}->{policy} = $active_chains->{$chain}->{policy};
-	    $sig = $sig->{sig};
-	}
-	$statushash->{$chain}->{action} = $action;
-	$statushash->{$chain}->{sig} = $sig;
-	print "$action $chain ($sig)\n" if $verbose;
+        next if defined($ruleset->{$chain});
+        my $action = 'delete';
+        my $sig = $active_chains->{$chain};
+        if (defined($change_only_regex)) {
+            $action = 'ignore' if ($chain !~ m/$change_only_regex/);
+            $statushash->{$chain}->{rules} = $active_chains->{$chain}->{rules};
+            $statushash->{$chain}->{policy} = $active_chains->{$chain}->{policy};
+            $sig = $sig->{sig};
+        }
+        $statushash->{$chain}->{action} = $action;
+        $statushash->{$chain}->{sig} = $sig;
+        print "$action $chain ($sig)\n" if $verbose;
     }
 
     return $statushash;
@@ -4411,50 +4796,50 @@ sub get_ruleset_cmdlist {
 
     # create missing chains first
     foreach my $chain (sort keys %$ruleset) {
-	my $stat = $statushash->{$chain};
-	die "internal error" if !$stat;
-	next if $stat->{action} ne 'create';
+        my $stat = $statushash->{$chain};
+        die "internal error" if !$stat;
+        next if $stat->{action} ne 'create';
 
-	$cmdlist .= ":$chain - [0:0]\n";
+        $cmdlist .= ":$chain - [0:0]\n";
     }
 
     foreach my $h (qw(INPUT OUTPUT FORWARD PREROUTING)) {
-	my $chain = "PVEFW-$h";
-	if ($ruleset->{$chain} && !$hooks->{$h}) {
-	    $cmdlist .= "-A $h -j $chain\n";
-	}
+        my $chain = "PVEFW-$h";
+        if ($ruleset->{$chain} && !$hooks->{$h}) {
+            $cmdlist .= "-A $h -j $chain\n";
+        }
     }
 
     foreach my $chain (sort keys %$ruleset) {
-	my $stat = $statushash->{$chain};
-	die "internal error" if !$stat;
+        my $stat = $statushash->{$chain};
+        die "internal error" if !$stat;
 
-	if ($stat->{action} eq 'update' || $stat->{action} eq 'create') {
-	    $cmdlist .= "-F $chain\n";
-	    foreach my $cmd (@{$ruleset->{$chain}}) {
-		$cmdlist .= "$cmd\n";
-	    }
-	    $cmdlist .= print_sig_rule($chain, $stat->{sig});
-	} elsif ($stat->{action} eq 'delete') {
-	    die "internal error"; # this should not happen
-	} elsif ($stat->{action} eq 'exists') {
-	    # do nothing
-	} else {
-	    die "internal error - unknown status '$stat->{action}'";
-	}
+        if ($stat->{action} eq 'update' || $stat->{action} eq 'create') {
+            $cmdlist .= "-F $chain\n";
+            foreach my $cmd (@{ $ruleset->{$chain} }) {
+                $cmdlist .= "$cmd\n";
+            }
+            $cmdlist .= print_sig_rule($chain, $stat->{sig});
+        } elsif ($stat->{action} eq 'delete') {
+            die "internal error"; # this should not happen
+        } elsif ($stat->{action} eq 'exists') {
+            # do nothing
+        } else {
+            die "internal error - unknown status '$stat->{action}'";
+        }
     }
 
     foreach my $chain (keys %$statushash) {
-	next if $statushash->{$chain}->{action} ne 'delete';
-	$cmdlist .= "-F $chain\n";
+        next if $statushash->{$chain}->{action} ne 'delete';
+        $cmdlist .= "-F $chain\n";
     }
     foreach my $chain (keys %$statushash) {
-	next if $statushash->{$chain}->{action} ne 'delete';
-	next if $chain eq 'PVEFW-INPUT';
-	next if $chain eq 'PVEFW-OUTPUT';
-	next if $chain eq 'PVEFW-FORWARD';
-	next if $chain eq 'PVEFW-PREROUTING';
-	$cmdlist .= "-X $chain\n";
+        next if $statushash->{$chain}->{action} ne 'delete';
+        next if $chain eq 'PVEFW-INPUT';
+        next if $chain eq 'PVEFW-OUTPUT';
+        next if $chain eq 'PVEFW-FORWARD';
+        next if $chain eq 'PVEFW-PREROUTING';
+        $cmdlist .= "-X $chain\n";
     }
 
     my $changes = $cmdlist ne "*$table\n" ? 1 : 0;
@@ -4473,32 +4858,32 @@ sub get_ebtables_cmdlist {
     my $cmdlist = "*filter\n";
 
     my $active_chains = ebtables_get_chains();
-    my $statushash = get_ruleset_status($ruleset, $active_chains,
-					\&iptables_chain_digest,
-					$pve_ebtables_chainname_regex);
+    my $statushash = get_ruleset_status(
+        $ruleset, $active_chains, \&iptables_chain_digest, $pve_ebtables_chainname_regex,
+    );
 
     # create chains first and make sure PVE rules are evaluated if active
     my $append_pve_to_forward = '-A FORWARD -j PVEFW-FORWARD';
     my $pve_include = 0;
     foreach my $chain (sort keys %$statushash) {
-	next if ($statushash->{$chain}->{action} eq 'delete');
-	my $policy = $statushash->{$chain}->{policy} // 'ACCEPT';
-	$cmdlist .= ":$chain $policy\n";
-	$pve_include = 1 if ($chain eq 'PVEFW-FORWARD');
+        next if ($statushash->{$chain}->{action} eq 'delete');
+        my $policy = $statushash->{$chain}->{policy} // 'ACCEPT';
+        $cmdlist .= ":$chain $policy\n";
+        $pve_include = 1 if ($chain eq 'PVEFW-FORWARD');
     }
 
     foreach my $chain (sort keys %$statushash) {
-	my $stat = $statushash->{$chain};
-	$changes = 1 if ($stat->{action} !~ 'ignore|exists');
-	next if ($stat->{action} eq 'delete');
+        my $stat = $statushash->{$chain};
+        $changes = 1 if ($stat->{action} !~ 'ignore|exists');
+        next if ($stat->{action} eq 'delete');
 
-	foreach my $cmd (@{$statushash->{$chain}->{'rules'}}) {
-	    if ($chain eq 'FORWARD' && $cmd eq $append_pve_to_forward) {
-		next if ! $pve_include;
-		$pve_include = 0;
-	    }
-	    $cmdlist .= "$cmd\n";
-	}
+        foreach my $cmd (@{ $statushash->{$chain}->{'rules'} }) {
+            if ($chain eq 'FORWARD' && $cmd eq $append_pve_to_forward) {
+                next if !$pve_include;
+                $pve_include = 0;
+            }
+            $cmdlist .= "$cmd\n";
+        }
     }
     $cmdlist .= "$append_pve_to_forward\n" if $pve_include;
 
@@ -4517,45 +4902,45 @@ sub get_ipset_cmdlist {
 
     # remove stale _swap chains
     foreach my $chain (keys %$active_chains) {
-	if ($chain =~ m/^PVEFW-\S+_swap$/) {
-	    $cmdlist .= "destroy $chain\n";
-	}
+        if ($chain =~ m/^PVEFW-\S+_swap$/) {
+            $cmdlist .= "destroy $chain\n";
+        }
     }
 
     foreach my $chain (keys %$ruleset) {
-	my $stat = $statushash->{$chain};
-	die "internal error" if !$stat;
+        my $stat = $statushash->{$chain};
+        die "internal error" if !$stat;
 
-	if ($stat->{action} eq 'create') {
-	    foreach my $cmd (@{$ruleset->{$chain}}) {
-		$cmdlist .= "$cmd\n";
-	    }
-	}
+        if ($stat->{action} eq 'create') {
+            foreach my $cmd (@{ $ruleset->{$chain} }) {
+                $cmdlist .= "$cmd\n";
+            }
+        }
     }
 
     foreach my $chain (keys %$ruleset) {
-	my $stat = $statushash->{$chain};
-	die "internal error" if !$stat;
+        my $stat = $statushash->{$chain};
+        die "internal error" if !$stat;
 
-	if ($stat->{action} eq 'update') {
-	    my $chain_swap = $chain."_swap";
+        if ($stat->{action} eq 'update') {
+            my $chain_swap = $chain . "_swap";
 
-	    foreach my $cmd (@{$ruleset->{$chain}}) {
-		$cmd =~ s/$chain/$chain_swap/;
-		$cmdlist .= "$cmd\n";
-	    }
-	    $cmdlist .= "swap $chain_swap $chain\n";
-	    $cmdlist .= "flush $chain_swap\n";
-	    $cmdlist .= "destroy $chain_swap\n";
-	}
+            foreach my $cmd (@{ $ruleset->{$chain} }) {
+                $cmd =~ s/$chain/$chain_swap/;
+                $cmdlist .= "$cmd\n";
+            }
+            $cmdlist .= "swap $chain_swap $chain\n";
+            $cmdlist .= "flush $chain_swap\n";
+            $cmdlist .= "destroy $chain_swap\n";
+        }
     }
 
-     # the remove unused chains
+    # the remove unused chains
     foreach my $chain (keys %$statushash) {
-	next if $statushash->{$chain}->{action} ne 'delete';
+        next if $statushash->{$chain}->{action} ne 'delete';
 
-	$delete_cmdlist .= "flush $chain\n";
-	$delete_cmdlist .= "destroy $chain\n";
+        $delete_cmdlist .= "flush $chain\n";
+        $delete_cmdlist .= "destroy $chain\n";
     }
 
     my $changes = ($cmdlist || $delete_cmdlist) ? 1 : 0;
@@ -4569,45 +4954,46 @@ sub apply_ruleset {
     enable_bridge_firewall();
 
     my ($ipset_create_cmdlist, $ipset_delete_cmdlist, $ipset_changes) =
-	get_ipset_cmdlist($ipset_ruleset);
+        get_ipset_cmdlist($ipset_ruleset);
 
     my ($cmdlist, $changes) = get_ruleset_cmdlist($ruleset->{filter});
     my ($cmdlistv6, $changesv6) = get_ruleset_cmdlist($rulesetv6->{filter}, "ip6tables");
     my ($ebtables_cmdlist, $ebtables_changes) = get_ebtables_cmdlist($ebtables_ruleset);
     my ($cmdlist_raw, $changes_raw) = get_ruleset_cmdlist($ruleset->{raw}, undef, 'raw');
-    my ($cmdlistv6_raw, $changesv6_raw) = get_ruleset_cmdlist($rulesetv6->{raw}, "ip6tables", 'raw');
+    my ($cmdlistv6_raw, $changesv6_raw) =
+        get_ruleset_cmdlist($rulesetv6->{raw}, "ip6tables", 'raw');
 
     if ($verbose) {
-	if ($ipset_changes) {
-	    print "ipset changes:\n";
-	    print $ipset_create_cmdlist if $ipset_create_cmdlist;
-	    print $ipset_delete_cmdlist if $ipset_delete_cmdlist;
-	}
+        if ($ipset_changes) {
+            print "ipset changes:\n";
+            print $ipset_create_cmdlist if $ipset_create_cmdlist;
+            print $ipset_delete_cmdlist if $ipset_delete_cmdlist;
+        }
 
-	if ($changes) {
-	    print "iptables changes:\n";
-	    print $cmdlist;
-	}
+        if ($changes) {
+            print "iptables changes:\n";
+            print $cmdlist;
+        }
 
-	if ($changesv6) {
-	    print "ip6tables changes:\n";
-	    print $cmdlistv6;
-	}
+        if ($changesv6) {
+            print "ip6tables changes:\n";
+            print $cmdlistv6;
+        }
 
-	if ($changes_raw) {
-	    print "iptables table raw changes:\n";
-	    print $cmdlist_raw;
-	}
+        if ($changes_raw) {
+            print "iptables table raw changes:\n";
+            print $cmdlist_raw;
+        }
 
-	if ($changesv6_raw) {
-	    print "ip6tables table raw changes:\n";
-	    print $cmdlistv6_raw;
-	}
+        if ($changesv6_raw) {
+            print "ip6tables table raw changes:\n";
+            print $cmdlistv6_raw;
+        }
 
-	if ($ebtables_changes) {
-	    print "ebtables changes:\n";
-	    print $ebtables_cmdlist;
-	}
+        if ($ebtables_changes) {
+            print "ebtables changes:\n";
+            print $ebtables_cmdlist;
+        }
     }
 
     my $tmpfile = "$pve_fw_status_dir/ipsetcmdlist1";
@@ -4652,60 +5038,66 @@ sub apply_ruleset {
 
     my $errors;
     foreach my $chain (sort keys %$ruleset_filter) {
-	my $stat = $statushash->{$chain};
-	if ($stat->{action} ne 'exists') {
-	    warn "unable to update chain '$chain'\n";
-	    $errors = 1;
-	}
+        my $stat = $statushash->{$chain};
+        if ($stat->{action} ne 'exists') {
+            warn "unable to update chain '$chain'\n";
+            $errors = 1;
+        }
     }
 
     my $rulesetv6_filter = $rulesetv6->{filter};
     my $active_chainsv6 = iptables_get_chains("ip6tables");
-    my $statushashv6 = get_ruleset_status($rulesetv6_filter, $active_chainsv6, \&iptables_chain_digest);
+    my $statushashv6 =
+        get_ruleset_status($rulesetv6_filter, $active_chainsv6, \&iptables_chain_digest);
 
     foreach my $chain (sort keys %$rulesetv6_filter) {
-	my $stat = $statushashv6->{$chain};
-	if ($stat->{action} ne 'exists') {
-	    warn "unable to update chain '$chain'\n";
-	    $errors = 1;
-	}
+        my $stat = $statushashv6->{$chain};
+        if ($stat->{action} ne 'exists') {
+            warn "unable to update chain '$chain'\n";
+            $errors = 1;
+        }
     }
 
     my $ruleset_raw = $ruleset->{raw};
     my $active_chains_raw = iptables_get_chains(undef, 'raw');
-    my $statushash_raw = get_ruleset_status($ruleset_raw, $active_chains_raw, \&iptables_chain_digest);
+    my $statushash_raw =
+        get_ruleset_status($ruleset_raw, $active_chains_raw, \&iptables_chain_digest);
 
     foreach my $chain (sort keys %$ruleset_raw) {
-	my $stat = $statushash_raw->{$chain};
-	if ($stat->{action} ne 'exists') {
-	    warn "unable to update chain '$chain'\n";
-	    $errors = 1;
-	}
+        my $stat = $statushash_raw->{$chain};
+        if ($stat->{action} ne 'exists') {
+            warn "unable to update chain '$chain'\n";
+            $errors = 1;
+        }
     }
 
     my $rulesetv6_raw = $rulesetv6->{raw};
     my $active_chainsv6_raw = iptables_get_chains("ip6tables", 'raw');
-    my $statushashv6_raw = get_ruleset_status($rulesetv6_raw, $active_chainsv6_raw, \&iptables_chain_digest);
+    my $statushashv6_raw =
+        get_ruleset_status($rulesetv6_raw, $active_chainsv6_raw, \&iptables_chain_digest);
 
     foreach my $chain (sort keys %$rulesetv6_raw) {
-	my $stat = $statushashv6_raw->{$chain};
-	if ($stat->{action} ne 'exists') {
-	    warn "unable to update chain '$chain'\n";
-	    $errors = 1;
-	}
+        my $stat = $statushashv6_raw->{$chain};
+        if ($stat->{action} ne 'exists') {
+            warn "unable to update chain '$chain'\n";
+            $errors = 1;
+        }
     }
 
     my $active_ebtables_chains = ebtables_get_chains();
-    my $ebtables_statushash = get_ruleset_status($ebtables_ruleset,
-				$active_ebtables_chains, \&iptables_chain_digest,
-				$pve_ebtables_chainname_regex);
+    my $ebtables_statushash = get_ruleset_status(
+        $ebtables_ruleset,
+        $active_ebtables_chains,
+        \&iptables_chain_digest,
+        $pve_ebtables_chainname_regex,
+    );
 
     foreach my $chain (sort keys %$ebtables_ruleset) {
-	my $stat = $ebtables_statushash->{$chain};
-	if ($stat->{action} ne 'exists') {
-	    warn "ebtables : unable to update chain '$chain'\n";
-	    $errors = 1;
-	}
+        my $stat = $ebtables_statushash->{$chain};
+        if ($stat->{action} ne 'exists') {
+            warn "ebtables : unable to update chain '$chain'\n";
+            $errors = 1;
+        }
     }
 
     die "unable to apply firewall changes\n" if $errors;
@@ -4727,8 +5119,8 @@ sub update_nf_conntrack_max {
     my $options = $hostfw_conf->{options} || {};
 
     if (defined($options->{nf_conntrack_max}) && ($options->{nf_conntrack_max} > $max)) {
-	$max = $options->{nf_conntrack_max};
-	$max = int(($max+ 8191)/8192)*8192; # round to multiples of 8192
+        $max = $options->{nf_conntrack_max};
+        $max = int(($max + 8191) / 8192) * 8192; # round to multiples of 8192
     }
 
     my $filename_nf_conntrack_max = "/proc/sys/net/nf_conntrack_max";
@@ -4737,9 +5129,9 @@ sub update_nf_conntrack_max {
     my $current = int(PVE::Tools::file_read_firstline($filename_nf_conntrack_max) || $max);
 
     if ($current != $max) {
-	my $hashsize = int($max/4);
-	PVE::ProcFSTools::write_proc_entry($filename_hashsize, $hashsize);
-	PVE::ProcFSTools::write_proc_entry($filename_nf_conntrack_max, $max);
+        my $hashsize = int($max / 4);
+        PVE::ProcFSTools::write_proc_entry($filename_hashsize, $hashsize);
+        PVE::ProcFSTools::write_proc_entry($filename_nf_conntrack_max, $max);
     }
 }
 
@@ -4748,9 +5140,14 @@ sub update_nf_conntrack_tcp_timeout_established {
 
     my $options = $hostfw_conf->{options} || {};
 
-    my $value = defined($options->{nf_conntrack_tcp_timeout_established}) ? $options->{nf_conntrack_tcp_timeout_established} : 432000;
+    my $value =
+        defined($options->{nf_conntrack_tcp_timeout_established})
+        ? $options->{nf_conntrack_tcp_timeout_established}
+        : 432000;
 
-    PVE::ProcFSTools::write_proc_entry("/proc/sys/net/netfilter/nf_conntrack_tcp_timeout_established", $value);
+    PVE::ProcFSTools::write_proc_entry(
+        "/proc/sys/net/netfilter/nf_conntrack_tcp_timeout_established", $value,
+    );
 }
 
 sub update_nf_conntrack_tcp_timeout_syn_recv {
@@ -4758,25 +5155,32 @@ sub update_nf_conntrack_tcp_timeout_syn_recv {
 
     my $options = $hostfw_conf->{options} || {};
 
-    my $value = defined($options->{nf_conntrack_tcp_timeout_syn_recv}) ? $options->{nf_conntrack_tcp_timeout_syn_recev} : 60;
+    my $value =
+        defined($options->{nf_conntrack_tcp_timeout_syn_recv})
+        ? $options->{nf_conntrack_tcp_timeout_syn_recev}
+        : 60;
 
-    PVE::ProcFSTools::write_proc_entry("/proc/sys/net/netfilter/nf_conntrack_tcp_timeout_syn_recv", $value);
+    PVE::ProcFSTools::write_proc_entry(
+        "/proc/sys/net/netfilter/nf_conntrack_tcp_timeout_syn_recv", $value,
+    );
 }
 
 my $log_nf_conntrack_enabled = undef;
+
 sub update_nf_conntrack_logging {
     my ($hostfw_conf) = @_;
 
     my $options = $hostfw_conf->{options} || {};
     my $value = $options->{log_nf_conntrack} || 0;
-    if (!defined($log_nf_conntrack_enabled)
-	|| $value != $log_nf_conntrack_enabled)
-    {
-	my $tmpfile = "$pve_fw_status_dir/log_nf_conntrack";
-	PVE::Tools::file_set_contents($tmpfile, $value);
+    if (
+        !defined($log_nf_conntrack_enabled)
+        || $value != $log_nf_conntrack_enabled
+    ) {
+        my $tmpfile = "$pve_fw_status_dir/log_nf_conntrack";
+        PVE::Tools::file_set_contents($tmpfile, $value);
 
-	run_command([qw(systemctl try-reload-or-restart pvefw-logger.service)]);
-	$log_nf_conntrack_enabled = $value;
+        run_command([qw(systemctl try-reload-or-restart pvefw-logger.service)]);
+        $log_nf_conntrack_enabled = $value;
     }
 }
 
@@ -4800,24 +5204,24 @@ sub remove_pvefw_chains_iptables {
     my $cmdlist = "*$table\n";
 
     foreach my $h (qw(INPUT OUTPUT FORWARD PREROUTING)) {
-	if ($hooks->{$h}) {
-	    $cmdlist .= "-D $h -j PVEFW-$h\n";
-	}
+        if ($hooks->{$h}) {
+            $cmdlist .= "-D $h -j PVEFW-$h\n";
+        }
     }
 
     foreach my $chain (keys %$chash) {
-	$cmdlist .= "-F $chain\n";
+        $cmdlist .= "-F $chain\n";
     }
 
     foreach my $chain (keys %$chash) {
-	$cmdlist .= "-X $chain\n";
+        $cmdlist .= "-X $chain\n";
     }
     $cmdlist .= "COMMIT\n";
 
-    if($iptablescmd eq "ip6tables") {
-	ip6tables_restore_cmdlist($cmdlist, $table);
+    if ($iptablescmd eq "ip6tables") {
+        ip6tables_restore_cmdlist($cmdlist, $table);
     } else {
-	iptables_restore_cmdlist($cmdlist, $table);
+        iptables_restore_cmdlist($cmdlist, $table);
     }
 }
 
@@ -4828,8 +5232,8 @@ sub remove_pvefw_chains_ipset {
     my $cmdlist = "";
 
     foreach my $chain (keys %$ipset_chains) {
-	$cmdlist .= "flush $chain\n";
-	$cmdlist .= "destroy $chain\n";
+        $cmdlist .= "flush $chain\n";
+        $cmdlist .= "destroy $chain\n";
     }
 
     ipset_restore_cmdlist($cmdlist) if $cmdlist;
@@ -4851,7 +5255,7 @@ my sub get_nftables_option {
     my ($cluster_conf, $host_conf) = @_;
 
     if (!-x "/usr/libexec/proxmox/proxmox-firewall") {
-	return 0;
+        return 0;
     }
 
     $cluster_conf = load_clusterfw_conf() if !defined($cluster_conf);
@@ -4864,13 +5268,14 @@ my sub update_force_nftables_disable_flag {
     my ($cluster_firewall_enabled, $is_nftables) = @_;
 
     if (!($cluster_firewall_enabled && $is_nftables)) {
-	if (! -e $FORCE_NFT_DISABLE_FLAG_FILE) {
-	    open(my $_fh, '>', $FORCE_NFT_DISABLE_FLAG_FILE)
-		or warn "failed to create flag file '$FORCE_NFT_DISABLE_FLAG_FILE' – $!\n";
-	}
+        if (!-e $FORCE_NFT_DISABLE_FLAG_FILE) {
+            open(my $_fh, '>', $FORCE_NFT_DISABLE_FLAG_FILE)
+                or warn "failed to create flag file '$FORCE_NFT_DISABLE_FLAG_FILE' – $!\n";
+        }
     } else {
-	unlink($FORCE_NFT_DISABLE_FLAG_FILE)
-	    or $!{ENOENT} or warn "failed to unlink flag file '$FORCE_NFT_DISABLE_FLAG_FILE' - $!\n";
+        unlink($FORCE_NFT_DISABLE_FLAG_FILE)
+            or $!{ENOENT}
+            or warn "failed to unlink flag file '$FORCE_NFT_DISABLE_FLAG_FILE' - $!\n";
     }
 }
 
@@ -4896,17 +5301,18 @@ sub init {
 sub update {
     my $code = sub {
 
-	my $cluster_conf = load_clusterfw_conf();
-	my $hostfw_conf = load_hostfw_conf($cluster_conf);
+        my $cluster_conf = load_clusterfw_conf();
+        my $hostfw_conf = load_hostfw_conf($cluster_conf);
 
-	if (!is_enabled_and_not_nftables($cluster_conf, $hostfw_conf)) {
-	    PVE::Firewall::remove_pvefw_chains();
-	    return;
-	}
+        if (!is_enabled_and_not_nftables($cluster_conf, $hostfw_conf)) {
+            PVE::Firewall::remove_pvefw_chains();
+            return;
+        }
 
-	my ($ruleset, $ipset_ruleset, $rulesetv6, $ebtables_ruleset) = compile($cluster_conf, $hostfw_conf);
+        my ($ruleset, $ipset_ruleset, $rulesetv6, $ebtables_ruleset) =
+            compile($cluster_conf, $hostfw_conf);
 
-	apply_ruleset($ruleset, $hostfw_conf, $ipset_ruleset, $rulesetv6, $ebtables_ruleset);
+        apply_ruleset($ruleset, $hostfw_conf, $ipset_ruleset, $rulesetv6, $ebtables_ruleset);
     };
 
     run_locked($code);
