@@ -4392,7 +4392,14 @@ sub compile_iptables_filter {
                 );
             }
         };
-        warn $@ if $@; # just to be sure - should not happen
+
+        if ($@) {
+            if ($verbose) { # running from cli
+                warn $@;
+            } else {
+                syslog('warn', "$@\n");
+            }
+        }
     }
 
     # generate firewall rules for LXC containers
