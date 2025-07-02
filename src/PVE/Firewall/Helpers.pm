@@ -188,4 +188,31 @@ sub collect_refs {
     return $res;
 }
 
+# This is checked in proxmox-firewall to avoid log-spam due to failing to parse the config
+our $FORCE_NFT_DISABLE_FLAG_FILE = "/run/proxmox-nftables-firewall-force-disable";
+
+=head3 is_nftables()
+
+Checks whether nftables is active via checking for the existence of the file
+C<$FORCE_NFT_DISABLE_FLAG_FILE >
+
+=cut
+sub is_nftables {
+    return !-e $FORCE_NFT_DISABLE_FLAG_FILE;
+}
+
+=head3 needs_fwbr($bridge_name)
+
+Returns whether a given bridge with interface name C<$bridge_name> requires a
+firewall bridge in order for the current firewall configuration to work. This is
+the case when using pve-firewall (iptables) or bridges that use OVS.
+
+=cut
+sub needs_fwbr {
+    my ($bridge_name) = @_;
+
+    my $is_ovs = !-d "/sys/class/net/$bridge_name/brif";
+    return !is_nftables() || $is_ovs;
+}
+
 1;
