@@ -5244,13 +5244,6 @@ sub remove_pvefw_chains_ebtables {
     ebtables_restore_cmdlist(get_ebtables_cmdlist({}));
 }
 
-# This is checked in proxmox-firewall to avoid log-spam due to failing to parse the config
-my $FORCE_NFT_DISABLE_FLAG_FILE = "/run/proxmox-nftables-firewall-force-disable";
-
-sub is_nftables {
-    return !-e $FORCE_NFT_DISABLE_FLAG_FILE;
-}
-
 my sub get_nftables_option {
     my ($cluster_conf, $host_conf) = @_;
 
@@ -5263,6 +5256,8 @@ my sub get_nftables_option {
 
     return $host_conf->{options}->{nftables};
 }
+
+my $FORCE_NFT_DISABLE_FLAG_FILE = $PVE::Firewall::Helpers::FORCE_NFT_DISABLE_FLAG_FILE;
 
 my sub update_force_nftables_disable_flag {
     my ($cluster_firewall_enabled, $is_nftables) = @_;
