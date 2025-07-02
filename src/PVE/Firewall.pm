@@ -4363,7 +4363,7 @@ sub compile_iptables_filter {
 
             foreach my $netid (sort keys %$conf) {
                 next if $netid !~ m/^net(\d+)$/;
-                my $net = PVE::QemuServer::parse_net($conf->{$netid});
+                my $net = PVE::QemuServer::Network::parse_net($conf->{$netid});
                 next if !$net->{firewall};
 
                 my $iface = "tap${vmid}i$1";
@@ -4503,7 +4503,7 @@ sub compile_ipsets {
             my $device_ips = {};
             foreach my $netid (keys %$conf) {
                 next if $netid !~ m/^net(\d+)$/;
-                my $net = PVE::QemuServer::parse_net($conf->{$netid});
+                my $net = PVE::QemuServer::Network::parse_net($conf->{$netid});
                 next if !$net->{firewall};
 
                 if ($vmfw_conf->{options}->{ipfilter} && !$ipsets->{"ipfilter-$netid"}) {
@@ -4623,7 +4623,7 @@ sub compile_ebtables_filter {
 
             foreach my $netid (sort keys %$conf) {
                 next if $netid !~ m/^net(\d+)$/;
-                my $net = PVE::QemuServer::parse_net($conf->{$netid});
+                my $net = PVE::QemuServer::Network::parse_net($conf->{$netid});
                 next if !$net->{firewall};
                 my $iface = "tap${vmid}i$1";
                 my $macaddr = $net->{macaddr};

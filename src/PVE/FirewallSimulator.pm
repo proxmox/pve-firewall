@@ -491,7 +491,7 @@ sub extract_vm_info {
     my $info = { type => 'vm', vmid => $vmid };
 
     my $conf = $vmdata->{qemu}->{$vmid} || die "no such VM '$vmid'";
-    my $net = PVE::QemuServer::parse_net($conf->{"net$netnum"});
+    my $net = PVE::QemuServer::Network::parse_net($conf->{"net$netnum"});
     $info->{macaddr} = $net->{macaddr} || die "unable to get mac address";
     $info->{bridge} = $net->{bridge} || die "unable to get bridge";
     $info->{fwbr} = "fwbr${vmid}i$netnum";
