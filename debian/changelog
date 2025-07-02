@@ -1,3 +1,9 @@
+pve-firewall (5.1.2) bookworm; urgency=medium
+
+  * add new helper for determining whether a fwbr is needed
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 02 Jul 2025 15:21:28 +0200
+
 pve-firewall (5.1.1) bookworm; urgency=medium
 
   * fix #5925: vnet: add parsing logic for log_level_forward
