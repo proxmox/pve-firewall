@@ -1,3 +1,13 @@
+pve-firewall (6.0.1) trixie; urgency=medium
+
+  * helpers: add helper for checking firewall bridge creation
+
+  * compile: report rule errors to syslog if running as daemon
+
+  * firewall: adjust to new qemu-server module structure
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 03 Jul 2025 14:38:00 +0200
+
 pve-firewall (6.0.0) trixie; urgency=medium
 
   * re-build for Debian 13 Trixie based Proxmox releases.
