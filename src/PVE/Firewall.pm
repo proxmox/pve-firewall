@@ -2861,6 +2861,8 @@ sub enable_host_firewall {
     my $rules = $hostfw_conf->{rules};
     my $cluster_rules = $cluster_conf->{rules};
 
+    my $interface_mapping = PVE::Network::altname_mapping();
+
     # corosync preparation
     my $corosync_rule = "-p udp --dport 5404:5405";
     my $corosync_local_addresses = {};
@@ -2908,7 +2910,7 @@ sub enable_host_firewall {
         next if !$rule->{enable} || $rule->{errors};
         next if $rule->{ipversion} && ($rule->{ipversion} != $ipversion);
 
-        $rule->{iface_in} = $rule->{iface} if $rule->{iface};
+        $rule->{iface_in} = ($interface_mapping->{$rule->{iface}} // $rule->{iface}) if $rule->{iface};
 
         eval {
             $rule->{logmsg} = "$rule->{action}: ";
@@ -2994,7 +2996,8 @@ sub enable_host_firewall {
         next if !$rule->{enable} || $rule->{errors};
         next if $rule->{ipversion} && ($rule->{ipversion} != $ipversion);
 
-        $rule->{iface_out} = $rule->{iface} if $rule->{iface};
+        $rule->{iface_out} = ($interface_mapping->{$rule->{iface}} // $rule->{iface}) if $rule->{iface};
+
         eval {
             $rule->{logmsg} = "$rule->{action}: ";
             if ($rule->{type} eq 'group') {
