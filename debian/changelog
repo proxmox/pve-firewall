@@ -1,3 +1,14 @@
+pve-firewall (6.0.2) trixie; urgency=medium
+
+  * firewall: add transparent support for interface alternative names
+    (altnames).
+
+  * change /var/run to /run and /var/lock to /run/lock, they point to the same
+    underlying directory, but /run is the modern one while /var/ continas
+    symlinks to /run. No semantic change intended.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 16 Jul 2025 17:52:36 +0200
+
 pve-firewall (6.0.1) trixie; urgency=medium
 
   * helpers: add helper for checking firewall bridge creation
