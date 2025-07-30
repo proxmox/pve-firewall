@@ -2551,10 +2551,13 @@ sub ruleset_chain_add_input_filters {
 }
 
 sub ruleset_create_vm_chain {
-    my ($ruleset, $chain, $ipversion, $options, $macaddr, $ipfilter_ipset, $direction) = @_;
+    my ($ruleset, $chain, $ipversion, $options, $macaddr, $ipfilter_ipset, $direction, $vmid) = @_;
 
     ruleset_create_chain($ruleset, $chain);
     my $accept = generate_nfqueue($options);
+
+    # needs to be first, to ensure that it gets always applied
+    ruleset_addrule($ruleset, $chain, "", "-j CONNMARK --set-mark $vmid");
 
     if (!(defined($options->{dhcp}) && $options->{dhcp} == 0)) {
         if ($ipversion == 4) {
@@ -2796,7 +2799,14 @@ sub generate_tap_rules_direction {
     if ($options->{enable}) {
         # create chain with mac and ip filter
         ruleset_create_vm_chain(
-            $ruleset, $tapchain, $ipversion, $options, $macaddr, $ipfilter_ipset, $direction,
+            $ruleset,
+            $tapchain,
+            $ipversion,
+            $options,
+            $macaddr,
+            $ipfilter_ipset,
+            $direction,
+            $vmid,
         );
 
         ruleset_generate_vm_rules(
