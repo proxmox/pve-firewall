@@ -17,6 +17,7 @@ our @EXPORT_OK = qw(
     remove_vmfw_conf
     clone_vmfw_conf
     collect_refs
+    flush_fw_ct_entries_by_mark
 );
 
 my $pvefw_conf_dir = "/etc/pve/firewall";
@@ -198,6 +199,7 @@ Checks whether nftables is active via checking for the existence of the file
 C<$FORCE_NFT_DISABLE_FLAG_FILE>
 
 =cut
+
 sub is_nftables {
     return !-e $FORCE_NFT_DISABLE_FLAG_FILE;
 }
@@ -209,9 +211,27 @@ firewall bridge in order for the current firewall configuration to work. This is
 the case when using pve-firewall (iptables) or bridges that use OVS.
 
 =cut
+
 sub needs_fwbr {
     my ($bridge_name) = @_;
     return !is_nftables() || PVE::Network::is_ovs_bridge($bridge_name);
+}
+
+=head3 flush_fw_ct_entries_by_mark($mark)
+
+Flushes all conntrack table entries which are CONNMARK'd with the given
+value in C<$mark>.
+
+=cut
+
+sub flush_fw_ct_entries_by_mark {
+    my ($mark) = @_;
+
+    PVE::Tools::run_command(
+        ['conntrack', '--delete', '--mark', $mark],
+        noerr => 1,
+        quiet => 1,
+    );
 }
 
 1;
