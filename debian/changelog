@@ -1,3 +1,11 @@
+pve-firewall (6.0.3) trixie; urgency=medium
+
+  * add connmark rule with VMID to all guest chains.
+
+  * helpers: add sub for flushing conntrack entries by mark.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 30 Jul 2025 22:52:00 +0200
+
 pve-firewall (6.0.2) trixie; urgency=medium
 
   * firewall: add transparent support for interface alternative names
