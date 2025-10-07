@@ -1285,6 +1285,7 @@ our $cluster_option_properties = {
         description => "Enable or disable the firewall cluster wide.",
         type => 'integer',
         minimum => 0,
+        default => 0,
         optional => 1,
     },
     ebtables => {
@@ -1346,6 +1347,7 @@ our $host_option_properties = {
     enable => {
         description => "Enable host firewall rules.",
         type => 'boolean',
+        default => 1,
         optional => 1,
     },
     log_level_in => get_standard_option(
