@@ -2920,7 +2920,9 @@ sub enable_host_firewall {
         next if !$rule->{enable} || $rule->{errors};
         next if $rule->{ipversion} && ($rule->{ipversion} != $ipversion);
 
-        $rule->{iface_in} = ($interface_mapping->{$rule->{iface}} // $rule->{iface}) if $rule->{iface};
+        if (my $iface = $rule->{iface}) {
+            $rule->{iface_in} = $interface_mapping->{$iface} // $iface;
+        }
 
         eval {
             $rule->{logmsg} = "$rule->{action}: ";
@@ -3006,7 +3008,9 @@ sub enable_host_firewall {
         next if !$rule->{enable} || $rule->{errors};
         next if $rule->{ipversion} && ($rule->{ipversion} != $ipversion);
 
-        $rule->{iface_out} = ($interface_mapping->{$rule->{iface}} // $rule->{iface}) if $rule->{iface};
+        if (my $iface = $rule->{iface}) {
+            $rule->{iface_out} = $interface_mapping->{$iface} // $iface;
+        }
 
         eval {
             $rule->{logmsg} = "$rule->{action}: ";
