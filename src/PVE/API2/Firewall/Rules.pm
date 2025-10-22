@@ -19,6 +19,68 @@ my $api_properties = {
     },
 };
 
+my $rule_return_properties = {
+    action => {
+        type => 'string',
+    },
+    comment => {
+        type => 'string',
+        optional => 1,
+    },
+    dest => {
+        type => 'string',
+        optional => 1,
+    },
+    dport => {
+        type => 'string',
+        optional => 1,
+    },
+    enable => {
+        type => 'integer',
+        optional => 1,
+    },
+    log => PVE::Firewall::get_standard_option(
+        'pve-fw-loglevel',
+        {
+            description => 'Log level for firewall rule',
+        },
+    ),
+    'icmp-type' => {
+        type => 'string',
+        optional => 1,
+    },
+    iface => {
+        type => 'string',
+        optional => 1,
+    },
+    ipversion => {
+        type => 'integer',
+        optional => 1,
+    },
+    macro => {
+        type => 'string',
+        optional => 1,
+    },
+    pos => {
+        type => 'integer',
+    },
+    proto => {
+        type => 'string',
+        optional => 1,
+    },
+    source => {
+        type => 'string',
+        optional => 1,
+    },
+    sport => {
+        type => 'string',
+        optional => 1,
+    },
+    type => {
+        type => 'string',
+    },
+};
+
 =head3 check_privileges_for_method($class, $method_name, $param)
 
 If the permission checks from the register_method() call are not sufficient,
@@ -102,11 +164,7 @@ sub register_get_rules {
             type => 'array',
             items => {
                 type => "object",
-                properties => {
-                    pos => {
-                        type => 'integer',
-                    },
-                },
+                properties => $rule_return_properties,
             },
             links => [{ rel => 'child', href => "{pos}" }],
         },
@@ -151,67 +209,7 @@ sub register_get_rule {
         proxyto => $rule_env eq 'host' ? 'node' : undef,
         returns => {
             type => "object",
-            properties => {
-                action => {
-                    type => 'string',
-                },
-                comment => {
-                    type => 'string',
-                    optional => 1,
-                },
-                dest => {
-                    type => 'string',
-                    optional => 1,
-                },
-                dport => {
-                    type => 'string',
-                    optional => 1,
-                },
-                enable => {
-                    type => 'integer',
-                    optional => 1,
-                },
-                log => PVE::Firewall::get_standard_option(
-                    'pve-fw-loglevel',
-                    {
-                        description => 'Log level for firewall rule',
-                    },
-                ),
-                'icmp-type' => {
-                    type => 'string',
-                    optional => 1,
-                },
-                iface => {
-                    type => 'string',
-                    optional => 1,
-                },
-                ipversion => {
-                    type => 'integer',
-                    optional => 1,
-                },
-                macro => {
-                    type => 'string',
-                    optional => 1,
-                },
-                pos => {
-                    type => 'integer',
-                },
-                proto => {
-                    type => 'string',
-                    optional => 1,
-                },
-                source => {
-                    type => 'string',
-                    optional => 1,
-                },
-                sport => {
-                    type => 'string',
-                    optional => 1,
-                },
-                type => {
-                    type => 'string',
-                },
-            },
+            properties => $rule_return_properties,
         },
         code => sub {
             my ($param) = @_;
