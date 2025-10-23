@@ -21,21 +21,26 @@ my $api_properties = {
 
 my $rule_return_properties = {
     action => {
+        description => "Rule action ('ACCEPT', 'DROP', 'REJECT') or security group name",
         type => 'string',
     },
     comment => {
+        description => 'Descriptive comment',
         type => 'string',
         optional => 1,
     },
     dest => {
+        description => 'Restrict packet destination address',
         type => 'string',
         optional => 1,
     },
     dport => {
+        description => 'Restrict TCP/UDP destination port',
         type => 'string',
         optional => 1,
     },
     enable => {
+        description => 'Flag to enable/disable a rule',
         type => 'integer',
         optional => 1,
     },
@@ -46,37 +51,50 @@ my $rule_return_properties = {
         },
     ),
     'icmp-type' => {
+        description =>
+            "Specify icmp-type. Only valid if proto equals 'icmp' or 'icmpv6'/'ipv6-icmp'",
         type => 'string',
         optional => 1,
     },
     iface => {
+        description =>
+            'Network interface name. You have to use network configuration key names for VMs and containers',
         type => 'string',
         optional => 1,
     },
     ipversion => {
+        description =>
+            'IP version (4 or 6) - automatically determined from source/dest addresses',
         type => 'integer',
         optional => 1,
     },
     macro => {
+        description => 'Use predefined standard macro',
         type => 'string',
         optional => 1,
     },
     pos => {
+        description => 'Rule position in the ruleset',
         type => 'integer',
     },
     proto => {
+        description =>
+            "IP protocol. You can use protocol names ('tcp'/'udp') or simple numbers, as defined in '/etc/protocols'",
         type => 'string',
         optional => 1,
     },
     source => {
+        description => 'Restrict packet source address',
         type => 'string',
         optional => 1,
     },
     sport => {
+        description => 'Restrict TCP/UDP source port',
         type => 'string',
         optional => 1,
     },
     type => {
+        description => 'Rule type',
         type => 'string',
     },
 };
