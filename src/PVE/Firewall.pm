@@ -1404,7 +1404,7 @@ our $host_option_properties = {
     ndp => {
         description => "Enable NDP (Neighbor Discovery Protocol).",
         type => 'boolean',
-        default => 0,
+        default => 1,
         optional => 1,
     },
     nf_conntrack_allow_invalid => {
@@ -1475,7 +1475,7 @@ our $vm_option_properties = {
     ndp => {
         description => "Enable NDP (Neighbor Discovery Protocol).",
         type => 'boolean',
-        default => 0,
+        default => 1,
         optional => 1,
     },
     radv => {
