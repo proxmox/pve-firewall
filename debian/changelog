@@ -1,3 +1,17 @@
+pve-firewall (6.0.4) trixie; urgency=medium
+
+  * config: document default-value for enable option in cluster and host
+    schema.
+
+  * api: rules: add return type to API schema of list-rules endpoint.
+
+  * config: document that NDP is actually enabled by default for nodes and
+    guests.
+
+  * api: rules: add descriptions to fields in rule return type in schema.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 11 Nov 2025 12:16:10 +0100
+
 pve-firewall (6.0.3) trixie; urgency=medium
 
   * add connmark rule with VMID to all guest chains.
