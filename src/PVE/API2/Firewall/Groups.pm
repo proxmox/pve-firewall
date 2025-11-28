@@ -56,6 +56,7 @@ __PACKAGE__->register_method({
                 group => get_standard_option('pve-security-group-name'),
                 digest => get_standard_option('pve-config-digest', { optional => 0 }),
                 comment => {
+                    description => 'Optional comment or description.',
                     type => 'string',
                     optional => 1,
                 },
