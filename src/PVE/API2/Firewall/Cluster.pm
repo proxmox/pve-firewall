@@ -240,19 +240,24 @@ __PACKAGE__->register_method({
                 type => {
                     type => 'string',
                     enum => ['alias', 'ipset'],
+                    description => "The type of reference (alias or ipset).",
                 },
                 name => {
                     type => 'string',
+                    description => "The name of the alias or ipset.",
                 },
                 ref => {
                     type => 'string',
+                    description => "The reference string used in firewall rules.",
                 },
                 scope => {
                     type => 'string',
+                    description => "The scope of the reference (e.g., SDN).",
                 },
                 comment => {
                     type => 'string',
                     optional => 1,
+                    description => "Optional comment or description.",
                 },
             },
         },
