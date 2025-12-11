@@ -253,6 +253,10 @@ sub rule_match {
             return undef;
         }
 
+        if ($rule =~ s@^-j CONNMARK --set-mark ($NUMBER_RE)(?:/($NUMBER_RE))?\s*$@@) {
+            return undef;
+        }
+
         if ($rule =~ s/^-j (\S+)\s*$//) {
             return (0, $1);
         }
