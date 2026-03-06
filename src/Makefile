@@ -42,9 +42,10 @@ install: pve-firewall pve-firewall.8 pve-firewall.bash-completion pve-firewall.z
 	install -m 0644 pve-firewall-sysctl.conf $(DESTDIR)/usr/lib/sysctl.d/pve-firewall.conf
 
 .PHONY: clean
-clean: 	
-	make -C PVE clean
-	rm -f *.xml.tmp *.1 *.5 *.8 *{synopsis,opts}.adoc docinfo.xml *~
+clean:
+	$(MAKE) -C PVE clean
+	$(MAKE) cleanup-docgen
+	rm -f *~
 	rm -rf pvefw-logger
 
 
