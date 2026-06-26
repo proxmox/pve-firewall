@@ -1914,6 +1914,9 @@ sub verify_rule {
             $add_error->('iface', "value does not match the regex pattern 'net\\d+'")
                 if $rule->{iface} !~ m/^net(\d+)$/;
         }
+
+        $add_error->('iface', "cannot define an interface on rules with direction FORWARD")
+            if $type eq 'forward';
     }
 
     if ($rule->{macro}) {
