@@ -1228,6 +1228,18 @@ sub pve_fw_verify_icmp_type_spec {
     return $icmp_type;
 }
 
+PVE::JSONSchema::register_format('pve-fw-comment-spec', \&pve_fw_verify_comment_spec);
+
+sub pve_fw_verify_comment_spec {
+    my ($comment) = @_;
+
+    if ($comment =~ m/[\n\r]/) {
+        die "comment must not contain a line feed\n";
+    }
+
+    return $comment;
+}
+
 # helper function for API
 
 sub copy_opject_with_digest {
@@ -1623,6 +1635,7 @@ my $rule_properties = {
         description => "Descriptive comment.",
         type => 'string',
         optional => 1,
+        format => 'pve-fw-comment-spec',
     },
     'icmp-type' => {
         description =>
