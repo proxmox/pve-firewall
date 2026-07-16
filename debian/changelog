@@ -1,3 +1,15 @@
+pve-firewall (6.0.5) trixie; urgency=medium
+
+  * api schema: add missing descriptions
+
+  * simulator: ignore CONNMARK --set-mark targets to fix broken tests
+
+  * buildsys: use cleanup-docgen target from pve-doc-generator
+
+  * fix #7818: disallow line feeds in firewall comments
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 16 Jul 2026 10:52:37 +0200
+
 pve-firewall (6.0.4) trixie; urgency=medium
 
   * config: document default-value for enable option in cluster and host
