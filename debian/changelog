@@ -1,3 +1,9 @@
+pve-firewall (5.1.3) bookworm; urgency=medium
+
+  * fix #7818: disallow line feeds in firewall comments
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 16 Jul 2026 10:56:13 +0200
+
 pve-firewall (5.1.2) bookworm; urgency=medium
 
   * add new helper for determining whether a fwbr is needed
