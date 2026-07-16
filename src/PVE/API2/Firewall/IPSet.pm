@@ -18,6 +18,7 @@ my $api_properties = {
     name => get_standard_option('ipset-name'),
     comment => {
         type => 'string',
+        format => 'pve-fw-comment-spec',
         optional => 1,
     },
     nomatch => {
@@ -641,7 +642,7 @@ sub register_create {
 
     $properties->{name} = get_standard_option('ipset-name');
 
-    $properties->{comment} = { type => 'string', optional => 1 };
+    $properties->{comment} = { type => 'string', format => 'pve-fw-comment-spec', optional => 1 };
 
     $properties->{digest} = get_standard_option('pve-config-digest');
 

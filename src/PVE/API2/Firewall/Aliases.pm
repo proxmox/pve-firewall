@@ -25,6 +25,7 @@ my $api_properties = {
     ),
     comment => {
         type => 'string',
+        format => 'pve-fw-comment-spec',
         optional => 1,
     },
 };

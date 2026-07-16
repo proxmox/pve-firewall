@@ -87,6 +87,7 @@ __PACKAGE__->register_method({
             group => get_standard_option('pve-security-group-name'),
             comment => {
                 type => 'string',
+                format => 'pve-fw-comment-spec',
                 optional => 1,
             },
             rename => get_standard_option(
