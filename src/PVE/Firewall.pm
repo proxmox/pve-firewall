@@ -4077,6 +4077,16 @@ sub generate_std_chains {
     }
 }
 
+my sub resolve_ipset_entry {
+    my ($cluster_conf, $fw_conf, $cidr) = @_;
+
+    if ($cidr =~ m@^(dc/|guest/)?(${ip_alias_pattern})$@) {
+        return resolve_alias($cluster_conf, $fw_conf, $2, $1 // "");
+    }
+
+    return parse_ip_or_cidr($cidr);
+}
+
 sub generate_ipset_chains {
     my ($ipset_ruleset, $clusterfw_conf, $fw_conf, $device_ips, $ipsets) = @_;
 
@@ -4095,14 +4105,8 @@ sub generate_ipset_chains {
         foreach my $entry (@$options) {
             next if $entry->{errors}; # skip entries with errors
             eval {
-                my ($cidr, $ver);
-                if ($entry->{cidr} =~ m@^(dc/|guest/)?(${ip_alias_pattern})$@) {
-                    my $scope = $1 // "";
-                    my $alias = $2;
-                    ($cidr, $ver) = resolve_alias($clusterfw_conf, $fw_conf, $alias, $scope);
-                } else {
-                    ($cidr, $ver) = parse_ip_or_cidr($entry->{cidr});
-                }
+                my ($cidr, $ver) =
+                    resolve_ipset_entry($clusterfw_conf, $fw_conf, $entry->{cidr});
                 #http://backreference.org/2013/03/01/ipv6-address-normalization/
                 if ($ver == 6) {
                     # ip_compress_address takes an address only, no CIDR
@@ -4813,6 +4817,32 @@ sub compile_ipsets {
     return $ipset_ruleset;
 }
 
+my sub resolve_arpfilter {
+    my ($ipset, $cluster_conf, $vm_conf, $vmid, $netid) = @_;
+    return [] if !defined($ipset);
+
+    my $arpfilter = [];
+    for my $entry ($ipset->@*) {
+        next if $entry->{errors};
+
+        my ($ip, $ver) = eval { resolve_ipset_entry($cluster_conf, $vm_conf, $entry->{cidr}) };
+        if ($@) {
+            my $err = "$vmid: ipfilter-$netid: skipping '$entry->{cidr}': $@";
+            if ($verbose) {
+                warn $err;
+            } else {
+                syslog('warn', $err);
+            }
+            next;
+        }
+
+        next if $ver != 4;
+        push $arpfilter->@*, $ip;
+    }
+
+    return $arpfilter;
+}
+
 sub compile_ebtables_filter {
     my ($cluster_conf, $hostfw_conf, $vmfw_configs, $vmdata) = @_;
 
@@ -4845,14 +4875,10 @@ sub compile_ebtables_filter {
                 my $iface = "tap${vmid}i$1";
                 next if !valid_interface_name($iface);
                 my $macaddr = $net->{macaddr};
-                my $arpfilter = [];
-                if (defined(my $ipset = $ipsets->{"ipfilter-$netid"})) {
-                    foreach my $ipaddr (@$ipset) {
-                        my ($ip, $version) = parse_ip_or_cidr($ipaddr->{cidr});
-                        next if !$ip || ($version && $version != 4);
-                        push(@$arpfilter, $ip);
-                    }
-                }
+                my $arpfilter = resolve_arpfilter(
+                    $ipsets->{"ipfilter-$netid"},
+                    $cluster_conf, $vmfw_conf, $vmid, $netid,
+                );
                 generate_tap_layer2filter(
                     $ruleset, $iface, $macaddr, $vmfw_conf, $vmid, $arpfilter,
                 );
@@ -4884,14 +4910,10 @@ sub compile_ebtables_filter {
                 my $iface = "veth${vmid}i$1";
                 next if !valid_interface_name($iface);
                 my $macaddr = $net->{hwaddr};
-                my $arpfilter = [];
-                if (defined(my $ipset = $ipsets->{"ipfilter-$netid"})) {
-                    foreach my $ipaddr (@$ipset) {
-                        my ($ip, $version) = parse_ip_or_cidr($ipaddr->{cidr});
-                        next if !$ip || ($version && $version != 4);
-                        push(@$arpfilter, $ip);
-                    }
-                }
+                my $arpfilter = resolve_arpfilter(
+                    $ipsets->{"ipfilter-$netid"},
+                    $cluster_conf, $vmfw_conf, $vmid, $netid,
+                );
                 if (defined(my $ip = $net->{ip}) && $vmfw_conf->{options}->{ipfilter}) {
                     # ebtables changes this to a .0/MASK network but we just
                     # want the address here, no network - see #2193
