@@ -4837,7 +4837,7 @@ my sub resolve_arpfilter {
         }
 
         next if $ver != 4;
-        push $arpfilter->@*, $ip;
+        push $arpfilter->@*, { cidr => $ip, nomatch => $entry->{nomatch} };
     }
 
     return $arpfilter;
@@ -4919,7 +4919,7 @@ sub compile_ebtables_filter {
                     # want the address here, no network - see #2193
                     $ip =~ s|/(\d+)$||;
                     if ($ip ne 'dhcp') {
-                        push @$arpfilter, $ip;
+                        push $arpfilter->@*, { cidr => $ip };
                     }
                 }
                 generate_tap_layer2filter(
@@ -4961,8 +4961,22 @@ sub generate_tap_layer2filter {
         ruleset_addrule($ruleset, $tapchain, "-p ARP", "-j $arpchain");
         ruleset_create_chain($ruleset, $arpchain);
 
-        foreach my $ip (@{$arpfilter}) {
-            ruleset_addrule($ruleset, $arpchain, "-p ARP --arp-ip-src $ip", '-j RETURN');
+        # Decide like the ipfilter IP set: the last entry for an address wins, as in
+        # generate_ipset_chains(), and the most specific entry matches first, as in a hash:net
+        # lookup. Otherwise both could disagree, for example if an alias and a literal entry, or
+        # a container's configured IP, resolve to the same address.
+        my ($nomatch, @cidrs) = ({});
+        for my $entry ($arpfilter->@*) {
+            my $cidr = $entry->{cidr} =~ s|/32$||r;
+            push @cidrs, $cidr if !exists($nomatch->{$cidr});
+            $nomatch->{$cidr} = $entry->{nomatch};
+        }
+        my $prefix_len = sub { $cidrs[$_[0]] =~ m|/(\d+)$| ? $1 : 32 };
+        my @order = sort { $prefix_len->($b) <=> $prefix_len->($a) || $a <=> $b } 0 .. $#cidrs;
+
+        for my $cidr (@cidrs[@order]) {
+            my $target = $nomatch->{$cidr} ? 'DROP' : 'RETURN';
+            ruleset_addrule($ruleset, $arpchain, "-p ARP --arp-ip-src $cidr", "-j $target");
         }
         ruleset_addrule($ruleset, $arpchain, '', '-j DROP');
     }
