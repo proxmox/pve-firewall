@@ -215,7 +215,7 @@ sub register_update_alias {
 
     $properties->{name} = $api_properties->{name};
     $properties->{rename} = $api_properties->{rename};
-    $properties->{cidr} = $api_properties->{cidr};
+    $properties->{cidr} = { $api_properties->{cidr}->%*, optional => 1 };
     $properties->{comment} = $api_properties->{comment};
     $properties->{digest} = get_standard_option('pve-config-digest');
 
@@ -251,8 +251,11 @@ sub register_update_alias {
 
                     raise_param_exc({ name => "no such alias" }) if !$aliases->{$name};
 
-                    my $data = { name => $param->{name}, cidr => $param->{cidr} };
-                    $data->{comment} = $param->{comment} if $param->{comment};
+                    my $data = {
+                        name => $param->{name},
+                        cidr => $param->{cidr} // $aliases->{$name}->{cidr},
+                        comment => $param->{comment} // $aliases->{$name}->{comment},
+                    };
 
                     $aliases->{$name} = $data;
 
