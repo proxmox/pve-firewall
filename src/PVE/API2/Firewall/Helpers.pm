@@ -51,15 +51,8 @@ sub get_allowed_vms {
 sub check_vnet_access {
     my ($vnetid, $privileges) = @_;
 
-    my $vnet = PVE::Network::SDN::Vnets::get_vnet($vnetid, 1)
-        or die "invalid vnet specified";
-
-    my $zoneid = $vnet->{zone};
-
-    my $rpcenv = PVE::RPCEnvironment::get();
-    my $authuser = $rpcenv->get_user();
-
-    $rpcenv->check_any($authuser, "/sdn/zones/$zoneid/$vnetid", $privileges);
+    my $running_config = PVE::Network::SDN::Vnets::config(1);
+    my $_vnet = PVE::Network::SDN::Vnets::api_get_vnet_checked($vnetid, $privileges, $running_config);
 }
 
 1;
