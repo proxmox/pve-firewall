@@ -1,3 +1,38 @@
+pve-firewall (6.0.7) trixie; urgency=medium
+
+  * rules: reject an interface on rules with direction forward, which do
+    not support it. The API accepted such rules before, making it easy to
+    create invalid forward rules by accident.
+
+  * api: vnets: check permissions with the shared SDN helper. A VNet that
+    does not exist and one the user lacks privileges for now return the
+    same error, consistent with the other SDN API endpoints.
+
+  * api: aliases: make the CIDR optional when updating an alias and keep
+    its comment unless a new one is passed. Clients can now rename an
+    alias or change its comment without sending back the current CIDR.
+
+  * ipfilter: fix several issues with the ARP filter, which limits the
+    sender addresses a guest can use in ARP packets:
+    - resolve aliases in ipfilter-netX sets instead of failing. An alias
+      or otherwise invalid entry aborted the generation of all ebtables
+      rules for the guest, including its MAC address filter. Entries
+      that cannot be resolved are now skipped and logged together with
+      the affected guest.
+    - honor nomatch ("!") entries in ipfilter-netX sets. Excluded
+      addresses were still accepted as ARP source, although the IP set
+      already blocked their IP traffic. Overlapping and duplicate entries
+      now follow the same precedence as in the IP set.
+    - ignore the 'manual' IPv4 setting of containers, like 'dhcp'. It was
+      passed to ebtables as an address, which made ebtables reject the
+      whole ruleset, so the rules could not be updated for any guest.
+    - allow the configured IPv4 address of a container whenever the IP
+      filter applies, also if only an ipfilter-netX set is defined
+      without the ipfilter option. ARP from the container's own address
+      was dropped in that case, although the IP set allowed its traffic.
+
+ -- Proxmox Support Team <support@proxmox.com>  Tue, 03 Nov 2026 00:19:22 +0100
+
 pve-firewall (6.0.6) trixie; urgency=medium
 
   * rules: read protocols, services and ethertypes from the new
