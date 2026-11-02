@@ -55,4 +55,46 @@ subtest 'container IP filters' => sub {
     }
 };
 
+subtest 'entries for the same network are merged in the form the kernel stores' => sub {
+    PVE::Firewall::local_network('192.0.2.0/24');
+
+    my $cluster = {
+        aliases => {
+            net4 => { name => 'net4', cidr => '192.0.2.5/24', ipversion => 4 },
+            net6 => { name => 'net6', cidr => '2001:DB8::1:2/64', ipversion => 6 },
+        },
+        ipset => {
+            test => [
+                { cidr => '192.0.2.0/24' },
+                { cidr => 'net4', nomatch => 1 },
+                { cidr => '198.51.100.7/32' },
+                { cidr => 'net6' },
+                { cidr => '2001:db8::/64', nomatch => 1 },
+                { cidr => '2001:db8::7/128' },
+            ],
+        },
+        sdn => { ipset => {} },
+    };
+    my @warnings;
+    local $SIG{__WARN__} = sub { push @warnings, @_ };
+
+    my $sets = PVE::Firewall::compile_ipsets($cluster, {}, { qemu => {}, lxc => {} });
+    is_deeply(\@warnings, [], 'compiles without errors');
+
+    my %entries = map {
+        my $name = "PVEFW-0-test-v$_";
+        ($_ => [map { s/^add \Q$name\E //r } grep { /^add / } ($sets->{$name} // [])->@*]);
+    } (4, 6);
+    is_deeply(
+        $entries{4},
+        ['192.0.2.0/24 nomatch', '198.51.100.7'],
+        'IPv4 host bits are masked and the last entry for a network wins',
+    );
+    is_deeply(
+        $entries{6},
+        ['2001:db8::/64 nomatch', '2001:db8::7'],
+        'IPv6 host bits are masked and the last entry for a network wins',
+    );
+};
+
 done_testing();

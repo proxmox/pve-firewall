@@ -142,6 +142,14 @@ subtest 'the last entry for an address wins, as in the IP set' => sub {
     is_deeply($warnings, [], 'no warnings');
 };
 
+subtest 'entries for the same network are merged, as in the IP set' => sub {
+    my (undef, $warnings, $rules) = compile_arp_sources([
+        { cidr => '192.0.2.0/24' }, { cidr => '192.0.2.5/24', nomatch => 1 },
+    ]);
+    is_deeply($rules, ['DROP 192.0.2.0/24'], 'host bits are masked and the last entry wins');
+    is_deeply($warnings, [], 'no warnings');
+};
+
 subtest 'the configured container IP wins over a nomatch entry, as in the IP set' => sub {
     plan(skip_all => 'PVE::LXC::Config is not installed') if !$have_lxc;
 

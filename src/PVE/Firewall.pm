@@ -114,6 +114,27 @@ sub clean_cidr {
     return "${clean_ip}/$len";
 }
 
+# Return an address or network in the form that ipset and ebtables store and list it: host bits
+# masked, IPv6 compressed in lowercase, and no prefix length for a single address. Entries that
+# are equal for the kernel then compare equal as strings, and generated rules match active ones.
+my sub canonical_cidr {
+    my ($cidr, $ver) = @_;
+
+    my ($addr, $len) = split('/', $cidr);
+    my $max_len = $ver == 6 ? 128 : 32;
+    if (defined($len) && $len < $max_len) {
+        $len = int($len);
+        my $bin = Net::IP::ip_iptobin(Net::IP::ip_expand_address($addr, $ver), $ver);
+        $addr = Net::IP::ip_bintoip($bin & Net::IP::ip_get_mask($len, $ver), $ver);
+    } else {
+        $len = undef;
+    }
+    #http://backreference.org/2013/03/01/ipv6-address-normalization/
+    $addr = lc(Net::IP::ip_compress_address($addr, 6)) if $ver == 6;
+
+    return defined($len) ? "$addr/$len" : $addr;
+}
+
 # iptables interprets zero-padded IPv4 octets as octal, including in dotted masks.
 our $IPV4_OCTET = "(?:25[0-5]|(?:2[0-4]|1[0-9]|[1-9])?[0-9]|0+[0-3]?[0-7]{1,2})";
 our $IPV4_SHORT_FORM_RE = "(?:(?:$IPV4_OCTET\\.){0,3}$IPV4_OCTET)";
@@ -4116,16 +4137,7 @@ sub generate_ipset_chains {
             eval {
                 my ($cidr, $ver) =
                     resolve_ipset_entry($clusterfw_conf, $fw_conf, $entry->{cidr});
-                #http://backreference.org/2013/03/01/ipv6-address-normalization/
-                if ($ver == 6) {
-                    # ip_compress_address takes an address only, no CIDR
-                    my ($addr, $prefix_len) = ($cidr =~ m@^([^/]*)(/.*)?$@);
-                    $cidr = lc(Net::IP::ip_compress_address($addr, 6));
-                    $cidr .= $prefix_len if defined($prefix_len);
-                    $cidr =~ s|/128$||;
-                } else {
-                    $cidr =~ s|/32$||;
-                }
+                $cidr = canonical_cidr($cidr, $ver);
 
                 $nethash->{$ver}->{$cidr} = { cidr => $cidr, nomatch => $entry->{nomatch} };
             };
@@ -4968,13 +4980,13 @@ sub generate_tap_layer2filter {
         ruleset_addrule($ruleset, $tapchain, "-p ARP", "-j $arpchain");
         ruleset_create_chain($ruleset, $arpchain);
 
-        # Decide like the ipfilter IP set: the last entry for an address wins, as in
+        # Decide like the ipfilter IP set: the last entry for a network wins, as in
         # generate_ipset_chains(), and the most specific entry matches first, as in a hash:net
         # lookup. Otherwise both could disagree, for example if an alias and a literal entry, or
         # a container's configured IP, resolve to the same address.
         my ($nomatch, @cidrs) = ({});
         for my $entry ($arpfilter->@*) {
-            my $cidr = $entry->{cidr} =~ s|/32$||r;
+            my $cidr = canonical_cidr($entry->{cidr}, 4);
             push @cidrs, $cidr if !exists($nomatch->{$cidr});
             $nomatch->{$cidr} = $entry->{nomatch};
         }
