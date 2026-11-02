@@ -17,7 +17,7 @@ my $have_lxc = eval { require PVE::LXC::Config; 1 };
 PVE::Firewall::set_verbose(1);
 
 sub compile_arp_sources {
-    my ($entries, $lxc_ip) = @_;
+    my ($entries, $lxc_ip, $ipfilter) = @_;
 
     my $cluster = {
         options => {},
@@ -34,7 +34,7 @@ sub compile_arp_sources {
     my $iface = 'tap100i0';
     if (defined($lxc_ip)) {
         $iface = 'veth100i0';
-        $vmfw_conf->{options}->{ipfilter} = 1;
+        $vmfw_conf->{options}->{ipfilter} = $ipfilter // 1;
         $vmdata->{lxc}->{100} =
             { net0 => "name=eth0,bridge=vmbr0,hwaddr=02:00:00:00:00:01,firewall=1,ip=$lxc_ip" };
     } else {
@@ -168,6 +168,23 @@ subtest 'only literal container addresses are allowed' => sub {
 
     my (undef, $warnings, $rules) = compile_arp_sources(undef, '192.0.2.5/24');
     is_deeply($rules, ['RETURN 192.0.2.5'], 'static address is used without its prefix');
+    is_deeply($warnings, [], 'no warnings');
+};
+
+subtest 'an ipfilter set allows the container IP without the ipfilter option' => sub {
+    plan(skip_all => 'PVE::LXC::Config is not installed') if !$have_lxc;
+
+    my (undef, $warnings, $rules) = compile_arp_sources([], '192.0.2.5/24', 0);
+    is_deeply($rules, ['RETURN 192.0.2.5'], 'empty set allows the container IP');
+    is_deeply($warnings, [], 'no warnings');
+
+    (undef, $warnings, $rules) =
+        compile_arp_sources([{ cidr => '192.0.2.10' }], '192.0.2.5/24', 0);
+    is_deeply($rules, ['RETURN 192.0.2.10', 'RETURN 192.0.2.5'], 'set entries are kept');
+    is_deeply($warnings, [], 'no warnings');
+
+    (undef, $warnings, $rules) = compile_arp_sources(undef, '192.0.2.5/24', 0);
+    is_deeply($rules, [], 'no ARP filter without the option or a set');
     is_deeply($warnings, [], 'no warnings');
 };
 

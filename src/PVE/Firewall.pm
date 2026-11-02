@@ -1085,6 +1085,15 @@ sub compute_ipfilter_ipset_name {
     return "ipfilter-$iface";
 }
 
+# The IP filter applies to an interface if the ipfilter option is enabled or if its ipfilter-netX
+# set is defined, which then implicitly contains the addresses configured for a container.
+my sub ipfilter_applies {
+    my ($vmfw_conf, $netid) = @_;
+
+    return $vmfw_conf->{options}->{ipfilter}
+        || defined($vmfw_conf->{ipset}->{ compute_ipfilter_ipset_name($netid) });
+}
+
 sub parse_address_list {
     my ($str) = @_;
 
@@ -2934,10 +2943,10 @@ sub generate_tap_rules_direction {
 
     my $tapchain = "$iface-$direction";
 
-    my $ipfilter_name = compute_ipfilter_ipset_name($netid);
     my $ipfilter_ipset;
-    $ipfilter_ipset = compute_ipset_chain_name($vmid, $ipfilter_name, $ipversion)
-        if $options->{ipfilter} || $vmfw_conf->{ipset}->{$ipfilter_name};
+    $ipfilter_ipset =
+        compute_ipset_chain_name($vmid, compute_ipfilter_ipset_name($netid), $ipversion)
+        if ipfilter_applies($vmfw_conf, $netid);
 
     if ($options->{enable}) {
         # create chain with mac and ip filter
@@ -4917,7 +4926,7 @@ sub compile_ebtables_filter {
                 # DHCP and manual configuration supply no address. Use only the address, since
                 # ebtables would match the whole network of the CIDR, see #2193.
                 my ($ip) = ($net->{ip} // '') =~ m!^($IPV4RE)(?:/\d+)?\z!;
-                if (defined($ip) && $vmfw_conf->{options}->{ipfilter}) {
+                if (defined($ip) && ipfilter_applies($vmfw_conf, $netid)) {
                     push $arpfilter->@*, { cidr => $ip };
                 }
                 generate_tap_layer2filter(
