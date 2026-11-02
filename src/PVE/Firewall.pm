@@ -4914,13 +4914,11 @@ sub compile_ebtables_filter {
                     $ipsets->{"ipfilter-$netid"},
                     $cluster_conf, $vmfw_conf, $vmid, $netid,
                 );
-                if (defined(my $ip = $net->{ip}) && $vmfw_conf->{options}->{ipfilter}) {
-                    # ebtables changes this to a .0/MASK network but we just
-                    # want the address here, no network - see #2193
-                    $ip =~ s|/(\d+)$||;
-                    if ($ip ne 'dhcp') {
-                        push $arpfilter->@*, { cidr => $ip };
-                    }
+                # DHCP and manual configuration supply no address. Use only the address, since
+                # ebtables would match the whole network of the CIDR, see #2193.
+                my ($ip) = ($net->{ip} // '') =~ m!^($IPV4RE)(?:/\d+)?\z!;
+                if (defined($ip) && $vmfw_conf->{options}->{ipfilter}) {
+                    push $arpfilter->@*, { cidr => $ip };
                 }
                 generate_tap_layer2filter(
                     $ruleset, $iface, $macaddr, $vmfw_conf, $vmid, $arpfilter,

@@ -12,6 +12,8 @@ use PVE::Firewall;
 plan(skip_all => 'PVE::QemuServer::Network is not installed')
     if !eval { require PVE::QemuServer::Network; 1 };
 
+my $have_lxc = eval { require PVE::LXC::Config; 1 };
+
 PVE::Firewall::set_verbose(1);
 
 sub compile_arp_sources {
@@ -26,7 +28,7 @@ sub compile_arp_sources {
         options => { enable => 1 },
         aliases =>
             { guestalias => { name => 'guestalias', cidr => '192.0.2.1', ipversion => 4 } },
-        ipset => { 'ipfilter-net0' => $entries },
+        ipset => defined($entries) ? { 'ipfilter-net0' => $entries } : {},
     };
     my $vmdata = { qemu => {}, lxc => {} };
     my $iface = 'tap100i0';
@@ -141,8 +143,7 @@ subtest 'the last entry for an address wins, as in the IP set' => sub {
 };
 
 subtest 'the configured container IP wins over a nomatch entry, as in the IP set' => sub {
-    plan(skip_all => 'PVE::LXC::Config is not installed')
-        if !eval { require PVE::LXC::Config; 1 };
+    plan(skip_all => 'PVE::LXC::Config is not installed') if !$have_lxc;
 
     my (undef, $warnings, $rules) = compile_arp_sources(
         [{ cidr => '192.0.2.0/24' }, { cidr => '192.0.2.5', nomatch => 1 }],
@@ -153,6 +154,20 @@ subtest 'the configured container IP wins over a nomatch entry, as in the IP set
         ['RETURN 192.0.2.5', 'RETURN 192.0.2.0/24'],
         'container IP is allowed despite the nomatch entry',
     );
+    is_deeply($warnings, [], 'no warnings');
+};
+
+subtest 'only literal container addresses are allowed' => sub {
+    plan(skip_all => 'PVE::LXC::Config is not installed') if !$have_lxc;
+
+    for my $ip ('dhcp', 'manual') {
+        my (undef, $warnings, $rules) = compile_arp_sources(undef, $ip);
+        is_deeply($rules, [], "no ARP source for ip=$ip");
+        is_deeply($warnings, [], 'no warnings');
+    }
+
+    my (undef, $warnings, $rules) = compile_arp_sources(undef, '192.0.2.5/24');
+    is_deeply($rules, ['RETURN 192.0.2.5'], 'static address is used without its prefix');
     is_deeply($warnings, [], 'no warnings');
 };
 
