@@ -4839,11 +4839,14 @@ sub compile_ipsets {
 }
 
 my sub resolve_arpfilter {
-    my ($ipset, $cluster_conf, $vm_conf, $vmid, $netid) = @_;
-    return [] if !defined($ipset);
+    my ($cluster_conf, $vm_conf, $vmid, $netid) = @_;
+
+    # Filter ARP exactly where the IP filter applies. If it allows no IPv4 address, all ARP is
+    # dropped, like all IPv4 traffic apart from DHCP.
+    return undef if !ipfilter_applies($vm_conf, $netid);
 
     my $arpfilter = [];
-    for my $entry ($ipset->@*) {
+    for my $entry (($vm_conf->{ipset}->{"ipfilter-$netid"} // [])->@*) {
         next if $entry->{errors};
 
         my ($ip, $ver) = eval { resolve_ipset_entry($cluster_conf, $vm_conf, $entry->{cidr}) };
@@ -4887,7 +4890,6 @@ sub compile_ebtables_filter {
             my $conf = $vmdata->{qemu}->{$vmid};
             my $vmfw_conf = $vmfw_configs->{$vmid};
             return if !$vmfw_conf || !$vmfw_conf->{options}->{enable};
-            my $ipsets = $vmfw_conf->{ipset};
 
             foreach my $netid (sort keys %$conf) {
                 next if $netid !~ m/^net(\d+)$/;
@@ -4896,10 +4898,7 @@ sub compile_ebtables_filter {
                 my $iface = "tap${vmid}i$1";
                 next if !valid_interface_name($iface);
                 my $macaddr = $net->{macaddr};
-                my $arpfilter = resolve_arpfilter(
-                    $ipsets->{"ipfilter-$netid"},
-                    $cluster_conf, $vmfw_conf, $vmid, $netid,
-                );
+                my $arpfilter = resolve_arpfilter($cluster_conf, $vmfw_conf, $vmid, $netid);
                 generate_tap_layer2filter(
                     $ruleset, $iface, $macaddr, $vmfw_conf, $vmid, $arpfilter,
                 );
@@ -4922,7 +4921,6 @@ sub compile_ebtables_filter {
 
             my $vmfw_conf = $vmfw_configs->{$vmid};
             return if !$vmfw_conf || !$vmfw_conf->{options}->{enable};
-            my $ipsets = $vmfw_conf->{ipset};
 
             foreach my $netid (sort keys %$conf) {
                 next if $netid !~ m/^net(\d+)$/;
@@ -4931,14 +4929,11 @@ sub compile_ebtables_filter {
                 my $iface = "veth${vmid}i$1";
                 next if !valid_interface_name($iface);
                 my $macaddr = $net->{hwaddr};
-                my $arpfilter = resolve_arpfilter(
-                    $ipsets->{"ipfilter-$netid"},
-                    $cluster_conf, $vmfw_conf, $vmid, $netid,
-                );
+                my $arpfilter = resolve_arpfilter($cluster_conf, $vmfw_conf, $vmid, $netid);
                 # DHCP and manual configuration supply no address. Use only the address, since
                 # ebtables would match the whole network of the CIDR, see #2193.
                 my ($ip) = ($net->{ip} // '') =~ m!^($IPV4RE)(?:/\d+)?\z!;
-                if (defined($ip) && ipfilter_applies($vmfw_conf, $netid)) {
+                if (defined($ip) && defined($arpfilter)) {
                     push $arpfilter->@*, { cidr => $ip };
                 }
                 generate_tap_layer2filter(
@@ -4975,7 +4970,7 @@ sub generate_tap_layer2filter {
         ruleset_addrule($ruleset, $tapchain, "-s ! $macaddr", '-j DROP');
     }
 
-    if (@$arpfilter) {
+    if (defined($arpfilter)) {
         my $arpchain = $tapchain . "-ARP";
         ruleset_addrule($ruleset, $tapchain, "-p ARP", "-j $arpchain");
         ruleset_create_chain($ruleset, $arpchain);

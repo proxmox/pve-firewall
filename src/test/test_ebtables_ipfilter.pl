@@ -19,13 +19,15 @@ PVE::Firewall::set_verbose(1);
 sub compile_arp_sources {
     my ($entries, $lxc_ip, $ipfilter) = @_;
 
+    $ipfilter //= defined($lxc_ip) ? 1 : 0;
+
     my $cluster = {
         options => {},
         aliases => { dcalias => { name => 'dcalias', cidr => '192.0.2.2', ipversion => 4 } },
     };
     my $vmfw_conf = {
         vmid => 100,
-        options => { enable => 1 },
+        options => { enable => 1, ipfilter => $ipfilter },
         aliases =>
             { guestalias => { name => 'guestalias', cidr => '192.0.2.1', ipversion => 4 } },
         ipset => defined($entries) ? { 'ipfilter-net0' => $entries } : {},
@@ -34,7 +36,6 @@ sub compile_arp_sources {
     my $iface = 'tap100i0';
     if (defined($lxc_ip)) {
         $iface = 'veth100i0';
-        $vmfw_conf->{options}->{ipfilter} = $ipfilter // 1;
         $vmdata->{lxc}->{100} =
             { net0 => "name=eth0,bridge=vmbr0,hwaddr=02:00:00:00:00:01,firewall=1,ip=$lxc_ip" };
     } else {
@@ -52,7 +53,7 @@ sub compile_arp_sources {
     my @sources = map { /--arp-ip-src (\S+) -j RETURN/ ? $1 : () } $arp_rules->@*;
     my @rules = map { /--arp-ip-src (\S+) -j (\S+)/ ? "$2 $1" : () } $arp_rules->@*;
 
-    return (\@sources, \@warnings, \@rules);
+    return (\@sources, \@warnings, \@rules, $ruleset->{"$iface-OUT-ARP"});
 }
 
 subtest 'aliases are resolved' => sub {
@@ -176,6 +177,22 @@ subtest 'only literal container addresses are allowed' => sub {
 
     my (undef, $warnings, $rules) = compile_arp_sources(undef, '192.0.2.5/24');
     is_deeply($rules, ['RETURN 192.0.2.5'], 'static address is used without its prefix');
+    is_deeply($warnings, [], 'no warnings');
+};
+
+subtest 'all ARP is dropped if the IP filter allows no IPv4 address' => sub {
+    my @drop_all = ('-A tap100i0-OUT-ARP -j DROP');
+
+    my (undef, $warnings, undef, $arp_chain) = compile_arp_sources([{ cidr => '2001:db8::1' }]);
+    is_deeply($arp_chain, \@drop_all, 'set with only IPv6 entries drops all ARP');
+    is_deeply($warnings, [], 'no warnings');
+
+    (undef, $warnings, undef, $arp_chain) = compile_arp_sources(undef, undef, 1);
+    is_deeply($arp_chain, \@drop_all, 'ipfilter option without a set drops all ARP');
+    is_deeply($warnings, [], 'no warnings');
+
+    (undef, $warnings, undef, $arp_chain) = compile_arp_sources(undef, undef, 0);
+    is($arp_chain, undef, 'no ARP filter without the option or a set');
     is_deeply($warnings, [], 'no warnings');
 };
 
