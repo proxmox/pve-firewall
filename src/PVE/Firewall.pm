@@ -103,7 +103,7 @@ sub pve_verify_ip_or_cidr_or_alias {
 sub clean_cidr {
     my ($cidr) = @_;
     my ($ip, $len) = split('/', $cidr);
-    return $cidr if !$len;
+    return $cidr if !defined($len);
     my $ver = ($ip =~ m!^$IPV4RE\z!) ? 4 : 6;
 
     my $bin_ip = Net::IP::ip_iptobin(Net::IP::ip_expand_address($ip, $ver), $ver);

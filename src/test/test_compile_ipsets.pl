@@ -27,6 +27,17 @@ for my $cidr (sort keys $valid->%*) {
     is_deeply(\@parsed, $valid->{$cidr}, "accept CIDR $cidr");
 }
 
+my $cleaned = {
+    '10.0.0.1' => '10.0.0.1',
+    '10.0.0.1/0' => '0.0.0.0/0',
+    '10.0.0.1/24' => '10.0.0.0/24',
+    '::1/0' => '::/0',
+};
+for my $cidr (sort keys $cleaned->%*) {
+    is(PVE::Firewall::clean_cidr($cidr), $cleaned->{$cidr}, "clean CIDR $cidr");
+    ok(PVE::Firewall::pve_verify_ip_or_cidr($cidr, 1), "API accepts CIDR $cidr");
+}
+
 subtest 'container IP filters' => sub {
     plan skip_all => 'PVE::LXC::Config is not installed'
         if !eval { require PVE::LXC::Config; 1 };
