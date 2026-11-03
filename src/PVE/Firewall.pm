@@ -3584,12 +3584,14 @@ sub parse_ip_or_cidr {
 
     my $ipversion;
 
-    pve_verify_ip_or_cidr($cidr);
-
-    if ($cidr =~ m!^(?:$IPV6RE)(/(\d+))?$!) {
+    if ($cidr =~ m!^(?:$IPV6RE)(/(?<prefix>\d+))?\z!) {
+        die "prefix length $+{prefix} is longer than IP address (128)\n"
+            if defined($+{prefix}) && $+{prefix} > 128;
         $cidr =~ s|/128$||;
         $ipversion = 6;
-    } elsif ($cidr =~ m!^(?:$IPV4RE)(/(\d+))?$!) {
+    } elsif ($cidr =~ m!^(?:$IPV4RE)(/(?<prefix>\d+))?\z!) {
+        die "prefix length $+{prefix} is longer than IP address (32)\n"
+            if defined($+{prefix}) && $+{prefix} > 32;
         $cidr =~ s|/32$||;
         $ipversion = 4;
     } else {

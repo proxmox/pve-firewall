@@ -13,6 +13,8 @@ my @cases = (
     [\&PVE::Firewall::pve_verify_ip_or_cidr, '192.0.2.1/24'],
     [\&PVE::Firewall::pve_verify_ip_or_cidr, '2001:db8::1/64'],
     [\&PVE::Firewall::pve_verify_ip_or_cidr_or_alias, 'guest/example'],
+    [\&PVE::Firewall::parse_ip_or_cidr, '192.0.2.0/24'],
+    [\&PVE::Firewall::parse_ip_or_cidr, '2001:db8::1'],
     [\&PVE::Firewall::parse_address_list, '192.0.2.0/24'],
     [\&PVE::Firewall::parse_address_list, 'dc/example'],
     [\&PVE::Firewall::parse_address_list, '+guest/example'],

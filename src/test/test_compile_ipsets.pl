@@ -9,9 +9,22 @@ use Test::More;
 
 use PVE::Firewall;
 
-for my $cidr ('192.0.2.0/99', '2001:db8::/129') {
+for my $cidr ('192.0.2.0/99', '10.0.0.0/33', '2001:db8::/129', '::/129') {
     eval { PVE::Firewall::parse_ip_or_cidr($cidr) };
     ok($@, "reject invalid CIDR $cidr");
+}
+
+my $valid = {
+    '10.0.0.0/0' => ['10.0.0.0/0', 4],
+    '10.0.0.1/32' => ['10.0.0.1', 4],
+    '10.0.0.1/032' => ['10.0.0.1/032', 4],
+    '::/0' => ['::/0', 6],
+    '::1/128' => ['::1', 6],
+    '::1/0128' => ['::1/0128', 6],
+};
+for my $cidr (sort keys $valid->%*) {
+    my @parsed = eval { PVE::Firewall::parse_ip_or_cidr($cidr) };
+    is_deeply(\@parsed, $valid->{$cidr}, "accept CIDR $cidr");
 }
 
 subtest 'container IP filters' => sub {
