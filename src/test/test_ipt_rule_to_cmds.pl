@@ -9,7 +9,15 @@ use Test::More;
 
 use PVE::Firewall;
 
-my $protocol_ids = { tcp => 6, udp => 17, sctp => 132, udplite => 136, icmp => 1, icmpv6 => 58 };
+my $protocol_ids = {
+    tcp => 6,
+    udp => 17,
+    sctp => 132,
+    udplite => 136,
+    icmp => 1,
+    icmpv6 => 58,
+    'ipv6-icmp' => 58,
+};
 
 for my $ipversion (4, 6) {
     for my $proto ('udplite', '136') {
@@ -48,7 +56,7 @@ for my $ipversion (4, 6) {
     }
 }
 
-for my $proto ('icmp', 'icmpv6') {
+for my $proto ('icmp', 'icmpv6', 'ipv6-icmp') {
     my $id = $protocol_ids->{$proto};
     my $version = $proto eq 'icmp' ? 4 : 6;
     my $type = $proto eq 'icmp' ? 'icmp-type' : 'icmpv6-type';
@@ -58,6 +66,20 @@ for my $proto ('icmp', 'icmpv6') {
         [PVE::Firewall::ipt_rule_to_cmds($rule, 'TEST', $version, {}, {})],
         ["-A TEST -p $id -m $proto --$type 0 -j ACCEPT"],
         "$proto preserves type zero restriction",
+    );
+
+    $rule = PVE::Firewall::parse_fw_rule(
+        'test',
+        "IN ACCEPT -p $proto -dport echo-request",
+        {},
+        {},
+        'host',
+    );
+    ok(!$rule->{errors}, "$proto accepts type name in dport");
+    is_deeply(
+        [PVE::Firewall::ipt_rule_to_cmds($rule, 'TEST', $version, {}, {})],
+        ["-A TEST -p $id -m $proto --$type echo-request -j ACCEPT"],
+        "$proto matches type name from dport",
     );
 }
 

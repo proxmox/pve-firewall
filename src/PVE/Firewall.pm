@@ -2480,9 +2480,9 @@ sub ipt_rule_to_cmds {
                 if ($proto eq 'icmp') {
                     $is_valid_icmp_type->($dport_string, $icmp_type_names);
                     push @match, "-m icmp --icmp-type $dport_string";
-                } elsif ($proto eq 'icmpv6') {
+                } elsif ($proto eq 'icmpv6' || $proto eq 'ipv6-icmp') {
                     $is_valid_icmp_type->($dport_string, $icmpv6_type_names);
-                    push @match, "-m icmpv6 --icmpv6-type $dport_string";
+                    push @match, "-m $proto --icmpv6-type $dport_string";
                 } elsif (!$PROTOCOLS_WITH_PORTS->{$proto}) {
                     die "protocol $proto does not have ports\n";
                 } elsif ($multidport) {
