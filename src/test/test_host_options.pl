@@ -40,4 +40,23 @@ for my $option ('protection_synflood_rate', 'protection_synflood_burst') {
     );
 }
 
+# the SYN_RECV timeout is written to the sysctl as configured
+{
+    no warnings 'redefine';
+    my %written;
+    local *PVE::ProcFSTools::write_proc_entry = sub { $written{ $_[0] } = $_[1] };
+    my $sysctl = '/proc/sys/net/netfilter/nf_conntrack_tcp_timeout_syn_recv';
+
+    PVE::Firewall::update_nf_conntrack_tcp_timeout_syn_recv(
+        { options => { nf_conntrack_tcp_timeout_syn_recv => 30 } });
+    is($written{$sysctl}, 30, 'the configured SYN_RECV timeout is applied');
+
+    PVE::Firewall::update_nf_conntrack_tcp_timeout_syn_recv({ options => {} });
+    is($written{$sysctl}, 60, 'the default SYN_RECV timeout is 60 seconds');
+
+    PVE::Firewall::update_nf_conntrack_tcp_timeout_syn_recv(
+        { options => { nf_conntrack_tcp_timeout_syn_recv => 0 } });
+    is($written{$sysctl}, 60, 'a SYN_RECV timeout of 0 falls back to the default');
+}
+
 done_testing();

@@ -5527,10 +5527,8 @@ sub update_nf_conntrack_tcp_timeout_syn_recv {
 
     my $options = $hostfw_conf->{options} || {};
 
-    my $value =
-        defined($options->{nf_conntrack_tcp_timeout_syn_recv})
-        ? $options->{nf_conntrack_tcp_timeout_syn_recev}
-        : 60;
+    # 0 falls back to the default, as for the expiry of the SYN flood protection
+    my $value = $options->{nf_conntrack_tcp_timeout_syn_recv} || 60;
 
     PVE::ProcFSTools::write_proc_entry(
         "/proc/sys/net/netfilter/nf_conntrack_tcp_timeout_syn_recv", $value,
