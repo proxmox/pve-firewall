@@ -3313,15 +3313,21 @@ sub generate_group_rules {
     ruleset_create_chain($ruleset, $chain);
     ruleset_addrule($ruleset, $chain, "", "-j MARK --set-mark $FWACCEPTMARK_OFF"); # clear mark
 
-    foreach my $rule (@$rules) {
+    for my $pos (0 .. $#$rules) {
+        my $rule = $rules->[$pos];
         next if $rule->{type} ne 'in';
         next if !$rule->{enable} || $rule->{errors};
         next if $rule->{ipversion} && $rule->{ipversion} ne $ipversion;
-        rule_substitude_action(
-            $rule,
-            { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" },
-        );
-        ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, $cluster_conf);
+        # contain errors to the rule, they would otherwise abort the ruleset of every guest
+        # referencing the group, before its chains are plugged into the bridge chains
+        eval {
+            rule_substitude_action(
+                $rule,
+                { ACCEPT => "PVEFW-SET-ACCEPT-MARK", REJECT => "PVEFW-reject" },
+            );
+            ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, $cluster_conf);
+        };
+        warn "security group '$group': skipping rule $pos: $@" if $@;
     }
 
     $chain = "GROUP-${group}-OUT";
@@ -3329,17 +3335,21 @@ sub generate_group_rules {
     ruleset_create_chain($ruleset, $chain);
     ruleset_addrule($ruleset, $chain, "", "-j MARK --set-mark $FWACCEPTMARK_OFF"); # clear mark
 
-    foreach my $rule (@$rules) {
+    for my $pos (0 .. $#$rules) {
+        my $rule = $rules->[$pos];
         next if $rule->{type} ne 'out';
         next if !$rule->{enable} || $rule->{errors};
         next if $rule->{ipversion} && $rule->{ipversion} ne $ipversion;
-        # we use PVEFW-SET-ACCEPT-MARK (Instead of ACCEPT) because we need to
-        # check also other tap rules later
-        rule_substitude_action(
-            $rule,
-            { ACCEPT => 'PVEFW-SET-ACCEPT-MARK', REJECT => "PVEFW-reject" },
-        );
-        ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, $cluster_conf);
+        eval {
+            # we use PVEFW-SET-ACCEPT-MARK (Instead of ACCEPT) because we need to
+            # check also other tap rules later
+            rule_substitude_action(
+                $rule,
+                { ACCEPT => 'PVEFW-SET-ACCEPT-MARK', REJECT => "PVEFW-reject" },
+            );
+            ruleset_generate_rule($ruleset, $chain, $ipversion, $rule, $cluster_conf);
+        };
+        warn "security group '$group': skipping rule $pos: $@" if $@;
     }
 }
 
