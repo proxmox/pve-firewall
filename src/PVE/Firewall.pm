@@ -1968,13 +1968,20 @@ sub verify_rule {
     }
 
     if ($rule->{dport}) {
-        eval { parse_port_name_number_or_range($rule->{dport}, $is_icmp); };
-        $add_error->('dport', $@) if $@;
         my $proto = $rule->{proto};
         $add_error->('proto', "missing property - 'dport' requires this property")
             if !$proto;
-        $add_error->('dport', "protocol '$proto' does not support ports")
-            if !$PROTOCOLS_WITH_PORTS->{$proto} && !$is_icmp; #special cases
+
+        if ($is_icmp) {
+            my $types = $proto eq 'icmp' ? $icmp_type_names : $icmpv6_type_names;
+            eval { $is_valid_icmp_type->($rule->{dport}, $types) };
+            $add_error->('dport', $@) if $@;
+        } else {
+            eval { parse_port_name_number_or_range($rule->{dport}, 0); };
+            $add_error->('dport', $@) if $@;
+            $add_error->('dport', "protocol '$proto' does not support ports")
+                if $proto && !$PROTOCOLS_WITH_PORTS->{$proto};
+        }
     }
 
     if (my $icmp_type = $rule->{'icmp-type'}) {
@@ -2461,9 +2468,14 @@ sub ipt_rule_to_cmds {
             my $is_icmp = $proto_is_icmp->($proto);
             my $is_udplite = $proto eq 'udplite' || $proto eq '136';
 
-            my @dports =
-                eval { parse_port_name_number_or_range($rule->{dport}, $is_icmp, 1) };
-            die "invalid dport definition: $rule->{dport}: $@" if $@;
+            my @dports;
+            if ($is_icmp) {
+                # dport holds the ICMP type, checked when adding the match
+                @dports = ($rule->{dport}) if defined($rule->{dport}) && $rule->{dport} ne '';
+            } else {
+                @dports = eval { parse_port_name_number_or_range($rule->{dport}, 0, 1) };
+                die "invalid dport definition: $rule->{dport}: $@" if $@;
+            }
             my $multidport = scalar(@dports) > 1 || $is_udplite;
             my $dport_string = join(',', @dports);
 

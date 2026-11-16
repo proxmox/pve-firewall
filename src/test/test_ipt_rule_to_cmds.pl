@@ -83,6 +83,35 @@ for my $proto ('icmp', 'icmpv6', 'ipv6-icmp') {
     );
 }
 
+for my $case (
+    [4, '-p 1 -m icmp --icmp-type echo-request'],
+    [6, '-p 58 -m icmpv6 --icmpv6-type echo-request'],
+) {
+    my ($version, $match) = @$case;
+    my $rule = PVE::Firewall::parse_fw_rule('test', 'IN Ping(ACCEPT)', {}, {}, 'host');
+    ok(!$rule->{errors}, "IPv$version: validate Ping macro");
+
+    my $ruleset = {};
+    PVE::Firewall::ruleset_create_chain($ruleset, 'TEST');
+    PVE::Firewall::ruleset_generate_rule($ruleset, 'TEST', $version, $rule, {}, {});
+    is_deeply(
+        $ruleset->{TEST},
+        ["-A TEST $match -j ACCEPT"],
+        "IPv$version: Ping macro matches type name from dport",
+    );
+}
+
+for my $line (
+    'IN ACCEPT -p icmp -dport neighbor-solicitation',
+    'IN ACCEPT -p icmpv6 -dport timestamp-request',
+    'IN ACCEPT -p ipv6-icmp -dport timestamp-request',
+    'IN ACCEPT -p icmp -dport 0:8',
+    'IN ACCEPT -p icmpv6 -dport 256',
+) {
+    my $rule = PVE::Firewall::parse_fw_rule('test', $line, {}, {}, 'host');
+    ok($rule->{errors}->{dport}, "rejects $line");
+}
+
 for my $proto ('tcp', 'udp', 'sctp', 'udplite', '136') {
     my $id = $protocol_ids->{$proto} // $proto;
     my $rule = { proto => $proto, sport => '0', dport => '0', action => 'ACCEPT' };
