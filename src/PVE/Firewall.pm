@@ -2872,15 +2872,18 @@ sub ruleset_generate_vm_rules {
         next if $rule->{ipversion} && ($rule->{ipversion} != $ipversion);
 
         if ($rule->{type} eq 'group') {
-            ruleset_add_group_rule(
-                $ruleset,
-                $cluster_conf,
-                $chain,
-                $rule,
-                $direction,
-                $direction eq 'OUT' ? 'RETURN' : $in_accept,
-                $ipversion,
-            );
+            eval {
+                ruleset_add_group_rule(
+                    $ruleset,
+                    $cluster_conf,
+                    $chain,
+                    $rule,
+                    $direction,
+                    $direction eq 'OUT' ? 'RETURN' : $in_accept,
+                    $ipversion,
+                );
+            };
+            warn "security group '$rule->{action}': $@" if $@;
         } else {
             next if $rule->{type} ne $lc_direction;
             eval {

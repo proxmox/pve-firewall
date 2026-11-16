@@ -46,4 +46,35 @@ for my $env ('vm', 'host') {
     ok($rule->{errors}->{action}, "$env: references to groups with 19 characters are invalid");
 }
 
+# a group whose chains cannot be created, referenced by a guest
+my $long_group = 'g' x 20;
+my $vmfw_conf = {
+    options => { enable => 1 },
+    rules => [
+        { type => 'group', action => $long_group, enable => 1 },
+        { type => 'in', action => 'ACCEPT', enable => 1, proto => 'tcp', dport => '80' },
+    ],
+};
+
+$ruleset = {};
+PVE::Firewall::ruleset_create_chain($ruleset, 'PVEFW-FWBR-IN');
+@warnings = ();
+{
+    local $SIG{__WARN__} = sub { push @warnings, @_ };
+    eval {
+        PVE::Firewall::generate_tap_rules_direction(
+            $ruleset, $cluster_conf, 'tap100i0', 'net0', undef, $vmfw_conf, 100, 'IN', 4,
+        );
+    };
+    is($@, '', 'a group reference that cannot be generated does not abort the guest');
+}
+
+like(
+    join('', @warnings),
+    qr/^security group '$long_group': Invalid chain name/m,
+    'the failing group reference is reported',
+);
+ok(grep({ /--dport 80/ } @{ $ruleset->{'tap100i0-IN'} }), 'the other guest rules are generated');
+ok(grep({ /-j tap100i0-IN/ } @{ $ruleset->{'PVEFW-FWBR-IN'} }), 'the guest chain is plugged');
+
 done_testing();
