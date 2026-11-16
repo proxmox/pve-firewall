@@ -1566,12 +1566,14 @@ our $host_option_properties = {
         type => 'integer',
         optional => 1,
         default => 200,
+        maximum => 1000000,
     },
     protection_synflood_burst => {
         description => "Synflood protection rate burst by ip src.",
         type => 'integer',
         optional => 1,
         default => 1000,
+        maximum => 1000000,
     },
     log_nf_conntrack => {
         description => "Enable logging of conntrack information.",
@@ -3529,6 +3531,14 @@ sub parse_vmfw_option {
     return ($opt, $value);
 }
 
+my $hashlimit_option_max = {
+    protection_synflood_rate => 1000000,
+    protection_synflood_burst => 1000000,
+    # in seconds, the hashlimit match takes milliseconds in 32 bits, the sysctl jiffies in a signed
+    # int with the HZ of 1000 of our kernel
+    nf_conntrack_tcp_timeout_syn_recv => int(0x7fffffff / 1000),
+};
+
 sub parse_hostfw_option {
     my ($line) = @_;
 
@@ -3555,6 +3565,11 @@ sub parse_hostfw_option {
     ) {
         $opt = lc($1);
         $value = int($2);
+
+        # the SYN flood protection passes these to a hashlimit match, iptables rejects larger values
+        # and with them the whole ruleset
+        my $max = $hashlimit_option_max->{$opt};
+        die "value of '$opt' is too high, at most $max is allowed\n" if $max && $value > $max;
     } else {
         die "can't parse option '$line'\n";
     }
