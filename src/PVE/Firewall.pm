@@ -1383,6 +1383,60 @@ sub copy_list_with_digest {
     return wantarray ? ($res, $digest) : $res;
 }
 
+my $log_ratelimit_units = { second => 1, minute => 60, hour => 3600, day => 86400 };
+
+# iptables allows at most 10000 log messages per second. The limit match of the kernel, which legacy
+# iptables uses, stores the duration of the burst in credits of 32 bits, 32000 per second with the
+# HZ of 1000 of our kernel. Longer bursts wrap around, and are either rejected, failing the whole
+# ruleset, or applied with a wrong burst, e.g. one message per day with the default burst of 5.
+my sub verify_log_ratelimit {
+    my ($limit) = @_;
+
+    return $limit if !$limit->{enable};
+
+    my $rate = $limit->{rate} // '1/second';
+    my ($count, $unit) = $rate =~ m|^(\d+)/(\w+)$|;
+    my $interval = int(10000 * $log_ratelimit_units->{$unit} / $count);
+    die "rate '$rate' is too high\n" if $interval == 0;
+
+    # a burst of 0 is not passed on to iptables, which then uses 5
+    my $burst = $limit->{burst} || 5;
+    die "burst $burst is too high for the rate '$rate'\n"
+        if int($interval * $burst / 10000) > int(0xffffffff / 32000);
+
+    return $limit;
+}
+
+PVE::JSONSchema::register_format(
+    'pve-fw-log-ratelimit',
+    {
+        enable => {
+            default_key => 1,
+            description => 'Enable or disable log rate limiting',
+            type => 'boolean',
+            default => '1',
+        },
+        rate => {
+            type => 'string',
+            description => 'Frequency with which the burst bucket gets refilled',
+            optional => 1,
+            pattern => '[1-9][0-9]*\/(second|minute|hour|day)',
+            format_description => 'rate',
+            default => '1/second',
+        },
+        burst => {
+            type => 'integer',
+            minimum => 0,
+            maximum => 10000,
+            optional => 1,
+            description =>
+                'Initial burst of packages which will always get logged before the rate is applied',
+            default => 5,
+        },
+    },
+    \&verify_log_ratelimit,
+);
+
 our $cluster_option_properties = {
     enable => {
         description => "Enable or disable the firewall cluster wide.",
@@ -1418,30 +1472,7 @@ our $cluster_option_properties = {
     log_ratelimit => {
         description => "Log ratelimiting settings",
         type => 'string',
-        format => {
-            enable => {
-                default_key => 1,
-                description => 'Enable or disable log rate limiting',
-                type => 'boolean',
-                default => '1',
-            },
-            rate => {
-                type => 'string',
-                description => 'Frequency with which the burst bucket gets refilled',
-                optional => 1,
-                pattern => '[1-9][0-9]*\/(second|minute|hour|day)',
-                format_description => 'rate',
-                default => '1/second',
-            },
-            burst => {
-                type => 'integer',
-                minimum => 0,
-                optional => 1,
-                description =>
-                    'Initial burst of packages which will always get logged before the rate is applied',
-                default => 5,
-            },
-        },
+        format => 'pve-fw-log-ratelimit',
         optional => 1,
     },
 };
@@ -4227,7 +4258,12 @@ my $set_global_log_ratelimit = sub {
     $global_log_ratelimit = '--limit 1/sec';
     if (defined(my $log_rlimit = $cluster_opts->{log_ratelimit})) {
         my $ll_format = $cluster_option_properties->{log_ratelimit}->{format};
-        my $limit = PVE::JSONSchema::parse_property_string($ll_format, $log_rlimit);
+        my $limit = eval { PVE::JSONSchema::parse_property_string($ll_format, $log_rlimit) };
+        if (my $err = $@) {
+            # iptables would reject the whole ruleset, since every log rule uses the limit
+            warn "ignoring invalid log_ratelimit '$log_rlimit', using the default - $err";
+            return;
+        }
 
         if ($limit->{enable}) {
             if (my $rate = $limit->{rate}) {
