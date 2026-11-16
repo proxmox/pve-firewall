@@ -37,4 +37,13 @@ ok(grep({ /--dport 22/ } @{ $ruleset->{'GROUP-grp-IN'} }), 'the other inbound ru
 ok(grep({ /--dport 23/ } @{ $ruleset->{'GROUP-grp-OUT'} }), 'the outbound chain is generated');
 ok(!grep({ /icmp/ } @{ $ruleset->{'GROUP-grp-IN'} }), 'the failing rule is skipped');
 
+# the chain names of a group are limited to 28 characters, which group names fit into
+for my $env ('vm', 'host') {
+    my $rule = PVE::Firewall::parse_fw_rule('test', 'GROUP ' . 'g' x 18, {}, {}, $env);
+    ok(!$rule->{errors}, "$env: references to groups with 18 characters are valid");
+
+    $rule = PVE::Firewall::parse_fw_rule('test', 'GROUP ' . 'g' x 19, {}, {}, $env);
+    ok($rule->{errors}->{action}, "$env: references to groups with 19 characters are invalid");
+}
+
 done_testing();
