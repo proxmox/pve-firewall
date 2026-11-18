@@ -1582,7 +1582,7 @@ our $host_option_properties = {
         optional => 1,
     },
     nftables => {
-        description => "Enable nftables based firewall (tech preview)",
+        description => "Enable nftables based firewall.",
         type => 'boolean',
         default => 0,
         optional => 1,
