@@ -1,3 +1,74 @@
+pve-firewall (6.0.8) trixie; urgency=medium
+
+  * ipset: merge entries that the kernel stores as the same network, for
+    example an alias with host bits like 192.0.2.5/24 next to an entry for
+    192.0.2.0/24. Restoring the IP sets failed for such entries, which
+    blocked every firewall update on the node. IP sets with host bits in
+    an entry are also no longer recreated on every update cycle.
+
+  * ipfilter: drop all ARP from guests whose IP filter allows no IPv4
+    address, for example with an ipfilter-netX set containing only IPv6
+    entries or for a container using DHCP. Their IPv4 traffic apart from
+    DHCP was already dropped, but they could still send ARP with any
+    sender address and so poison the ARP caches of other hosts.
+
+  * fix #8261: config: speed up reading aliases and IPSet entries again.
+    A costly check of every entry, added in version 6.0.6, slowed down
+    parsing the configuration, and with it every firewall update, with
+    large IP sets, for example from 0.4 to 6 seconds for about 30000
+    entries.
+
+  * aliases: accept host bits in CIDRs with a /0 prefix, like 10.0.0.1/0,
+    as for any other prefix length. The API rejected them, and since
+    version 6.0.6 such aliases also failed to load from the configuration.
+
+  * rules: fix the handling of ICMP types in the destination port field:
+    - generate such rules for the protocol ipv6-icmp as for icmpv6. The
+      API accepted them, but they were skipped when generating the
+      ruleset and take effect now.
+    - only accept a single ICMP type that is valid for the protocol's
+      address family. Lists, ranges and types of the other family passed
+      the API, but were skipped when generating the ruleset. Service
+      names were used as the ICMP type of their port number, for example
+      'daytime' matched timestamp-request. Such rules are now reported as
+      invalid.
+    - reject numeric types with a leading zero, which iptables reads as
+      octal. For example, '010' matched type 8, and '08' kept the ruleset
+      of the whole node from being applied.
+
+  * security groups: contain errors in groups and in references to them.
+    These aborted the ruleset of each guest using the group and left the
+    guest without any filtering. Such guests now get their other rules
+    and default policy applied again, which can block traffic that passed
+    so far:
+    - skip only the affected rule if a rule of a group cannot be
+      generated.
+    - reject references to groups with names longer than 18 characters,
+      which cannot exist since the names of their chains would be too
+      long.
+    - skip only the affected reference if a group cannot be generated for
+      another reason.
+
+  * cluster options: reject log rate limits that iptables cannot apply,
+    that is more than 10000 messages per second, a burst above 10000, or
+    a burst lasting longer than about 37 hours, for example one message
+    per day with the default burst of 5. As every logging rule uses this
+    limit, such a value kept the whole ruleset from being applied or was
+    applied with a wrong burst. Configurations that already contain one
+    fall back to the default limit.
+
+  * host options: limit the rate and burst of the SYN flood protection to
+    1000000, the most iptables accepts. Larger values kept the whole
+    ruleset from being applied. Configurations that already contain them
+    now use the defaults, as do SYN_RECV timeouts above 2147483 seconds,
+    the most the kernel accepts.
+
+  * host options: apply the configured conntrack SYN_RECV timeout to the
+    kernel. Due to a typo, only the SYN flood protection used it, while
+    the kernel kept its previous timeout.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 18 Nov 2026 06:14:19 +0100
+
 pve-firewall (6.0.7) trixie; urgency=medium
 
   * rules: reject an interface on rules with direction forward, which do
