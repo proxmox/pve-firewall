@@ -107,6 +107,9 @@ for my $line (
     'IN ACCEPT -p ipv6-icmp -dport timestamp-request',
     'IN ACCEPT -p icmp -dport 0:8',
     'IN ACCEPT -p icmpv6 -dport 256',
+    'IN ACCEPT -p icmp -dport 08',
+    'IN ACCEPT -p icmpv6 -dport 010',
+    'IN ACCEPT -p ipv6-icmp -dport 010',
 ) {
     my $rule = PVE::Firewall::parse_fw_rule('test', $line, {}, {}, 'host');
     ok($rule->{errors}->{dport}, "rejects $line");

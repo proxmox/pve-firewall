@@ -913,6 +913,8 @@ my $is_valid_icmp_type = sub {
     if ($type =~ m/^\d+$/) {
         # values for icmp-type range between 0 and 255 (8 bit field)
         die "invalid icmp-type '$type'\n" if $type > 255;
+        # iptables reads numbers with a leading zero as octal, or rejects them
+        die "invalid icmp-type '$type' - leading zeros are not allowed\n" if $type =~ m/^0\d/;
     } else {
         die "unknown icmp-type '$type'\n" if !defined($valid_types->{$type});
     }
