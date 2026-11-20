@@ -131,7 +131,8 @@ log_writer_thread(gpointer data)
     while (1) {
         struct log_entry *le = (struct log_entry *)g_async_queue_timeout_pop(queue, 250000);
         if (le == NULL) {
-            if (terminate_threads) {
+            // the wait can time out right before the last entries get queued
+            if (g_atomic_int_get(&terminate_threads) && g_async_queue_length(queue) == 0) {
                 return NULL;
             }
             continue;
@@ -947,7 +948,8 @@ nflog_cb(struct nflog_g_handle *gh, struct nfgenmsg *nfmsg,
 
     queue_log_entry(le);
 
-    return 0;
+    // while waiting for an acknowledgement, the library stops handling a batch on NFNL_CB_STOP
+    return NFNL_CB_CONTINUE;
 }
 
 static gint64 nflog_overrun_reported = 0; // monotonic time, zero if never reported
@@ -969,21 +971,30 @@ report_nflog_overrun(void)
     nflog_overrun_reported = now;
 }
 
+// returns FALSE once there was nothing to receive
+static gboolean
+nflog_receive(int fd, int flags)
+{
+    gchar buf[8192];
+    int rv = recv(fd, buf, sizeof(buf), flags);
+
+    if (rv > 0) {
+        nflog_handle_packet(logh, buf, rv);
+    } else if (rv < 0 && errno == ENOBUFS) {
+        report_nflog_overrun();
+    } else {
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
 static gboolean
 nflog_read_cb(GIOChannel *source,
               GIOCondition condition,
               gpointer data)
 {
-    int rv = 0;
-    gchar buf[8192];
-
-    int fd =  g_io_channel_unix_get_fd(source);
-
-    if ((rv = recv(fd, buf, sizeof(buf), 0)) > 0) {
-         nflog_handle_packet(logh, buf, rv);
-    } else if (rv < 0 && errno == ENOBUFS) {
-        report_nflog_overrun();
-    }
+    nflog_receive(g_io_channel_unix_get_fd(source), 0);
 
     return TRUE;
 }
@@ -1019,7 +1030,6 @@ signal_read_cb(GIOChannel *source,
     int fd =  g_io_channel_unix_get_fd(source);
 
     if ((rv = read(fd, &si, sizeof(si))) && rv >= 0) {
-        terminate_threads = TRUE;
         log_status_message(5, "received terminate request (signal)");
         g_main_loop_quit(main_loop);
     }
@@ -1272,8 +1282,20 @@ main(int argc, char *argv[])
 
     g_main_loop_run(main_loop);
 
+    // the kernel holds back log messages for batching, unbinding makes it flush them into the
+    // socket ahead of the acknowledgement, and the timeout bounds the library's wait for the latter
+    struct timeval timeout = { .tv_sec = 1 };
+    setsockopt(logfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    nflog_unbind_group(qh);
+
+    // the library stops reading at the trailer of a batch, so receive what is left
+    while (nflog_receive(logfd, MSG_DONTWAIT))
+        ;
+
     log_status_message(5, "stopping pvefw logger");
 
+    // the writer thread exits once its queue is empty, so only tell it after the last entry
+    g_atomic_int_set(&terminate_threads, TRUE);
     g_thread_join(wthread);
 
     close(outfd);
