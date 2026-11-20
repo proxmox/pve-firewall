@@ -635,6 +635,46 @@ test_ip4_header_length(void)
 }
 
 static void
+test_non_first_fragments(void)
+{
+    struct log_entry le;
+    uint8_t pkt4[sizeof(struct iphdr) + sizeof(struct udphdr)] PKT_ALIGNED;
+    struct iphdr *ip4 = (struct iphdr *)pkt4;
+
+    init_ip4_hdr(ip4, IPPROTO_UDP, sizeof(pkt4));
+    init_udp_hdr((struct udphdr *)(ip4 + 1));
+    ip4->frag_off = htons(IP_MF);
+    assert(run_printer(print_iphdr, pkt4, sizeof(pkt4), &le) == 0);
+    assert_log_ends_with(&le, "ID=0 MF PROTO=UDP SPT=1234 DPT=5678 LEN=8 ");
+    ip4->frag_off = htons(IP_MF | 185);
+    assert(run_printer(print_iphdr, pkt4, sizeof(pkt4), &le) == 0);
+    assert_log_ends_with(&le, "ID=0 FRAG=185 MF PROTO=UDP ");
+    ip4->protocol = 99;
+    assert(run_printer(print_iphdr, pkt4, sizeof(pkt4), &le) == 0);
+    assert_log_ends_with(&le, "ID=0 FRAG=185 MF PROTO=99 ");
+    pass("only the first IPv4 fragment is logged with its transport header");
+
+    uint8_t pkt6[sizeof(struct ip6_hdr) + 8 + sizeof(struct udphdr)] PKT_ALIGNED;
+    struct ip6_frag *frag = (struct ip6_frag *)(pkt6 + sizeof(struct ip6_hdr));
+
+    init_ip6_hdr((struct ip6_hdr *)pkt6, IPPROTO_FRAGMENT, sizeof(*frag) + sizeof(struct udphdr));
+    memset(frag, 0, sizeof(*frag));
+    frag->ip6f_nxt = IPPROTO_UDP;
+    frag->ip6f_offlg = IP6F_MORE_FRAG;
+    frag->ip6f_ident = htonl(1);
+    init_udp_hdr((struct udphdr *)(frag + 1));
+    assert(run_printer(print_ip6hdr, pkt6, sizeof(pkt6), &le) == 0);
+    assert_log_ends_with(&le, "FRAG=0 ID=1 MF PROTO=UDP SPT=1234 DPT=5678 LEN=8 ");
+    frag->ip6f_offlg = htons(1448) | IP6F_MORE_FRAG;
+    assert(run_printer(print_ip6hdr, pkt6, sizeof(pkt6), &le) == 0);
+    assert_log_ends_with(&le, "FRAG=1448 ID=1 MF PROTO=UDP ");
+    frag->ip6f_nxt = IPPROTO_DSTOPTS;
+    assert(run_printer(print_ip6hdr, pkt6, sizeof(pkt6), &le) == 0);
+    assert_log_ends_with(&le, "FRAG=1448 ID=1 MF PROTO=60 ");
+    pass("only the first IPv6 fragment is logged with its next header");
+}
+
+static void
 test_conntrack_format_error(void)
 {
     struct nf_conntrack *ct = nfct_new();
@@ -677,6 +717,7 @@ main(void)
     test_ip6_fragment_header();
     test_ip4_header_length();
     test_icmp_redirect();
+    test_non_first_fragments();
     test_conntrack_format_error();
 
     printf("1..%d\n", tests_run);

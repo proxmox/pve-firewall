@@ -382,6 +382,34 @@ print_ipproto(struct log_entry *le, char * nexthdr, int payload_len, u_int8_t pr
     return 0;
 }
 
+static const char *
+ipproto_name(u_int8_t proto)
+{
+    switch (proto) {
+    case IPPROTO_TCP: return "TCP";
+    case IPPROTO_UDP: return "UDP";
+    case IPPROTO_ICMP: return "ICMP";
+    case IPPROTO_SCTP: return "SCTP";
+    case IPPROTO_AH: return "AH";
+    case IPPROTO_ESP: return "ESP";
+    case IPPROTO_IGMP: return "IGMP";
+    case IPPROTO_ICMPV6: return "ICMPV6";
+    default: return NULL;
+    }
+}
+
+// only the first fragment starts with the header of the next protocol, so just log its name
+static void
+print_fragment_proto(struct log_entry *le, u_int8_t proto)
+{
+    const char *name = ipproto_name(proto);
+
+    if (name)
+        LEPRINTF("PROTO=%s ", name);
+    else
+        LEPRINTF("PROTO=%u ", proto);
+}
+
 static int
 print_iphdr(struct log_entry *le, char * payload, int payload_len)
 {
@@ -415,6 +443,11 @@ print_iphdr(struct log_entry *le, char * payload, int payload_len)
 
     if (ip_off & IP_DF) LEPRINTF("DF ");
     if (ip_off & IP_MF) LEPRINTF("MF ");
+
+    if (ip_off & IP_OFFMASK) {
+        print_fragment_proto(le, h->protocol);
+        return 0;
+    }
 
     void *nexthdr = (u_int32_t *)h + h->ihl;
     payload_len -= h->ihl * 4;
@@ -630,6 +663,10 @@ print_nexthdr(struct log_entry *le, char *hdr, int payload_len, u_int8_t proto)
         case IPPROTO_FRAGMENT:
             if (print_fragment(le, (struct ip6_frag*)hdr, payload_len) < 0)
                 return -1;
+            if (((struct ip6_frag*)hdr)->ip6f_offlg & IP6F_OFF_MASK) {
+                print_fragment_proto(le, exthdr->ip6e_nxt);
+                return 0;
+            }
             ext_len = sizeof(struct ip6_frag);
             break;
         case IPPROTO_HOPOPTS:
