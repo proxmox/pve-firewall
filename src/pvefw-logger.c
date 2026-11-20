@@ -523,6 +523,11 @@ print_icmp6(struct log_entry *le, struct icmp6_hdr *h, int payload_len)
         break;
 
     case ND_ROUTER_ADVERT:
+        if (payload_len < (int)sizeof(struct nd_router_advert)) {
+            LEPRINTF("LEN=%d ", payload_len);
+            LEPRINTF("INVALID=LEN ");
+            return -1;
+        }
         ra = (struct nd_router_advert*)h;
         LEPRINTF("HOPLIMIT=%d ", ra->nd_ra_curhoplimit);
         /* nd_ra_flags_reserved is only 8 bit, so no swapping here as
@@ -537,16 +542,31 @@ print_icmp6(struct log_entry *le, struct icmp6_hdr *h, int payload_len)
         break;
 
     case ND_NEIGHBOR_SOLICIT:
+        if (payload_len < (int)sizeof(struct nd_neighbor_solicit)) {
+            LEPRINTF("LEN=%d ", payload_len);
+            LEPRINTF("INVALID=LEN ");
+            return -1;
+        }
         /* can be followed by options */
         break;
 
     case ND_NEIGHBOR_ADVERT:
+        if (payload_len < (int)sizeof(struct nd_neighbor_advert)) {
+            LEPRINTF("LEN=%d ", payload_len);
+            LEPRINTF("INVALID=LEN ");
+            return -1;
+        }
         na = (struct nd_neighbor_advert*)h;
         LEPRINTF("NA=%08x ", ntohl(na->nd_na_flags_reserved));
         /* can be followed by options */
         break;
 
     case ND_REDIRECT:
+        if (payload_len < (int)sizeof(struct nd_redirect)) {
+            LEPRINTF("LEN=%d ", payload_len);
+            LEPRINTF("INVALID=LEN ");
+            return -1;
+        }
         re = (struct nd_redirect*)h;
         inet_ntop(AF_INET6, &re->nd_rd_target, tmp, sizeof(tmp));
         LEPRINTF("TARGET=%s ", tmp);

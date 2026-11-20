@@ -493,6 +493,67 @@ test_ip6_routing_header(void)
 }
 
 static void
+test_icmp6_nd_lengths(void)
+{
+    struct log_entry le;
+    uint8_t pkt[sizeof(struct ip6_hdr) + sizeof(struct nd_redirect)] PKT_ALIGNED;
+    struct icmp6_hdr *icmp6 = (struct icmp6_hdr *)(pkt + sizeof(struct ip6_hdr));
+    const struct {
+        uint8_t type;
+        size_t len;
+    } nd_msgs[] = {
+        { ND_ROUTER_ADVERT, sizeof(struct nd_router_advert) },
+        { ND_NEIGHBOR_SOLICIT, sizeof(struct nd_neighbor_solicit) },
+        { ND_NEIGHBOR_ADVERT, sizeof(struct nd_neighbor_advert) },
+        { ND_REDIRECT, sizeof(struct nd_redirect) },
+    };
+
+    for (size_t i = 0; i < G_N_ELEMENTS(nd_msgs); i++) {
+        for (size_t len = sizeof(*icmp6); len < nd_msgs[i].len; len++) {
+            init_ip6_hdr((struct ip6_hdr *)pkt, IPPROTO_ICMPV6, len);
+            memset(icmp6, 0, nd_msgs[i].len);
+            icmp6->icmp6_type = nd_msgs[i].type;
+            assert(run_printer(print_ip6hdr, pkt, sizeof(struct ip6_hdr) + len, &le) == -1);
+            assert_log_ends_with(&le, "INVALID=LEN ");
+        }
+    }
+    pass("truncated neighbor discovery messages are rejected");
+
+    struct nd_router_advert *ra = (struct nd_router_advert *)icmp6;
+    init_ip6_hdr((struct ip6_hdr *)pkt, IPPROTO_ICMPV6, sizeof(*ra));
+    memset(ra, 0, sizeof(*ra));
+    ra->nd_ra_type = ND_ROUTER_ADVERT;
+    ra->nd_ra_curhoplimit = 64;
+    ra->nd_ra_flags_reserved = ND_RA_FLAG_MANAGED;
+    ra->nd_ra_router_lifetime = htons(1800);
+    ra->nd_ra_reachable = htonl(30000);
+    ra->nd_ra_retransmit = htonl(1000);
+    assert(run_printer(print_ip6hdr, pkt, sizeof(struct ip6_hdr) + sizeof(*ra), &le) == 0);
+    assert_log_ends_with(&le, "TYPE=134 CODE=0 HOPLIMIT=64 RA=80 LIFETIME=1800 REACHABLE=30000 "
+                         "RETRANSMIT=1000 ");
+    pass("router advertisement is logged");
+
+    struct nd_neighbor_advert *na = (struct nd_neighbor_advert *)icmp6;
+    init_ip6_hdr((struct ip6_hdr *)pkt, IPPROTO_ICMPV6, sizeof(*na));
+    memset(na, 0, sizeof(*na));
+    na->nd_na_type = ND_NEIGHBOR_ADVERT;
+    na->nd_na_flags_reserved = ND_NA_FLAG_SOLICITED | ND_NA_FLAG_OVERRIDE;
+    assert(run_printer(print_ip6hdr, pkt, sizeof(struct ip6_hdr) + sizeof(*na), &le) == 0);
+    assert_log_ends_with(&le, "TYPE=136 CODE=0 NA=60000000 ");
+    pass("neighbor advertisement is logged");
+
+    struct nd_redirect *rd = (struct nd_redirect *)icmp6;
+    init_ip6_hdr((struct ip6_hdr *)pkt, IPPROTO_ICMPV6, sizeof(*rd));
+    memset(rd, 0, sizeof(*rd));
+    rd->nd_rd_type = ND_REDIRECT;
+    assert(inet_pton(AF_INET6, "2001:db8::1", &rd->nd_rd_target) == 1);
+    assert(inet_pton(AF_INET6, "2001:db8::2", &rd->nd_rd_dst) == 1);
+    assert(run_printer(print_ip6hdr, pkt, sizeof(pkt), &le) == 0);
+    assert_log_ends_with(&le, "TYPE=137 CODE=0 TARGET=2001:db8::1 GATEWAY=2001:db8::2 ");
+    pass("redirect is logged");
+}
+
+static void
 test_conntrack_format_error(void)
 {
     struct nf_conntrack *ct = nfct_new();
@@ -531,6 +592,7 @@ main(void)
     test_icmp6_nonzero_code();
     test_ip6_ext_header_lengths();
     test_ip6_routing_header();
+    test_icmp6_nd_lengths();
     test_conntrack_format_error();
 
     printf("1..%d\n", tests_run);
