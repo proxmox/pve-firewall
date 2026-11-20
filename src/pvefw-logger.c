@@ -583,20 +583,8 @@ print_icmp6(struct log_entry *le, struct icmp6_hdr *h, int payload_len)
         break;
 
     case ICMP6_PARAM_PROB:
-        switch (ntohl(h->icmp6_pptr)) {
-        case ICMP6_PARAMPROB_HEADER:
-            LEPRINTF("PARAMETER=HEADER "); /* erroneous header */
-            break;
-        case ICMP6_PARAMPROB_NEXTHEADER:
-            LEPRINTF("PARAMETER=NEXTHEADER "); /* bad next-header field */
-            break;
-        case ICMP6_PARAMPROB_OPTION:
-            LEPRINTF("PARAMETER=OPTION "); /* bad ipv6 option (hop/dst header?) */
-            break;
-        default:
-            LEPRINTF("PARAMETER=%u ", ntohl(h->icmp6_pptr)); /* unknown */
-            break;
-        }
+        /* CODE shows the type of problem, the pointer its offset in the offending packet */
+        LEPRINTF("PARAMETER=%u ", ntohl(h->icmp6_pptr));
         break;
     }
 

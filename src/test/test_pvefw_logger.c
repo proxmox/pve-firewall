@@ -388,6 +388,16 @@ test_icmp6_nonzero_code(void)
     assert(run_printer(print_ip6hdr, pkt, sizeof(pkt), &le) == 0);
     assert_log_ends_with(&le, "HOPLIMIT=255 PROTO=ICMPV6 TYPE=2 CODE=255 MTU=1280 ");
     pass("ICMPv6 message with code 255 is logged");
+
+    icmp6->icmp6_type = ICMP6_PARAM_PROB;
+    icmp6->icmp6_code = ICMP6_PARAMPROB_NEXTHEADER;
+    icmp6->icmp6_pptr = htonl(6);
+    assert(run_printer(print_ip6hdr, pkt, sizeof(pkt), &le) == 0);
+    assert_log_ends_with(&le, "PROTO=ICMPV6 TYPE=4 CODE=1 PARAMETER=6 ");
+    icmp6->icmp6_pptr = htonl(ICMP6_PARAMPROB_OPTION);
+    assert(run_printer(print_ip6hdr, pkt, sizeof(pkt), &le) == 0);
+    assert_log_ends_with(&le, "PROTO=ICMPV6 TYPE=4 CODE=1 PARAMETER=2 ");
+    pass("ICMPv6 parameter problem is logged with its pointer");
 }
 
 static void
