@@ -566,7 +566,7 @@ print_icmp6(struct log_entry *le, struct icmp6_hdr *h, int payload_len)
         inet_ntop(AF_INET6, &re->nd_rd_target, tmp, sizeof(tmp));
         LEPRINTF("TARGET=%s ", tmp);
         inet_ntop(AF_INET6, &re->nd_rd_dst, tmp, sizeof(tmp));
-        LEPRINTF("GATEWAY=%s ", tmp);
+        LEPRINTF("DESTINATION=%s ", tmp);
         /* can be followed by options */
         break;
 

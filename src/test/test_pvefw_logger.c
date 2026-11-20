@@ -561,8 +561,8 @@ test_icmp6_nd_lengths(void)
     assert(inet_pton(AF_INET6, "2001:db8::1", &rd->nd_rd_target) == 1);
     assert(inet_pton(AF_INET6, "2001:db8::2", &rd->nd_rd_dst) == 1);
     assert(run_printer(print_ip6hdr, pkt, sizeof(pkt), &le) == 0);
-    assert_log_ends_with(&le, "TYPE=137 CODE=0 TARGET=2001:db8::1 GATEWAY=2001:db8::2 ");
-    pass("redirect is logged");
+    assert_log_ends_with(&le, "TYPE=137 CODE=0 TARGET=2001:db8::1 DESTINATION=2001:db8::2 ");
+    pass("ICMPv6 redirect is logged with its target and destination");
 }
 
 static void
