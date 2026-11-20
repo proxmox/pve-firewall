@@ -435,6 +435,39 @@ test_ip6_ext_header_lengths(void)
     pass("fragment header with a non-zero reserved byte is followed");
 }
 
+/* IPv6 packet with a routing header of the given length in 8-byte units, followed by UDP */
+static size_t
+init_routing_pkt(uint8_t *pkt, uint8_t type, uint8_t len, uint8_t segleft)
+{
+    size_t rt_len = (len + 1) * 8;
+    struct ip6_rthdr0 *rt = (struct ip6_rthdr0 *)(pkt + sizeof(struct ip6_hdr));
+
+    init_ip6_hdr((struct ip6_hdr *)pkt, IPPROTO_ROUTING, rt_len + sizeof(struct udphdr));
+    memset(rt, 0, rt_len);
+    rt->ip6r0_nxt = IPPROTO_UDP;
+    rt->ip6r0_len = len;
+    rt->ip6r0_type = type;
+    rt->ip6r0_segleft = segleft;
+    for (int i = 0; i < len / 2; i++)
+        assert(inet_pton(AF_INET6, "2001:db8::99", &rt->ip6r0_addr[i]) == 1);
+    init_udp_hdr((struct udphdr *)((uint8_t *)rt + rt_len));
+
+    return sizeof(struct ip6_hdr) + rt_len + sizeof(struct udphdr);
+}
+
+static void
+test_ip6_routing_header(void)
+{
+    struct log_entry le;
+    uint8_t pkt[sizeof(struct ip6_hdr) + 5 * 8 + sizeof(struct udphdr)] PKT_ALIGNED;
+    size_t len;
+
+    len = init_routing_pkt(pkt, 0, 2, 0);
+    assert(run_printer(print_ip6hdr, pkt, len, &le) == 0);
+    assert_log_ends_with(&le, "HOPLIMIT=255 TYPE=0 SEGMENTS=0 PROTO=UDP SPT=1234 DPT=5678 LEN=8");
+    pass("routing header is logged with separated fields");
+}
+
 static void
 test_conntrack_format_error(void)
 {
@@ -473,6 +506,7 @@ main(void)
     test_negative_payload_len();
     test_icmp6_nonzero_code();
     test_ip6_ext_header_lengths();
+    test_ip6_routing_header();
     test_conntrack_format_error();
 
     printf("1..%d\n", tests_run);

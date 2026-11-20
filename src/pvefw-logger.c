@@ -432,7 +432,7 @@ static int
 print_routing(struct log_entry *le, struct ip6_rthdr *rthdr, int payload_len)
 {
     char tmp[INET6_ADDRSTRLEN];
-    LEPRINTF("TYPE=%u SEGMENTS=%u", rthdr->ip6r_type, rthdr->ip6r_segleft);
+    LEPRINTF("TYPE=%u SEGMENTS=%u ", rthdr->ip6r_type, rthdr->ip6r_segleft);
 
     if (payload_len < (int)sizeof(*rthdr) || payload_len < rthdr->ip6r_len*8) {
         LEPRINTF("LEN=%d ", payload_len);
