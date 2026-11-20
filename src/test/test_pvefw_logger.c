@@ -591,6 +591,18 @@ test_ip4_header_length(void)
         assert(strcmp(le.buf, "INVALID=IHL ") == 0);
     }
     pass("IPv4 header length below 20 bytes is rejected");
+
+    init_ip4_hdr(ip4, IPPROTO_UDP, sizeof(pkt));
+    ip4->ihl = 6;
+    assert(run_printer(print_iphdr, pkt, sizeof(*ip4), &le) == -1);
+    assert(strcmp(le.buf, "INVALID=IHL ") == 0);
+    pass("IPv4 header length beyond the packet is rejected");
+
+    init_ip4_hdr(ip4, IPPROTO_UDP, sizeof(*ip4));
+    assert(run_printer(print_iphdr, pkt, sizeof(*ip4), &le) == 0);
+    assert(strcmp(le.buf, "SRC=192.0.2.1 DST=192.0.2.2 LEN=20 TOS=0x00 PREC=0x00 TTL=64 ID=0 "
+                  "PROTO=UDP LEN=0 INVALID=LEN ") == 0);
+    pass("IPv4 packet without transport header is logged");
 }
 
 static void

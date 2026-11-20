@@ -395,7 +395,7 @@ print_iphdr(struct log_entry *le, char * payload, int payload_len)
 
     struct iphdr *h = (struct iphdr *)payload;
 
-    if (h->ihl < 5 || payload_len <= h->ihl * 4) {
+    if (h->ihl < 5 || payload_len < h->ihl * 4) {
         LEPRINTF("INVALID=IHL ");
         return -1;
     }
