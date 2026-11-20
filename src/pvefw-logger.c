@@ -432,20 +432,28 @@ static int
 print_routing(struct log_entry *le, struct ip6_rthdr *rthdr, int payload_len)
 {
     char tmp[INET6_ADDRSTRLEN];
-    LEPRINTF("TYPE=%u SEGMENTS=%u ", rthdr->ip6r_type, rthdr->ip6r_segleft);
 
-    if (payload_len < (int)sizeof(*rthdr) || payload_len < rthdr->ip6r_len*8) {
+    if (payload_len < (int)sizeof(*rthdr)) {
         LEPRINTF("LEN=%d ", payload_len);
         LEPRINTF("INVALID=LEN ");
         return -1;
     }
+
+    int hdr_len = (rthdr->ip6r_len + 1) * 8;
+    if (payload_len < hdr_len) {
+        LEPRINTF("LEN=%d ", payload_len);
+        LEPRINTF("INVALID=LEN ");
+        return -1;
+    }
+
+    LEPRINTF("TYPE=%u SEGMENTS=%u ", rthdr->ip6r_type, rthdr->ip6r_segleft);
 
     if (rthdr->ip6r_type == 0) {
         /* Route via waypoints (deprecated), this contains a list of waypoints
          * to visit. (RFC2460 (4.4))
          */
         struct ip6_rthdr0 *h = (struct ip6_rthdr0*)rthdr;
-        if (rthdr->ip6r_len*8 < sizeof(*h) + rthdr->ip6r_segleft * sizeof(struct in6_addr)) {
+        if (hdr_len < (int)(sizeof(*h) + rthdr->ip6r_segleft * sizeof(struct in6_addr))) {
             LEPRINTF("INVALID=SEGMENTS ");
             return 0;
         }
@@ -456,7 +464,7 @@ print_routing(struct log_entry *le, struct ip6_rthdr *rthdr, int payload_len)
     } else if (rthdr->ip6r_type == 2) {
         /* RFC3375 (6.4), the layout is like type-0 but with exactly 1 address */
         struct ip6_rthdr0 *h = (struct ip6_rthdr0*)rthdr;
-        if (rthdr->ip6r_len*8 < sizeof(*h) + sizeof(struct in6_addr)) {
+        if (hdr_len < (int)(sizeof(*h) + sizeof(struct in6_addr))) {
             LEPRINTF("LEN=%d ", payload_len);
             LEPRINTF("INVALID=LEN ");
             return -1;
@@ -613,8 +621,6 @@ print_nexthdr(struct log_entry *le, char *hdr, int payload_len, u_int8_t proto)
 
         /* extension headers (these break to keep iterating) */
         case IPPROTO_ROUTING:
-            if (check_ip6ext(le, exthdr, payload_len) < 0)
-                return -1;
             if (print_routing(le, (struct ip6_rthdr*)hdr, payload_len) < 0)
                 return -1;
             break;

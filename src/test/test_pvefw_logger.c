@@ -466,6 +466,30 @@ test_ip6_routing_header(void)
     assert(run_printer(print_ip6hdr, pkt, len, &le) == 0);
     assert_log_ends_with(&le, "HOPLIMIT=255 TYPE=0 SEGMENTS=0 PROTO=UDP SPT=1234 DPT=5678 LEN=8");
     pass("routing header is logged with separated fields");
+
+    len = init_routing_pkt(pkt, 0, 4, 2);
+    assert(run_printer(print_ip6hdr, pkt, len, &le) == 0);
+    assert_log_ends_with(&le, "HOPLIMIT=255 TYPE=0 SEGMENTS=2 PROTO=UDP SPT=1234 DPT=5678 LEN=8");
+    pass("type 0 routing header with all segments left is logged");
+
+    len = init_routing_pkt(pkt, 0, 4, 3);
+    assert(run_printer(print_ip6hdr, pkt, len, &le) == 0);
+    assert_log_ends_with(&le, "TYPE=0 SEGMENTS=3 INVALID=SEGMENTS PROTO=UDP SPT=1234 DPT=5678 LEN=8");
+    pass("type 0 routing header with more segments left than addresses is flagged");
+
+    len = init_routing_pkt(pkt, 2, 2, 1);
+    assert(run_printer(print_ip6hdr, pkt, len, &le) == 0);
+    assert_log_ends_with(&le, "TYPE=2 SEGMENTS=1 HOME=2001:db8::99 PROTO=UDP SPT=1234 DPT=5678 LEN=8");
+    pass("type 2 routing header is logged with its home address");
+
+    len = init_routing_pkt(pkt, 2, 1, 1);
+    assert(run_printer(print_ip6hdr, pkt, len, &le) == -1);
+    assert_log_ends_with(&le, "TYPE=2 SEGMENTS=1 LEN=24 INVALID=LEN ");
+    pass("type 2 routing header without room for the home address is rejected");
+
+    memset(&le, 0, sizeof(le));
+    assert(print_routing(&le, NULL, -1) == -1);
+    pass("routing header is checked before reading its fields");
 }
 
 static void
