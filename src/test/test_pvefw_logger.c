@@ -577,6 +577,23 @@ test_ip6_fragment_header(void)
 }
 
 static void
+test_ip4_header_length(void)
+{
+    struct log_entry le;
+    uint8_t pkt[sizeof(struct iphdr) + sizeof(struct udphdr)] PKT_ALIGNED;
+    struct iphdr *ip4 = (struct iphdr *)pkt;
+
+    for (unsigned int ihl = 0; ihl < 5; ihl++) {
+        init_ip4_hdr(ip4, IPPROTO_UDP, sizeof(pkt));
+        init_udp_hdr((struct udphdr *)(ip4 + 1));
+        ip4->ihl = ihl;
+        assert(run_printer(print_iphdr, pkt, sizeof(pkt), &le) == -1);
+        assert(strcmp(le.buf, "INVALID=IHL ") == 0);
+    }
+    pass("IPv4 header length below 20 bytes is rejected");
+}
+
+static void
 test_conntrack_format_error(void)
 {
     struct nf_conntrack *ct = nfct_new();
@@ -617,6 +634,7 @@ main(void)
     test_ip6_routing_header();
     test_icmp6_nd_lengths();
     test_ip6_fragment_header();
+    test_ip4_header_length();
     test_conntrack_format_error();
 
     printf("1..%d\n", tests_run);
