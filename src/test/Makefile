@@ -13,7 +13,7 @@ $(TESTS): %: %.pl
 	./$<
 
 test_pvefw_logger: test_pvefw_logger.c ../pvefw-logger.c
-	gcc -Wall -Werror -Wno-unused-function test_pvefw_logger.c -o test_pvefw_logger -std=gnu99 $(CFLAGS) $(LDFLAGS)
+	gcc -Wall -Werror -Wno-unused-function test_pvefw_logger.c -o test_pvefw_logger -std=gnu99 $(CFLAGS) $(LDFLAGS) -Wl,--wrap=nfct_snprintf
 
 run_test_pvefw_logger: test_pvefw_logger
 	./test_pvefw_logger

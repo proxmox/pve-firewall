@@ -193,6 +193,109 @@ test_ip6_packets(void)
 }
 
 static void
+test_log_entry_truncation(void)
+{
+    struct log_entry le;
+
+    memset(&le, 0, sizeof(le));
+    strcpy(le.buf, "abc");
+    le.len = 3;
+    le_finish_line(&le);
+    assert(le.len == 4 && strcmp(le.buf, "abc\n") == 0);
+    pass("log entry is terminated with a newline");
+
+    /* each hop-by-hop header adds 16 characters, far more than fit into one entry */
+    const size_t n_ext = 100;
+    size_t len = sizeof(struct ip6_hdr) + n_ext * 8;
+    uint8_t *pkt = calloc(1, len);
+    assert(pkt != NULL);
+
+    init_ip6_hdr((struct ip6_hdr *)pkt, IPPROTO_HOPOPTS, n_ext * 8);
+    for (size_t i = 0; i < n_ext; i++) {
+        struct ip6_ext *ext = (struct ip6_ext *)(pkt + sizeof(struct ip6_hdr) + i * 8);
+        ext->ip6e_nxt = i + 1 < n_ext ? IPPROTO_HOPOPTS : IPPROTO_NONE;
+    }
+    assert(run_printer(print_ip6hdr, pkt, len, &le) == 0);
+    free(pkt);
+    assert(le.len == LE_MAX - 1);
+    le_finish_line(&le);
+    assert(le.len == LE_MAX - 1);
+    assert(le.buf[LE_MAX - 2] == '\n' && le.buf[LE_MAX - 1] == '\0');
+    pass("overlong log entry is truncated and still ends with a newline");
+}
+
+static void
+test_status_message_truncation(void)
+{
+    char msg[LE_MAX * 2];
+
+    memset(msg, 'x', sizeof(msg) - 1);
+    msg[sizeof(msg) - 1] = '\0';
+    queue = g_async_queue_new_full(g_free);
+
+    /* keep the message out of the system log */
+    int mask = setlogmask(LOG_MASK(LOG_EMERG));
+    log_status_message(3, "%s", msg);
+    setlogmask(mask);
+
+    struct log_entry *le = g_async_queue_try_pop(queue);
+    assert(le != NULL && le->len == LE_MAX - 1);
+    assert(le->buf[LE_MAX - 2] == '\n' && le->buf[LE_MAX - 1] == '\0');
+    g_free(le);
+
+    g_async_queue_unref(queue);
+    queue = NULL;
+    pass("overlong status message is truncated and still ends with a newline");
+}
+
+int __real_nfct_snprintf(char *buf, unsigned int size, const struct nf_conntrack *ct,
+                         unsigned int msg_type, unsigned int out_type, unsigned int flags);
+
+static int nfct_fake_len = 0;
+
+/* linked in place of nfct_snprintf() with --wrap, to fake events of any length */
+int
+__wrap_nfct_snprintf(char *buf, unsigned int size, const struct nf_conntrack *ct,
+                     unsigned int msg_type, unsigned int out_type, unsigned int flags)
+{
+    if (nfct_fake_len == 0)
+        return __real_nfct_snprintf(buf, size, ct, msg_type, out_type, flags);
+
+    /* like snprintf(), write what fits and return the full length */
+    unsigned int n = MIN((unsigned int)nfct_fake_len, size - 1);
+    memset(buf, 'x', n);
+    buf[n] = '\0';
+    return nfct_fake_len;
+}
+
+static void
+test_conntrack_event_truncation(void)
+{
+    struct nf_conntrack *ct = nfct_new();
+    assert(ct != NULL);
+    queue = g_async_queue_new_full(g_free);
+
+    for (int len = LE_MAX - 4; len <= LE_MAX + 1; len++) {
+        nfct_fake_len = len;
+        nfct_cb(NULL, NFCT_T_NEW, ct, NULL);
+        nfct_fake_len = 0;
+
+        struct log_entry *le = g_async_queue_try_pop(queue);
+        assert(le != NULL);
+        /* a full entry gives up its last character for the newline */
+        assert(le->len == (guint32)MIN(len, LE_MAX - 2) + 1);
+        assert(strspn(le->buf, "x") == le->len - 1);
+        assert(le->buf[le->len - 1] == '\n' && le->buf[le->len] == '\0');
+        g_free(le);
+    }
+
+    g_async_queue_unref(queue);
+    queue = NULL;
+    nfct_destroy(ct);
+    pass("conntrack event is truncated to the entry size and ends with a newline");
+}
+
+static void
 test_conntrack_format_error(void)
 {
     struct nf_conntrack *ct = nfct_new();
@@ -223,6 +326,9 @@ main(void)
 
     test_ip4_packets();
     test_ip6_packets();
+    test_log_entry_truncation();
+    test_status_message_truncation();
+    test_conntrack_event_truncation();
     test_conntrack_format_error();
 
     printf("1..%d\n", tests_run);

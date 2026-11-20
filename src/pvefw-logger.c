@@ -87,7 +87,7 @@ Example:
 #define MAX_CHAIN_LEN 28
 
 struct log_entry {
-    guint32 len; // max LE_MAX chars
+    guint32 len; // max LE_MAX - 1 chars
     char buf[LE_MAX];
 };
 
@@ -181,10 +181,23 @@ queue_log_entry(struct log_entry *le)
 }
 
 
+// snprintf() and friends return the length the output would have had, even if it got truncated
+static void
+le_advance(struct log_entry *le, int len)
+{
+    if (len <= 0)
+        return;
+
+    if ((guint32)len >= LE_MAX - le->len)
+        le->len = LE_MAX - 1;
+    else
+        le->len += len;
+}
+
 #define LEPRINTF(format, ...) \
     do { \
-        if (le->len < LE_MAX) \
-            le->len += snprintf(le->buf + le->len, LE_MAX - le->len, format, ##__VA_ARGS__); \
+        if (le->len < LE_MAX - 1) \
+            le_advance(le, snprintf(le->buf + le->len, LE_MAX - le->len, format, ##__VA_ARGS__)); \
     } while (0)
 #define LEPRINTTIME(sec) \
     do { \
@@ -192,6 +205,17 @@ queue_log_entry(struct log_entry *le)
         if (le->len < (LE_MAX - 30)) \
             le->len += strftime(le->buf + le->len, LE_MAX - le->len, "%d/%b/%Y:%H:%M:%S %z ", localtime(&tmp_sec)); \
     } while (0)
+
+// a full entry gives up its last character for the newline
+static void
+le_finish_line(struct log_entry *le)
+{
+    if (le->len >= LE_MAX - 1)
+        le->len = LE_MAX - 2;
+
+    le->buf[le->len++] = '\n';
+    le->buf[le->len] = '\0';
+}
 
 static void
 log_status_message(guint loglevel, const char *fmt, ...)
@@ -208,10 +232,10 @@ log_status_message(guint loglevel, const char *fmt, ...)
 
     va_start(ap, fmt);
     va_copy(ap2, ap);
-    le->len += vsnprintf(le->buf + le->len, LE_MAX - le->len, fmt, ap);
+    le_advance(le, vsnprintf(le->buf + le->len, LE_MAX - le->len, fmt, ap));
     va_end(ap);
 
-    LEPRINTF("\n");
+    le_finish_line(le);
 
     queue_log_entry(le);
 
@@ -867,7 +891,7 @@ nflog_cb(struct nflog_g_handle *gh, struct nfgenmsg *nfmsg,
 
     print_pkt(le, nfa, nfmsg->nfgen_family);
 
-    LEPRINTF("\n"); // add newline
+    le_finish_line(le);
 
     queue_log_entry(le);
 
@@ -945,13 +969,8 @@ nfct_cb(const struct nlmsghdr *nlh,
         return NFCT_CB_STOP;
     }
 
-    le->len += len;
-
-    if (le->len == LE_MAX) {
-        le->buf[le->len-1] = '\n';
-    } else { // le->len < LE_MAX
-        le->buf[le->len++] = '\n';
-    }
+    le_advance(le, len);
+    le_finish_line(le);
 
     queue_log_entry(le);
 
