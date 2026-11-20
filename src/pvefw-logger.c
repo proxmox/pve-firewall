@@ -480,17 +480,14 @@ print_routing(struct log_entry *le, struct ip6_rthdr *rthdr, int payload_len)
 static int
 print_fragment(struct log_entry *le, struct ip6_frag *frag, int payload_len)
 {
-    u_int16_t offlg;
-
     if (payload_len < (int)sizeof(*frag)) {
         LEPRINTF("LEN=%d ", payload_len);
         LEPRINTF("INVALID=LEN ");
         return -1;
     }
 
-    offlg = ntohs(frag->ip6f_offlg);
-    LEPRINTF("FRAG=%d ID=%d ", (offlg&0x2FFF), ntohl(frag->ip6f_ident));
-    if (offlg>>15) {
+    LEPRINTF("FRAG=%u ID=%u ", ntohs(frag->ip6f_offlg & IP6F_OFF_MASK), ntohl(frag->ip6f_ident));
+    if (frag->ip6f_offlg & IP6F_MORE_FRAG) {
         LEPRINTF("MF ");
     }
     return 0;

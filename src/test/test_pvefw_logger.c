@@ -554,6 +554,29 @@ test_icmp6_nd_lengths(void)
 }
 
 static void
+test_ip6_fragment_header(void)
+{
+    struct log_entry le;
+    uint8_t pkt[sizeof(struct ip6_hdr) + sizeof(struct ip6_frag)] PKT_ALIGNED;
+    struct ip6_frag *frag = (struct ip6_frag *)(pkt + sizeof(struct ip6_hdr));
+
+    init_ip6_hdr((struct ip6_hdr *)pkt, IPPROTO_FRAGMENT, sizeof(*frag));
+    memset(frag, 0, sizeof(*frag));
+    frag->ip6f_nxt = IPPROTO_NONE;
+    frag->ip6f_offlg = htons(1448) | IP6F_MORE_FRAG;
+    frag->ip6f_ident = htonl(0x80000001);
+    assert(run_printer(print_ip6hdr, pkt, sizeof(pkt), &le) == 0);
+    assert_log_ends_with(&le, "HOPLIMIT=255 FRAG=1448 ID=2147483649 MF PROTO=59 ");
+    pass("fragment with more fragments following is logged");
+
+    frag->ip6f_offlg = htons(65528);
+    frag->ip6f_ident = htonl(42);
+    assert(run_printer(print_ip6hdr, pkt, sizeof(pkt), &le) == 0);
+    assert_log_ends_with(&le, "HOPLIMIT=255 FRAG=65528 ID=42 PROTO=59 ");
+    pass("last fragment at the highest offset is logged");
+}
+
+static void
 test_conntrack_format_error(void)
 {
     struct nf_conntrack *ct = nfct_new();
@@ -593,6 +616,7 @@ main(void)
     test_ip6_ext_header_lengths();
     test_ip6_routing_header();
     test_icmp6_nd_lengths();
+    test_ip6_fragment_header();
     test_conntrack_format_error();
 
     printf("1..%d\n", tests_run);
