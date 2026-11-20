@@ -294,7 +294,6 @@ static int
 print_icmp(struct log_entry *le, struct icmphdr *h, int payload_len)
 {
     char tmp[INET_ADDRSTRLEN];
-    u_int32_t gateway;
 
     LEPRINTF("PROTO=ICMP ");
 
@@ -315,8 +314,7 @@ print_icmp(struct log_entry *le, struct icmphdr *h, int payload_len)
         LEPRINTF("PARAMETER=%u ", ntohl(h->un.gateway) >> 24);
         break;
     case ICMP_REDIRECT:
-        gateway = ntohl(h->un.gateway);
-        inet_ntop(AF_INET, &gateway, tmp, sizeof(tmp));
+        inet_ntop(AF_INET, &h->un.gateway, tmp, sizeof(tmp));
         LEPRINTF("GATEWAY=%s ", tmp);
         break;
     case ICMP_DEST_UNREACH:

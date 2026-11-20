@@ -579,6 +579,23 @@ test_ip6_fragment_header(void)
 }
 
 static void
+test_icmp_redirect(void)
+{
+    struct log_entry le;
+    uint8_t pkt[sizeof(struct iphdr) + sizeof(struct icmphdr)] PKT_ALIGNED;
+    struct icmphdr *icmp = (struct icmphdr *)(pkt + sizeof(struct iphdr));
+
+    init_ip4_hdr((struct iphdr *)pkt, IPPROTO_ICMP, sizeof(pkt));
+    memset(icmp, 0, sizeof(*icmp));
+    icmp->type = ICMP_REDIRECT;
+    icmp->code = ICMP_REDIR_HOST;
+    assert(inet_pton(AF_INET, "192.0.2.254", &icmp->un.gateway) == 1);
+    assert(run_printer(print_iphdr, pkt, sizeof(pkt), &le) == 0);
+    assert_log_ends_with(&le, "PROTO=ICMP TYPE=5 CODE=1 GATEWAY=192.0.2.254 ");
+    pass("ICMP redirect is logged with its gateway");
+}
+
+static void
 test_ip4_header_length(void)
 {
     struct log_entry le;
@@ -649,6 +666,7 @@ main(void)
     test_icmp6_nd_lengths();
     test_ip6_fragment_header();
     test_ip4_header_length();
+    test_icmp_redirect();
     test_conntrack_format_error();
 
     printf("1..%d\n", tests_run);
