@@ -44,6 +44,7 @@ install: pve-firewall pve-firewall.8 pve-firewall.bash-completion pve-firewall.z
 .PHONY: clean
 clean:
 	$(MAKE) -C PVE clean
+	$(MAKE) -C test clean
 	$(MAKE) cleanup-docgen
 	rm -f *~
 	rm -rf pvefw-logger

@@ -1,0 +1,205 @@
+#undef NDEBUG
+#define PVEFW_LOGGER_TEST
+#include "../pvefw-logger.c"
+
+#include <assert.h>
+#include <stdint.h>
+#include <sys/mman.h>
+
+/* packets are accessed through the header structs, so align their buffers like those */
+#define PKT_ALIGNED __attribute__((aligned(4)))
+
+static int tests_run = 0;
+
+static void
+pass(const char *desc)
+{
+    tests_run++;
+    printf("ok %d - %s\n", tests_run, desc);
+}
+
+static void
+assert_log_ends_with(const struct log_entry *le, const char *expected)
+{
+    size_t len = strlen(expected);
+
+    if (le->len < len || strcmp(le->buf + le->len - len, expected) != 0) {
+        fprintf(stderr, "log entry '%s' does not end with '%s'\n", le->buf, expected);
+        abort();
+    }
+}
+
+static char *guard_page = NULL;
+static size_t page_size = 0;
+
+static void
+setup_guard_page(void)
+{
+    page_size = (size_t)sysconf(_SC_PAGESIZE);
+    char *base = mmap(NULL, page_size * 2, PROT_READ | PROT_WRITE,
+                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    assert(base != MAP_FAILED);
+    guard_page = base + page_size;
+    assert(mprotect(guard_page, page_size, PROT_NONE) == 0);
+}
+
+/*
+ * Place the packet right before the inaccessible guard page, so reading past its end crashes even
+ * without a sanitizer. Keep the 4-byte alignment of netlink attributes, which leaves up to three
+ * padding bytes before the guard page.
+ */
+static char *
+place_before_guard(const void *data, size_t len)
+{
+    size_t aligned_len = (len + 3) & ~(size_t)3;
+    assert(aligned_len <= page_size);
+    char *dst = guard_page - aligned_len;
+    memset(dst, 0xAA, aligned_len);
+    memcpy(dst, data, len);
+    return dst;
+}
+
+typedef int (*packet_printer)(struct log_entry *le, char *payload, int payload_len);
+
+/*
+ * Run the printer on the guard page copy and on an exact-size heap copy, which a sanitizer build
+ * checks without padding, and require both to produce the same result.
+ */
+static int
+run_printer(packet_printer print, const void *pkt, size_t len, struct log_entry *le)
+{
+    char *heap_buf = malloc(len > 0 ? len : 1);
+    assert(heap_buf != NULL);
+    memcpy(heap_buf, pkt, len);
+    memset(le, 0, sizeof(*le));
+    int rc = print(le, heap_buf, (int)len);
+    free(heap_buf);
+
+    struct log_entry guard_le;
+    memset(&guard_le, 0, sizeof(guard_le));
+    int guard_rc = print(&guard_le, place_before_guard(pkt, len), (int)len);
+
+    assert(rc == guard_rc);
+    assert(memcmp(le, &guard_le, sizeof(*le)) == 0);
+    assert(le->len < LE_MAX);
+    assert(le->buf[le->len] == '\0');
+    return rc;
+}
+
+static void
+init_ip4_hdr(struct iphdr *h, uint8_t protocol, uint16_t tot_len)
+{
+    memset(h, 0, sizeof(*h));
+    h->version = 4;
+    h->ihl = 5;
+    h->tot_len = htons(tot_len);
+    h->ttl = 64;
+    h->protocol = protocol;
+    assert(inet_pton(AF_INET, "192.0.2.1", &h->saddr) == 1);
+    assert(inet_pton(AF_INET, "192.0.2.2", &h->daddr) == 1);
+}
+
+static void
+init_ip6_hdr(struct ip6_hdr *h, uint8_t nxt, uint16_t plen)
+{
+    memset(h, 0, sizeof(*h));
+    h->ip6_flow = htonl(0x60000000);
+    h->ip6_plen = htons(plen);
+    h->ip6_nxt = nxt;
+    h->ip6_hlim = 255;
+    assert(inet_pton(AF_INET6, "fe80::1", &h->ip6_src) == 1);
+    assert(inet_pton(AF_INET6, "fe80::2", &h->ip6_dst) == 1);
+}
+
+static void
+init_udp_hdr(struct udphdr *h)
+{
+    memset(h, 0, sizeof(*h));
+    h->source = htons(1234);
+    h->dest = htons(5678);
+    h->len = htons(sizeof(*h));
+}
+
+static void
+test_ip4_packets(void)
+{
+    struct log_entry le;
+    uint8_t pkt[sizeof(struct iphdr) + sizeof(struct tcphdr)] PKT_ALIGNED;
+    struct iphdr *ip4 = (struct iphdr *)pkt;
+
+    init_ip4_hdr(ip4, IPPROTO_UDP, sizeof(*ip4) + sizeof(struct udphdr));
+    init_udp_hdr((struct udphdr *)(ip4 + 1));
+    assert(run_printer(print_iphdr, pkt, sizeof(*ip4) + sizeof(struct udphdr), &le) == 0);
+    assert(strcmp(le.buf, "SRC=192.0.2.1 DST=192.0.2.2 LEN=28 TOS=0x00 PREC=0x00 TTL=64 ID=0 "
+                  "PROTO=UDP SPT=1234 DPT=5678 LEN=8") == 0);
+    pass("IPv4 UDP packet is logged");
+
+    init_ip4_hdr(ip4, IPPROTO_TCP, sizeof(pkt));
+    struct tcphdr *tcp = (struct tcphdr *)(ip4 + 1);
+    memset(tcp, 0, sizeof(*tcp));
+    tcp->source = htons(40000);
+    tcp->dest = htons(22);
+    tcp->seq = htonl(1);
+    tcp->window = htons(64240);
+    tcp->syn = 1;
+    assert(run_printer(print_iphdr, pkt, sizeof(pkt), &le) == 0);
+    assert_log_ends_with(&le, "PROTO=TCP SPT=40000 DPT=22 SEQ=1 ACK=0 WINDOW=64240 SYN ");
+    pass("IPv4 TCP packet is logged");
+}
+
+static void
+test_ip6_packets(void)
+{
+    struct log_entry le;
+    uint8_t pkt[sizeof(struct ip6_hdr) + 8 + sizeof(struct icmp6_hdr)] PKT_ALIGNED;
+    struct ip6_hdr *ip6 = (struct ip6_hdr *)pkt;
+    struct icmp6_hdr *icmp6 = (struct icmp6_hdr *)(ip6 + 1);
+
+    init_ip6_hdr(ip6, IPPROTO_UDP, sizeof(struct udphdr));
+    init_udp_hdr((struct udphdr *)(ip6 + 1));
+    assert(run_printer(print_ip6hdr, pkt, sizeof(*ip6) + sizeof(struct udphdr), &le) == 0);
+    assert(strcmp(le.buf, "SRC=fe80::1 DST=fe80::2 LEN=8 TC=0 FLOWLBL=0 HOPLIMIT=255 "
+                  "PROTO=UDP SPT=1234 DPT=5678 LEN=8") == 0);
+    pass("IPv6 UDP packet is logged");
+
+    init_ip6_hdr(ip6, IPPROTO_ICMPV6, sizeof(*icmp6));
+    memset(icmp6, 0, sizeof(*icmp6));
+    icmp6->icmp6_type = ICMP6_ECHO_REQUEST;
+    icmp6->icmp6_id = htons(42);
+    icmp6->icmp6_seq = htons(7);
+    assert(run_printer(print_ip6hdr, pkt, sizeof(*ip6) + sizeof(*icmp6), &le) == 0);
+    assert_log_ends_with(&le, "HOPLIMIT=255 PROTO=ICMPV6 TYPE=128 CODE=0 ID=42 SEQ=7 ");
+    pass("ICMPv6 echo request is logged");
+
+    for (size_t len = 0; len < sizeof(*icmp6); len++) {
+        init_ip6_hdr(ip6, IPPROTO_ICMPV6, len);
+        assert(run_printer(print_ip6hdr, pkt, sizeof(*ip6) + len, &le) == -1);
+        assert_log_ends_with(&le, "INVALID=LEN ");
+    }
+    pass("truncated ICMPv6 header is rejected");
+
+    /* MLDv2 listener reports carry a hop-by-hop header with the router alert option */
+    uint8_t *hopopts = (uint8_t *)(ip6 + 1);
+    init_ip6_hdr(ip6, IPPROTO_HOPOPTS, 8 + sizeof(*icmp6));
+    memset(hopopts, 0, 8 + sizeof(*icmp6));
+    hopopts[0] = IPPROTO_ICMPV6;
+    hopopts[2] = IP6OPT_ROUTER_ALERT;
+    hopopts[3] = 2;
+    icmp6 = (struct icmp6_hdr *)(hopopts + 8);
+    icmp6->icmp6_type = 143;
+    assert(run_printer(print_ip6hdr, pkt, sizeof(pkt), &le) == 0);
+    assert_log_ends_with(&le, "HOPLIMIT=255 NEXTHDR=HOPOPTS PROTO=ICMPV6 TYPE=143 CODE=0 ");
+    pass("hop-by-hop header followed by ICMPv6 is logged");
+}
+
+int
+main(void)
+{
+    setup_guard_page();
+
+    test_ip4_packets();
+    test_ip6_packets();
+
+    printf("1..%d\n", tests_run);
+    return 0;
+}

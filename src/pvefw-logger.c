@@ -970,6 +970,7 @@ nfct_read_cb(GIOChannel *source,
     return TRUE;
 }
 
+#ifndef PVEFW_LOGGER_TEST
 int
 main(int argc, char *argv[])
 {
@@ -1190,3 +1191,4 @@ main(int argc, char *argv[])
 
     exit(0);
 }
+#endif
