@@ -139,7 +139,7 @@ test_ip4_packets(void)
     init_udp_hdr((struct udphdr *)(ip4 + 1));
     assert(run_printer(print_iphdr, pkt, sizeof(*ip4) + sizeof(struct udphdr), &le) == 0);
     assert(strcmp(le.buf, "SRC=192.0.2.1 DST=192.0.2.2 LEN=28 TOS=0x00 PREC=0x00 TTL=64 ID=0 "
-                  "PROTO=UDP SPT=1234 DPT=5678 LEN=8") == 0);
+                  "PROTO=UDP SPT=1234 DPT=5678 LEN=8 ") == 0);
     pass("IPv4 UDP packet is logged");
 
     init_ip4_hdr(ip4, IPPROTO_TCP, sizeof(pkt));
@@ -167,7 +167,7 @@ test_ip6_packets(void)
     init_udp_hdr((struct udphdr *)(ip6 + 1));
     assert(run_printer(print_ip6hdr, pkt, sizeof(*ip6) + sizeof(struct udphdr), &le) == 0);
     assert(strcmp(le.buf, "SRC=fe80::1 DST=fe80::2 LEN=8 TC=0 FLOWLBL=0 HOPLIMIT=255 "
-                  "PROTO=UDP SPT=1234 DPT=5678 LEN=8") == 0);
+                  "PROTO=UDP SPT=1234 DPT=5678 LEN=8 ") == 0);
     pass("IPv6 UDP packet is logged");
 
     init_ip6_hdr(ip6, IPPROTO_ICMPV6, sizeof(*icmp6));
@@ -431,7 +431,7 @@ test_ip6_ext_header_lengths(void)
     frag->ip6f_reserved = 0xff;
     init_udp_hdr((struct udphdr *)(frag + 1));
     assert(run_printer(print_ip6hdr, pkt, sizeof(pkt), &le) == 0);
-    assert_log_ends_with(&le, "FRAG=0 ID=0 PROTO=UDP SPT=1234 DPT=5678 LEN=8");
+    assert_log_ends_with(&le, "FRAG=0 ID=0 PROTO=UDP SPT=1234 DPT=5678 LEN=8 ");
     pass("fragment header with a non-zero reserved byte is followed");
 }
 
@@ -464,22 +464,24 @@ test_ip6_routing_header(void)
 
     len = init_routing_pkt(pkt, 0, 2, 0);
     assert(run_printer(print_ip6hdr, pkt, len, &le) == 0);
-    assert_log_ends_with(&le, "HOPLIMIT=255 TYPE=0 SEGMENTS=0 PROTO=UDP SPT=1234 DPT=5678 LEN=8");
+    assert_log_ends_with(&le, "HOPLIMIT=255 TYPE=0 SEGMENTS=0 PROTO=UDP SPT=1234 DPT=5678 LEN=8 ");
     pass("routing header is logged with separated fields");
 
     len = init_routing_pkt(pkt, 0, 4, 2);
     assert(run_printer(print_ip6hdr, pkt, len, &le) == 0);
-    assert_log_ends_with(&le, "HOPLIMIT=255 TYPE=0 SEGMENTS=2 PROTO=UDP SPT=1234 DPT=5678 LEN=8");
+    assert_log_ends_with(&le, "HOPLIMIT=255 TYPE=0 SEGMENTS=2 PROTO=UDP SPT=1234 DPT=5678 LEN=8 ");
     pass("type 0 routing header with all segments left is logged");
 
     len = init_routing_pkt(pkt, 0, 4, 3);
     assert(run_printer(print_ip6hdr, pkt, len, &le) == 0);
-    assert_log_ends_with(&le, "TYPE=0 SEGMENTS=3 INVALID=SEGMENTS PROTO=UDP SPT=1234 DPT=5678 LEN=8");
+    assert_log_ends_with(&le, "TYPE=0 SEGMENTS=3 INVALID=SEGMENTS "
+                         "PROTO=UDP SPT=1234 DPT=5678 LEN=8 ");
     pass("type 0 routing header with more segments left than addresses is flagged");
 
     len = init_routing_pkt(pkt, 2, 2, 1);
     assert(run_printer(print_ip6hdr, pkt, len, &le) == 0);
-    assert_log_ends_with(&le, "TYPE=2 SEGMENTS=1 HOME=2001:db8::99 PROTO=UDP SPT=1234 DPT=5678 LEN=8");
+    assert_log_ends_with(&le, "TYPE=2 SEGMENTS=1 HOME=2001:db8::99 "
+                         "PROTO=UDP SPT=1234 DPT=5678 LEN=8 ");
     pass("type 2 routing header is logged with its home address");
 
     len = init_routing_pkt(pkt, 2, 1, 1);

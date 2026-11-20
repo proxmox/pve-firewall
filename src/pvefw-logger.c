@@ -285,7 +285,7 @@ print_udp(struct log_entry *le, struct udphdr *h, int payload_len)
         return -1;
     }
 
-    LEPRINTF("SPT=%u DPT=%u LEN=%u", ntohs(h->source), ntohs(h->dest), ntohs(h->len));
+    LEPRINTF("SPT=%u DPT=%u LEN=%u ", ntohs(h->source), ntohs(h->dest), ntohs(h->len));
 
     return 0;
 }
