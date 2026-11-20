@@ -1155,7 +1155,9 @@ main(int argc, char *argv[])
         exit(-1);
     }
 
-    if (nflog_set_mode(qh, NFULNL_COPY_PACKET, 0xffff) < 0) {
+    // only headers get logged, 4 KiB cover even long IPv6 extension header chains, and the
+    // kernel's batches of such messages still fit into the 8 KiB receive buffer
+    if (nflog_set_mode(qh, NFULNL_COPY_PACKET, 4096) < 0) {
         fprintf(stderr, "can't set packet copy mode\n");
         exit(-1);
     }
