@@ -125,6 +125,13 @@ safe_write(int fd, char *buf, size_t count)
   return n;
 }
 
+static gboolean
+quit_main_loop(gpointer data)
+{
+    g_main_loop_quit(main_loop);
+    return G_SOURCE_REMOVE;
+}
+
 static gpointer
 log_writer_thread(gpointer data)
 {
@@ -146,7 +153,8 @@ log_writer_thread(gpointer data)
 
         if (res < 0) {
             syslog(3, "writing log failed, stopping daemon - %s", strerror (errno));
-            g_main_loop_quit(main_loop);
+            // quitting the main loop before it runs would have no effect
+            g_idle_add(quit_main_loop, NULL);
             return NULL;
         }
     }
