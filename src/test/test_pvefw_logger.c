@@ -391,6 +391,51 @@ test_icmp6_nonzero_code(void)
 }
 
 static void
+test_ip6_ext_header_lengths(void)
+{
+    struct log_entry le;
+    uint8_t pkt[sizeof(struct ip6_hdr) + 16] PKT_ALIGNED;
+    uint8_t *ext = pkt + sizeof(struct ip6_hdr);
+    const uint8_t ext_protos[] = {
+        IPPROTO_HOPOPTS, IPPROTO_DSTOPTS, IPPROTO_ROUTING, IPPROTO_MH, IPPROTO_FRAGMENT,
+    };
+
+    for (size_t i = 0; i < G_N_ELEMENTS(ext_protos); i++) {
+        for (size_t len = 0; len < 8; len++) {
+            init_ip6_hdr((struct ip6_hdr *)pkt, ext_protos[i], len);
+            memset(ext, 0, 16);
+            ext[0] = IPPROTO_TCP;
+            assert(run_printer(print_ip6hdr, pkt, sizeof(struct ip6_hdr) + len, &le) == -1);
+            assert_log_ends_with(&le, "INVALID=LEN ");
+        }
+    }
+    pass("extension header shorter than 8 bytes is rejected");
+
+    for (size_t len = 8; len < 16; len++) {
+        init_ip6_hdr((struct ip6_hdr *)pkt, IPPROTO_DSTOPTS, len);
+        memset(ext, 0, 16);
+        ext[0] = IPPROTO_TCP;
+        ext[1] = 1; /* (1 + 1) * 8 bytes */
+        assert(run_printer(print_ip6hdr, pkt, sizeof(struct ip6_hdr) + len, &le) == -1);
+        char expected[64];
+        snprintf(expected, sizeof(expected), "NEXTHDR=DSTOPTS LEN=%zu INVALID=LEN ", len);
+        assert_log_ends_with(&le, expected);
+    }
+    pass("extension header longer than the remaining packet is rejected");
+
+    /* the reserved byte of a fragment header is where other extension headers have their length */
+    struct ip6_frag *frag = (struct ip6_frag *)ext;
+    init_ip6_hdr((struct ip6_hdr *)pkt, IPPROTO_FRAGMENT, sizeof(*frag) + sizeof(struct udphdr));
+    memset(frag, 0, sizeof(*frag));
+    frag->ip6f_nxt = IPPROTO_UDP;
+    frag->ip6f_reserved = 0xff;
+    init_udp_hdr((struct udphdr *)(frag + 1));
+    assert(run_printer(print_ip6hdr, pkt, sizeof(pkt), &le) == 0);
+    assert_log_ends_with(&le, "FRAG=0 ID=0 PROTO=UDP SPT=1234 DPT=5678 LEN=8");
+    pass("fragment header with a non-zero reserved byte is followed");
+}
+
+static void
 test_conntrack_format_error(void)
 {
     struct nf_conntrack *ct = nfct_new();
@@ -427,6 +472,7 @@ main(void)
     test_queue_full();
     test_negative_payload_len();
     test_icmp6_nonzero_code();
+    test_ip6_ext_header_lengths();
     test_conntrack_format_error();
 
     printf("1..%d\n", tests_run);

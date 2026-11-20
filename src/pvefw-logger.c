@@ -584,7 +584,7 @@ static int
 check_ip6ext(struct log_entry *le, struct ip6_ext *exthdr, int payload_len)
 {
     if (payload_len < (int)sizeof(*exthdr) ||
-        payload_len < exthdr->ip6e_len)
+        payload_len < (exthdr->ip6e_len + 1) * 8)
     {
         LEPRINTF("LEN=%d ", payload_len);
         LEPRINTF("INVALID=LEN ");
@@ -619,8 +619,6 @@ print_nexthdr(struct log_entry *le, char *hdr, int payload_len, u_int8_t proto)
                 return -1;
             break;
         case IPPROTO_FRAGMENT:
-            if (check_ip6ext(le, exthdr, payload_len) < 0)
-                return -1;
             if (print_fragment(le, (struct ip6_frag*)hdr, payload_len) < 0)
                 return -1;
             ext_len = sizeof(struct ip6_frag);
@@ -648,9 +646,7 @@ print_nexthdr(struct log_entry *le, char *hdr, int payload_len, u_int8_t proto)
             LEPRINTF("PROTO=%u ", proto);
             return 0; /* bail */
         }
-        /* next header: */
-        if (check_ip6ext(le, exthdr, payload_len) < 0)
-            return -1;
+        /* next header, the cases above checked that the current one fits */
         if(ext_len == 0) {
             ext_len = (exthdr->ip6e_len+1) * 8;
         }
