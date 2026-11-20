@@ -348,6 +348,26 @@ test_queue_full(void)
 }
 
 static void
+test_negative_payload_len(void)
+{
+    struct log_entry le;
+
+    /* nflog_get_payload() returns -1 and a NULL pointer for messages without packet data */
+    memset(&le, 0, sizeof(le));
+    assert(print_iphdr(&le, NULL, -1) == -1);
+    assert(print_ip6hdr(&le, NULL, -1) == -1);
+    assert(print_arp(&le, NULL, -1) == -1);
+    assert(print_tcp(&le, NULL, -1) == -1);
+    assert(print_udp(&le, NULL, -1) == -1);
+    assert(print_icmp(&le, NULL, -1) == -1);
+    assert(print_sctp(&le, NULL, -1) == -1);
+    assert(print_icmp6(&le, NULL, -1) == -1);
+    assert(print_fragment(&le, NULL, -1) == -1);
+    assert(check_ip6ext(&le, NULL, -1) == -1);
+    pass("negative payload length is rejected");
+}
+
+static void
 test_conntrack_format_error(void)
 {
     struct nf_conntrack *ct = nfct_new();
@@ -382,6 +402,7 @@ main(void)
     test_status_message_truncation();
     test_conntrack_event_truncation();
     test_queue_full();
+    test_negative_payload_len();
     test_conntrack_format_error();
 
     printf("1..%d\n", tests_run);

@@ -252,7 +252,7 @@ print_tcp(struct log_entry *le, struct tcphdr *h, int payload_len)
 {
     LEPRINTF("PROTO=TCP ");
 
-    if (payload_len < sizeof(struct tcphdr)) {
+    if (payload_len < (int)sizeof(struct tcphdr)) {
         LEPRINTF("LEN=%d ", payload_len);
         LEPRINTF("INVALID=LEN ");
         return -1;
@@ -279,7 +279,7 @@ print_udp(struct log_entry *le, struct udphdr *h, int payload_len)
 {
     LEPRINTF("PROTO=UDP ");
 
-    if (payload_len < sizeof(struct udphdr)) {
+    if (payload_len < (int)sizeof(struct udphdr)) {
         LEPRINTF("LEN=%d ", payload_len);
         LEPRINTF("INVALID=LEN ");
         return -1;
@@ -298,7 +298,7 @@ print_icmp(struct log_entry *le, struct icmphdr *h, int payload_len)
 
     LEPRINTF("PROTO=ICMP ");
 
-    if (payload_len < sizeof(struct icmphdr)) {
+    if (payload_len < (int)sizeof(struct icmphdr)) {
         LEPRINTF("LEN=%d ", payload_len);
         LEPRINTF("INVALID=LEN ");
         return -1;
@@ -342,7 +342,7 @@ print_sctp(struct log_entry *le, struct sctphdr *h, int payload_len)
 {
     LEPRINTF("PROTO=SCTP ");
 
-    if (payload_len < sizeof(struct sctphdr)) {
+    if (payload_len < (int)sizeof(struct sctphdr)) {
         LEPRINTF("LEN=%d ", payload_len);
         LEPRINTF("INVALID=LEN ");
         return -1;
@@ -387,7 +387,7 @@ print_ipproto(struct log_entry *le, char * nexthdr, int payload_len, u_int8_t pr
 static int
 print_iphdr(struct log_entry *le, char * payload, int payload_len)
 {
-    if (payload_len < sizeof(struct iphdr)) {
+    if (payload_len < (int)sizeof(struct iphdr)) {
        LEPRINTF("LEN=%d ", payload_len);
        LEPRINTF("INVALID=LEN ");
        return -1;
@@ -434,7 +434,7 @@ print_routing(struct log_entry *le, struct ip6_rthdr *rthdr, int payload_len)
     char tmp[INET6_ADDRSTRLEN];
     LEPRINTF("TYPE=%u SEGMENTS=%u", rthdr->ip6r_type, rthdr->ip6r_segleft);
 
-    if (payload_len < sizeof(*rthdr) || payload_len < rthdr->ip6r_len*8) {
+    if (payload_len < (int)sizeof(*rthdr) || payload_len < rthdr->ip6r_len*8) {
         LEPRINTF("LEN=%d ", payload_len);
         LEPRINTF("INVALID=LEN ");
         return -1;
@@ -474,7 +474,7 @@ print_fragment(struct log_entry *le, struct ip6_frag *frag, int payload_len)
 {
     u_int16_t offlg;
 
-    if (payload_len < sizeof(*frag)) {
+    if (payload_len < (int)sizeof(*frag)) {
         LEPRINTF("LEN=%d ", payload_len);
         LEPRINTF("INVALID=LEN ");
         return -1;
@@ -496,7 +496,7 @@ print_icmp6(struct log_entry *le, struct icmp6_hdr *h, int payload_len)
     struct nd_redirect *re;
     char tmp[INET6_ADDRSTRLEN];
 
-    if (payload_len < sizeof(struct icmp6_hdr)) {
+    if (payload_len < (int)sizeof(struct icmp6_hdr)) {
         LEPRINTF("LEN=%d ", payload_len);
         LEPRINTF("INVALID=LEN ");
         return -1;
@@ -583,7 +583,7 @@ print_icmp6(struct log_entry *le, struct icmp6_hdr *h, int payload_len)
 static int
 check_ip6ext(struct log_entry *le, struct ip6_ext *exthdr, int payload_len)
 {
-    if (payload_len < sizeof(*exthdr) ||
+    if (payload_len < (int)sizeof(*exthdr) ||
         payload_len < exthdr->ip6e_len)
     {
         LEPRINTF("LEN=%d ", payload_len);
@@ -668,7 +668,7 @@ print_nexthdr(struct log_entry *le, char *hdr, int payload_len, u_int8_t proto)
 static int
 print_ip6hdr(struct log_entry *le, char * payload, int payload_len)
 {
-    if (payload_len < sizeof(struct ip6_hdr)) {
+    if (payload_len < (int)sizeof(struct ip6_hdr)) {
         LEPRINTF("LEN=%d ", payload_len);
         LEPRINTF("INVALID=LEN ");
         return -1;
@@ -689,14 +689,14 @@ print_ip6hdr(struct log_entry *le, char * payload, int payload_len)
 
     LEPRINTF("HOPLIMIT=%d ", h->ip6_hlim);
 
-    return print_nexthdr(le, (char *)(h+1), payload_len - sizeof(*h), h->ip6_nxt);
+    return print_nexthdr(le, (char *)(h+1), payload_len - (int)sizeof(*h), h->ip6_nxt);
 }
 
 // ebtables -I FORWARD --nflog --nflog-group 0
 static int
 print_arp(struct log_entry *le, struct ether_arp *h, int payload_len)
 {
-    if (payload_len < sizeof(struct ether_arp)) {
+    if (payload_len < (int)sizeof(struct ether_arp)) {
         LEPRINTF("LEN=%d ", payload_len);
         LEPRINTF("INVALID=LEN ");
         return -1;
