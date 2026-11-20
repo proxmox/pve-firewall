@@ -715,6 +715,32 @@ test_capture_beyond_packet(void)
 }
 
 static void
+test_nflog_overrun_report(void)
+{
+    queue = g_async_queue_new_full(g_free);
+    int mask = setlogmask(LOG_MASK(LOG_EMERG));
+
+    report_nflog_overrun();
+    report_nflog_overrun();
+    assert(g_async_queue_length(queue) == 1);
+    struct log_entry *le = g_async_queue_try_pop(queue);
+    assert(strstr(le->buf, "overrun 1 time(s)") != NULL);
+    g_free(le);
+
+    /* overruns within ten seconds are counted for the next report */
+    nflog_overrun_reported -= 10 * G_USEC_PER_SEC;
+    report_nflog_overrun();
+    le = g_async_queue_try_pop(queue);
+    assert(le != NULL && strstr(le->buf, "overrun 2 time(s)") != NULL);
+    g_free(le);
+
+    setlogmask(mask);
+    g_async_queue_unref(queue);
+    queue = NULL;
+    pass("receive buffer overruns are reported at most every ten seconds");
+}
+
+static void
 test_conntrack_format_error(void)
 {
     struct nf_conntrack *ct = nfct_new();
@@ -759,6 +785,7 @@ main(void)
     test_icmp_redirect();
     test_non_first_fragments();
     test_capture_beyond_packet();
+    test_nflog_overrun_report();
     test_conntrack_format_error();
 
     printf("1..%d\n", tests_run);

@@ -950,6 +950,25 @@ nflog_cb(struct nflog_g_handle *gh, struct nfgenmsg *nfmsg,
     return 0;
 }
 
+static gint64 nflog_overrun_reported = 0; // monotonic time, zero if never reported
+static int nflog_overruns = 0;
+
+// a flood can overrun the socket over and over, so report that at most every ten seconds
+static void
+report_nflog_overrun(void)
+{
+    gint64 now = g_get_monotonic_time();
+
+    nflog_overruns++;
+    if (nflog_overrun_reported && now - nflog_overrun_reported < 10 * G_USEC_PER_SEC)
+        return;
+
+    log_status_message(3, "nflog receive buffer overrun %d time(s), kernel dropped log entries",
+                       nflog_overruns);
+    nflog_overruns = 0;
+    nflog_overrun_reported = now;
+}
+
 static gboolean
 nflog_read_cb(GIOChannel *source,
               GIOCondition condition,
@@ -960,8 +979,10 @@ nflog_read_cb(GIOChannel *source,
 
     int fd =  g_io_channel_unix_get_fd(source);
 
-    if ((rv = recv(fd, buf, sizeof(buf), 0)) && rv >= 0) {
+    if ((rv = recv(fd, buf, sizeof(buf), 0)) > 0) {
          nflog_handle_packet(logh, buf, rv);
+    } else if (rv < 0 && errno == ENOBUFS) {
+        report_nflog_overrun();
     }
 
     return TRUE;
