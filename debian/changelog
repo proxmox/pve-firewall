@@ -1,3 +1,70 @@
+pve-firewall (6.0.9) trixie; urgency=medium
+
+  * host options: drop the technology preview note from the option enabling
+    the nftables based firewall. It stays opt-in, as the option remains
+    disabled by default.
+
+  * logger: fix several issues of the daemon writing the firewall log:
+    - keep log entries within their buffer. If the description of a packet
+      or conntrack event did not fit, for example of an IPv6 packet with
+      many extension headers, heap memory following the entry could end up
+      in the firewall log. For packets, the newline could also go missing,
+      joining the next entry to the same line. Packets hitting a logging
+      rule could trigger this.
+    - fix a memory leak of 512 bytes per entry dropped while the log queue
+      is full, for example during a flood of logged packets.
+    - fix a crash on log messages without packet data, for example from a
+      custom logging rule with a zero copy length.
+    - check IPv6 extension headers, routing headers and neighbor discovery
+      messages against the length of the packet, so that truncated ones are
+      logged as invalid instead of with data read from past its end.
+    - log ICMPv6 messages with a non-zero code, such as port unreachable
+      errors, with their actual type, code and parameters instead of bogus
+      ones or as invalid.
+    - log valid IPv6 routing headers of type 2 (Mobile IPv6) with their
+      home address instead of as invalid, and no longer flag type 0
+      headers with all segments left as invalid. Also add the missing
+      space after the routing header fields.
+    - fix the offset, more-fragments flag and identification logged for
+      IPv6 fragments, and no longer reject fragments with a non-zero
+      reserved byte.
+    - log IPv4 packets with a header length below 20 bytes as invalid
+      instead of with ports and flags made up from the IPv4 header, and log
+      the header of packets that end right after it instead of only
+      INVALID=IHL.
+    - add the missing space after the UDP header fields, which glued a
+      logged packet mark to the UDP length, for example "LEN=8mark=1".
+    - fix the gateway address of IPv4 ICMP redirects, which was logged
+      with its bytes reversed on little-endian hosts like x86.
+    - log the pointer of ICMPv6 parameter problem messages as a number.
+      Pointers 0 to 2 were logged as names of problem codes instead.
+    - log the destination of ICMPv6 redirects as DESTINATION= instead of
+      GATEWAY=, as the gateway is the target, already logged as TARGET=.
+    - only log the protocol of non-first fragments instead of their
+      payload parsed as transport header, which showed made-up ports and
+      flags.
+    - log the reachable time and retransmission timer of ICMPv6 router
+      advertisements as unsigned numbers, which showed values from 2^31 on
+      as negative.
+    - flag IPv6 type 2 routing headers with more than one segment left
+      with INVALID=SEGMENTS, as they hold exactly one address.
+    - stop parsing at the end of the IP packet as given by its header, so
+      that link-layer padding captured with a short frame is not logged as
+      its transport header.
+    - log packets larger than about 8 KiB, like jumbo frames or segmentation
+      offload units of bulk transfers. With the logging rules of the
+      Proxmox VE firewall, they were silently missing from the log, as their
+      netlink messages did not fit into the receive buffer.
+    - report in the system log, and if possible in the firewall log, when
+      the kernel dropped log entries as the daemon did not keep up with
+      reading them, for example during a flood of logged packets. Such
+      losses went unnoticed so far.
+    - log the entries that the kernel still held back, or that still waited
+      to be read, when the daemon stops, instead of losing them, for example
+      on a restart during a package upgrade.
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 20 Nov 2026 11:49:29 +0100
+
 pve-firewall (6.0.8) trixie; urgency=medium
 
   * ipset: merge entries that the kernel stores as the same network, for
