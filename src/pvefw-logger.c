@@ -493,12 +493,15 @@ print_routing(struct log_entry *le, struct ip6_rthdr *rthdr, int payload_len)
         /* nimrod routing (RFC1992) */
         return 0;
     } else if (rthdr->ip6r_type == 2) {
-        /* RFC3375 (6.4), the layout is like type-0 but with exactly 1 address */
+        /* RFC 6275 (6.4), the layout is like type-0 but with exactly 1 address */
         struct ip6_rthdr0 *h = (struct ip6_rthdr0*)rthdr;
         if (hdr_len < (int)(sizeof(*h) + sizeof(struct in6_addr))) {
             LEPRINTF("LEN=%d ", payload_len);
             LEPRINTF("INVALID=LEN ");
             return -1;
+        }
+        if (rthdr->ip6r_segleft > 1) {
+            LEPRINTF("INVALID=SEGMENTS ");
         }
         inet_ntop(AF_INET6, &h->ip6r0_addr[0], tmp, sizeof(tmp));
         LEPRINTF("HOME=%s ", tmp);
