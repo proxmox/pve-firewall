@@ -368,6 +368,29 @@ test_negative_payload_len(void)
 }
 
 static void
+test_icmp6_nonzero_code(void)
+{
+    struct log_entry le;
+    uint8_t pkt[sizeof(struct ip6_hdr) + sizeof(struct icmp6_hdr)] PKT_ALIGNED;
+    struct icmp6_hdr *icmp6 = (struct icmp6_hdr *)(pkt + sizeof(struct ip6_hdr));
+
+    init_ip6_hdr((struct ip6_hdr *)pkt, IPPROTO_ICMPV6, sizeof(*icmp6));
+    memset(icmp6, 0, sizeof(*icmp6));
+    icmp6->icmp6_type = ICMP6_DST_UNREACH;
+    icmp6->icmp6_code = ICMP6_DST_UNREACH_NOPORT;
+    assert(run_printer(print_ip6hdr, pkt, sizeof(pkt), &le) == 0);
+    assert_log_ends_with(&le, "HOPLIMIT=255 PROTO=ICMPV6 TYPE=1 CODE=4 ");
+    pass("ICMPv6 destination unreachable with code 4 is logged");
+
+    icmp6->icmp6_type = ICMP6_PACKET_TOO_BIG;
+    icmp6->icmp6_code = 255;
+    icmp6->icmp6_mtu = htonl(1280);
+    assert(run_printer(print_ip6hdr, pkt, sizeof(pkt), &le) == 0);
+    assert_log_ends_with(&le, "HOPLIMIT=255 PROTO=ICMPV6 TYPE=2 CODE=255 MTU=1280 ");
+    pass("ICMPv6 message with code 255 is logged");
+}
+
+static void
 test_conntrack_format_error(void)
 {
     struct nf_conntrack *ct = nfct_new();
@@ -403,6 +426,7 @@ main(void)
     test_conntrack_event_truncation();
     test_queue_full();
     test_negative_payload_len();
+    test_icmp6_nonzero_code();
     test_conntrack_format_error();
 
     printf("1..%d\n", tests_run);

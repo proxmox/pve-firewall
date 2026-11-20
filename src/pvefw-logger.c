@@ -607,13 +607,8 @@ print_nexthdr(struct log_entry *le, char *hdr, int payload_len, u_int8_t proto)
         /* protocols (these return) */
         case IPPROTO_ICMPV6:
             LEPRINTF("PROTO=ICMPV6 ");
-            if (check_ip6ext(le, exthdr, payload_len) < 0)
+            if (print_icmp6(le, (struct icmp6_hdr *)hdr, payload_len) < 0)
                 return -1;
-            if (print_icmp6(le, (struct icmp6_hdr*)(hdr + exthdr->ip6e_len),
-                            payload_len - exthdr->ip6e_len) < 0)
-            {
-                return -1;
-            }
             return 0;
 
         /* extension headers (these break to keep iterating) */
