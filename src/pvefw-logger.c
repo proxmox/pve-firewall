@@ -165,6 +165,7 @@ queue_log_entry(struct log_entry *le)
     if (skipped_logs > 0) {
         if (len >= (LQ_LEN - 1)) {
             skipped_logs++;
+            g_free(le);
         } else {
             int skip_tmp = skipped_logs;
             skipped_logs = 0; // clear before calling log_status_message()
@@ -174,6 +175,7 @@ queue_log_entry(struct log_entry *le)
     } else {
         if (len >= LQ_LEN) {
             skipped_logs++;
+            g_free(le);
         } else {
             g_async_queue_push(queue, le);
         }

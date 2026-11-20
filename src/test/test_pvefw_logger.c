@@ -3,6 +3,7 @@
 #include "../pvefw-logger.c"
 
 #include <assert.h>
+#include <malloc.h>
 #include <stdint.h>
 #include <sys/mman.h>
 
@@ -16,6 +17,13 @@ pass(const char *desc)
 {
     tests_run++;
     printf("ok %d - %s\n", tests_run, desc);
+}
+
+static void
+skip(const char *desc, const char *reason)
+{
+    tests_run++;
+    printf("ok %d - %s # SKIP %s\n", tests_run, desc, reason);
 }
 
 static void
@@ -296,6 +304,50 @@ test_conntrack_event_truncation(void)
 }
 
 static void
+test_queue_full(void)
+{
+    const char *desc = "entries dropped from a full queue are freed";
+    const int n_rounds = 10000;
+    struct log_entry *probe[64];
+
+    /* other allocators, like the one of sanitizer builds, may lack glibc's statistics */
+    size_t used = mallinfo2().uordblks;
+    for (size_t i = 0; i < G_N_ELEMENTS(probe); i++)
+        probe[i] = g_new0(struct log_entry, 1);
+    gboolean have_stats = mallinfo2().uordblks >= used + 32 * sizeof(struct log_entry);
+    for (size_t i = 0; i < G_N_ELEMENTS(probe); i++)
+        g_free(probe[i]);
+
+    queue = g_async_queue_new_full(g_free);
+    for (int i = 0; i < LQ_LEN; i++)
+        queue_log_entry(g_new0(struct log_entry, 1));
+
+    size_t used_before = mallinfo2().uordblks;
+    for (int i = 0; i < n_rounds; i++) {
+        /* the first dropped entry starts the skip count, the next one increases it */
+        skipped_logs = 0;
+        queue_log_entry(g_new0(struct log_entry, 1));
+        queue_log_entry(g_new0(struct log_entry, 1));
+        assert(skipped_logs == 2);
+    }
+    size_t used_after = mallinfo2().uordblks;
+
+    assert(g_async_queue_length(queue) == LQ_LEN);
+    g_async_queue_unref(queue);
+    queue = NULL;
+    skipped_logs = 0;
+
+    /* without the statistics, only a leak checker like the one of sanitizer builds notices */
+    if (!have_stats) {
+        skip(desc, "no malloc statistics");
+        return;
+    }
+    /* keeping the dropped entries of either kind would take up about 5 MiB */
+    assert(used_after < used_before + 64 * 1024);
+    pass(desc);
+}
+
+static void
 test_conntrack_format_error(void)
 {
     struct nf_conntrack *ct = nfct_new();
@@ -329,6 +381,7 @@ main(void)
     test_log_entry_truncation();
     test_status_message_truncation();
     test_conntrack_event_truncation();
+    test_queue_full();
     test_conntrack_format_error();
 
     printf("1..%d\n", tests_run);
