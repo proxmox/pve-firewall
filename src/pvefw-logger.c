@@ -940,6 +940,11 @@ nfct_cb(const struct nlmsghdr *nlh,
     int len = nfct_snprintf(&le->buf[le->len], LE_MAX - le->len,
                             ct, type, NFCT_O_DEFAULT,
                             NFCT_OF_SHOW_LAYER3|NFCT_OF_TIMESTAMP);
+    if (len < 0) {
+        g_free(le);
+        return NFCT_CB_STOP;
+    }
+
     le->len += len;
 
     if (le->len == LE_MAX) {

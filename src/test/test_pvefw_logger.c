@@ -192,6 +192,30 @@ test_ip6_packets(void)
     pass("hop-by-hop header followed by ICMPv6 is logged");
 }
 
+static void
+test_conntrack_format_error(void)
+{
+    struct nf_conntrack *ct = nfct_new();
+    assert(ct != NULL);
+    queue = g_async_queue_new_full(g_free);
+
+    /* without the layer 4 protocol, nfct_snprintf() fails */
+    nfct_set_attr_u8(ct, ATTR_L3PROTO, AF_INET);
+    nfct_cb(NULL, NFCT_T_NEW, ct, NULL);
+    assert(g_async_queue_length(queue) == 0);
+
+    nfct_set_attr_u8(ct, ATTR_L4PROTO, IPPROTO_UDP);
+    nfct_cb(NULL, NFCT_T_NEW, ct, NULL);
+    struct log_entry *le = g_async_queue_try_pop(queue);
+    assert(le != NULL && le->len > 1 && le->buf[le->len - 1] == '\n');
+    g_free(le);
+
+    g_async_queue_unref(queue);
+    queue = NULL;
+    nfct_destroy(ct);
+    pass("conntrack event that cannot be formatted is skipped");
+}
+
 int
 main(void)
 {
@@ -199,6 +223,7 @@ main(void)
 
     test_ip4_packets();
     test_ip6_packets();
+    test_conntrack_format_error();
 
     printf("1..%d\n", tests_run);
     return 0;
