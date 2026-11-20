@@ -561,7 +561,7 @@ print_icmp6(struct log_entry *le, struct icmp6_hdr *h, int payload_len)
         /* nd_ra_flags_reserved is only 8 bit, so no swapping here as
          * opposed to the neighbor advertisement flags (see below).
          */
-        LEPRINTF("RA=%02x LIFETIME=%d REACHABLE=%d RETRANSMIT=%d ",
+        LEPRINTF("RA=%02x LIFETIME=%d REACHABLE=%u RETRANSMIT=%u ",
                  ra->nd_ra_flags_reserved,
                  ntohs(ra->nd_ra_router_lifetime),
                  ntohl(ra->nd_ra_reachable),

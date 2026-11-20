@@ -545,6 +545,12 @@ test_icmp6_nd_lengths(void)
                          "RETRANSMIT=1000 ");
     pass("router advertisement is logged");
 
+    ra->nd_ra_reachable = htonl(0x80000000);
+    ra->nd_ra_retransmit = htonl(UINT32_MAX);
+    assert(run_printer(print_ip6hdr, pkt, sizeof(struct ip6_hdr) + sizeof(*ra), &le) == 0);
+    assert_log_ends_with(&le, "REACHABLE=2147483648 RETRANSMIT=4294967295 ");
+    pass("router advertisement timers are logged as unsigned numbers");
+
     struct nd_neighbor_advert *na = (struct nd_neighbor_advert *)icmp6;
     init_ip6_hdr((struct ip6_hdr *)pkt, IPPROTO_ICMPV6, sizeof(*na));
     memset(na, 0, sizeof(*na));
