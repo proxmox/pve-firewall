@@ -449,6 +449,11 @@ print_iphdr(struct log_entry *le, char * payload, int payload_len)
         return 0;
     }
 
+    // the capture can extend past the packet, zero lengths are used for large GSO packets
+    int tot_len = ntohs(h->tot_len);
+    if (tot_len >= h->ihl * 4 && tot_len < payload_len)
+        payload_len = tot_len;
+
     void *nexthdr = (u_int32_t *)h + h->ihl;
     payload_len -= h->ihl * 4;
 
@@ -728,6 +733,11 @@ print_ip6hdr(struct log_entry *le, char * payload, int payload_len)
     LEPRINTF("TC=%d FLOWLBL=%d ", (flow>>20)&0xFF, flow&0xFFFFF);
 
     LEPRINTF("HOPLIMIT=%d ", h->ip6_hlim);
+
+    // the capture can extend past the packet, zero lengths are used for jumbograms and GSO
+    int plen = ntohs(h->ip6_plen);
+    if (plen > 0 && (int)sizeof(*h) + plen < payload_len)
+        payload_len = sizeof(*h) + plen;
 
     return print_nexthdr(le, (char *)(h+1), payload_len - (int)sizeof(*h), h->ip6_nxt);
 }

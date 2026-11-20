@@ -687,6 +687,34 @@ test_non_first_fragments(void)
 }
 
 static void
+test_capture_beyond_packet(void)
+{
+    struct log_entry le;
+    uint8_t pkt4[sizeof(struct iphdr) + sizeof(struct udphdr)] PKT_ALIGNED;
+
+    /* padding after a packet that ends with its IP header */
+    init_ip4_hdr((struct iphdr *)pkt4, IPPROTO_UDP, sizeof(struct iphdr));
+    init_udp_hdr((struct udphdr *)(pkt4 + sizeof(struct iphdr)));
+    assert(run_printer(print_iphdr, pkt4, sizeof(pkt4), &le) == 0);
+    assert_log_ends_with(&le, "LEN=20 TOS=0x00 PREC=0x00 TTL=64 ID=0 PROTO=UDP LEN=0 INVALID=LEN ");
+    ((struct iphdr *)pkt4)->tot_len = 0;
+    assert(run_printer(print_iphdr, pkt4, sizeof(pkt4), &le) == 0);
+    assert_log_ends_with(&le, "PROTO=UDP SPT=1234 DPT=5678 LEN=8 ");
+    pass("IPv4 packet is parsed up to its length only");
+
+    uint8_t pkt6[sizeof(struct ip6_hdr) + sizeof(struct udphdr)] PKT_ALIGNED;
+
+    init_ip6_hdr((struct ip6_hdr *)pkt6, IPPROTO_UDP, 4);
+    init_udp_hdr((struct udphdr *)(pkt6 + sizeof(struct ip6_hdr)));
+    assert(run_printer(print_ip6hdr, pkt6, sizeof(pkt6), &le) == 0);
+    assert_log_ends_with(&le, "LEN=4 TC=0 FLOWLBL=0 HOPLIMIT=255 PROTO=UDP LEN=4 INVALID=LEN ");
+    ((struct ip6_hdr *)pkt6)->ip6_plen = 0;
+    assert(run_printer(print_ip6hdr, pkt6, sizeof(pkt6), &le) == 0);
+    assert_log_ends_with(&le, "PROTO=UDP SPT=1234 DPT=5678 LEN=8 ");
+    pass("IPv6 packet is parsed up to its length only");
+}
+
+static void
 test_conntrack_format_error(void)
 {
     struct nf_conntrack *ct = nfct_new();
@@ -730,6 +758,7 @@ main(void)
     test_ip4_header_length();
     test_icmp_redirect();
     test_non_first_fragments();
+    test_capture_beyond_packet();
     test_conntrack_format_error();
 
     printf("1..%d\n", tests_run);
